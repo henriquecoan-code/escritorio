@@ -16,34 +16,8 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if signedIn();
     }
-  }
-}
-      allow delete: if canWrite();
-    }
 
-    match /meta/lists {
-      allow read: if signedIn();
-      allow write: if canWrite() &&
-        request.resource.data.keys().hasOnly(['AREAS','ACOES','TIPOS','ORIGENS','ADVS','MESES_REF']) &&
-        request.resource.data.AREAS is list && request.resource.data.AREAS.size() <= 200 &&
-        request.resource.data.ACOES is list && request.resource.data.ACOES.size() <= 300 &&
-        request.resource.data.TIPOS is list && request.resource.data.TIPOS.size() <= 80 &&
-        request.resource.data.ORIGENS is list && request.resource.data.ORIGENS.size() <= 80 &&
-        request.resource.data.ADVS is list && request.resource.data.ADVS.size() <= 120 &&
-        request.resource.data.MESES_REF is list && request.resource.data.MESES_REF.size() <= 24;
-    }
-
-    match /meta/photos {
-      allow read: if signedIn();
-      allow write: if canWrite();
-    }
-
-    // Keep this document admin-only because it controls authorization.
-    match /meta/security {
-      allow read, write: if canWrite();
-    }
-
-    // Deny everything else by default.
+    // Deny everything else by default
     match /{document=**} {
       allow read, write: if false;
     }
