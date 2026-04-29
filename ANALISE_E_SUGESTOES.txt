@@ -1,0 +1,77 @@
+ANALISE TECNICA DO PROJETO - DASHBOARD OLIVEIRA E BENEDET
+Data: 28/04/2026
+
+1) RESUMO GERAL
+- Projeto funcional e objetivo.
+- Estrutura simples: frontend em HTML unico + backend Python + persistencia em JSON.
+- Bom para uso interno e rapido deploy na rede local.
+
+Arquivos principais analisados:
+- OB_Dashboard_Rede.html
+- OB_Server.py
+- ob_data.json
+- run_server.bat
+
+2) PONTOS FORTES
+- Interface completa para operacao diaria (dashboard, contratos e configuracoes).
+- API local com endpoints claros para dados, listas e fotos.
+- Modo offline previsto no frontend.
+- Codigo com leitura facil para manutencao inicial.
+
+3) RISCOS IDENTIFICADOS
+3.1) Seguranca no frontend (prioridade alta)
+- Existem pontos com insercao de dados via innerHTML usando conteudo vindo de servidor/usuario.
+- Isso pode abrir espaco para XSS se um campo malicioso for salvo em cliente, obs etc.
+
+3.2) API sem autenticacao (prioridade alta)
+- Qualquer cliente na rede local pode enviar POST para alterar ou apagar registros.
+- CORS liberado para qualquer origem.
+
+3.3) Robustez da API (prioridade media-alta)
+- Leitura de JSON sem tratamento de erro pode quebrar requisicao se arquivo estiver invalido.
+- Escrita direta em JSON sem estrategia atomica pode corromper arquivo em queda de energia/interrupcao.
+
+3.4) Script de inicializacao fragil (prioridade media)
+- run_server.bat usa caminho hardcoded para pasta interna de Python, o que falha em outras maquinas.
+
+3.5) Ordenacao de data na tabela (prioridade media)
+- Ordenacao atual pode ser textual para data no formato dd/mm/aaaa, gerando ordem incorreta em alguns casos.
+
+4) SUGESTOES RECOMENDADAS (PLANO POR FASE)
+
+FASE 1 - Seguranca minima (fazer primeiro)
+- Substituir montagem sensivel por criacao segura de elementos (textContent) nas linhas de tabela.
+- Sanitizar campos de entrada no frontend antes de renderizar.
+- Restringir CORS e incluir token simples para escrita (POST/DELETE).
+
+FASE 2 - Confiabilidade de dados
+- Adicionar try/except para json.loads e json.load em todos os endpoints.
+- Implementar escrita atomica (gravar arquivo temporario e renomear).
+- Validar schema minimo dos registros antes de salvar.
+
+FASE 3 - Operacao e manutencao
+- Corrigir run_server.bat para usar python do PATH sem caminho fixo.
+- Ajustar ordenacao de data para comparacao real por data.
+- Registrar logs de erro com mensagem amigavel para equipe.
+
+FASE 4 - Evolucao futura (opcional)
+- Dividir frontend em arquivos menores (HTML/CSS/JS separados).
+- Criar backup automatico diario do JSON.
+- Considerar migracao para banco leve (SQLite) quando volume crescer.
+
+5) CHECKLIST PRATICO DE EXECUCAO
+- [ ] Remover uso inseguro de innerHTML em pontos com dados de usuario.
+- [ ] Proteger endpoints de escrita com token interno.
+- [ ] Tratar excecoes de JSON no servidor.
+- [ ] Implementar escrita atomica do arquivo de dados.
+- [ ] Corrigir run_server.bat para ambiente padrao.
+- [ ] Corrigir ordenacao cronologica por data.
+- [ ] Validar funcionamento em modo online e offline.
+
+6) IMPACTO ESPERADO
+- Menor risco de incidente de seguranca no uso interno.
+- Menor risco de perda/corrupcao de dados.
+- Mais estabilidade na rotina da equipe.
+- Base mais preparada para crescimento.
+
+Fim do documento.
