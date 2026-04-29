@@ -1,0 +1,35 @@
+CONFIGURACAO FIREBASE - DASHBOARD
+
+1) Criar projeto no Firebase
+- Acesse console.firebase.google.com
+- Crie um projeto
+- Ative Cloud Firestore (modo producao ou teste temporario)
+
+2) Criar app Web
+- Em Configuracoes do projeto > Seus apps > Web
+- Copie o objeto de configuracao Firebase
+
+3) Preencher arquivo local
+- Abra firebase-config.js
+- Substitua window.OB_FIREBASE_CONFIG = null; pelo objeto real
+
+4) Estrutura usada no Firestore
+- Colecao: contratos (docId = uid)
+- Colecao: meta, documento: lists
+- Colecao: meta, documento: photos
+
+5) Comportamento da aplicacao
+- Se firebase-config.js tiver configuracao valida, o sistema usa Firebase automaticamente
+- Se nao tiver, continua usando servidor local/offline atual
+
+6) Regras iniciais (sugestao simples para inicio)
+- Em producao, nao deixe regras abertas
+- Comece com autenticacao e regras por usuario/equipe
+
+7) Migracao inicial
+- Na primeira carga com Firebase vazio, o sistema publica automaticamente o SEED_DATA
+- Depois disso, os novos salvamentos/edicoes/exclusoes vao para Firestore
+
+Observacao
+- Esta etapa integra Firestore no frontend.
+- Se quiser, no proximo passo eu implemento autenticacao Firebase Auth e regras recomendadas.
