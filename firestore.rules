@@ -5,50 +5,19 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Option A: control by custom claim set in Firebase Auth token
-    function isAdmin() {
-      return signedIn() && request.auth.token.admin == true;
-    }
-
-    // Option B: control by admin UID list in document /meta/security
-    function isAdminByUid() {
-      return signedIn() &&
-        exists(/databases/$(database)/documents/meta/security) &&
-        request.auth.uid in get(/databases/$(database)/documents/meta/security).data.adminUids;
-    }
-
-    function canWrite() {
-      return isAdmin() || isAdminByUid();
-    }
-
-    function validContractCreate() {
-      return request.resource.data.keys().hasOnly([
-          'uid','data','cliente','mes','area','acao','tipo','origem','adv','status','obs'
-        ]) &&
-        request.resource.data.uid is string && request.resource.data.uid.size() >= 6 && request.resource.data.uid.size() <= 50 &&
-        request.resource.data.data is string && request.resource.data.data.size() <= 10 &&
-        request.resource.data.cliente is string && request.resource.data.cliente.size() >= 2 && request.resource.data.cliente.size() <= 140 &&
-        request.resource.data.mes is string && request.resource.data.mes.size() <= 20 &&
-        request.resource.data.area is string && request.resource.data.area.size() <= 60 &&
-        request.resource.data.acao is string && request.resource.data.acao.size() <= 80 &&
-        request.resource.data.tipo is string && request.resource.data.tipo.size() <= 40 &&
-        request.resource.data.origem is string && request.resource.data.origem.size() <= 40 &&
-        request.resource.data.adv is string && request.resource.data.adv.size() <= 40 &&
-        request.resource.data.status is string && request.resource.data.status in ['Ativo','Encerrado','Suspenso'] &&
-        request.resource.data.obs is string && request.resource.data.obs.size() <= 800;
-    }
-
-    function validContractUpdate() {
-      return validContractCreate() &&
-        // immutable uid after creation
-        request.resource.data.uid == resource.data.uid;
-    }
-
     match /contratos/{docId} {
-      // TODO: Implementar autenticacao - por enquanto permite leitura sem login
-      allow read: if true;
-      allow create: if canWrite() && validContractCreate();
-      allow update: if canWrite() && validContractUpdate();
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update: if signedIn();
+      allow delete: if signedIn();
+    }
+
+    match /meta/{docId} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+  }
+}
       allow delete: if canWrite();
     }
 

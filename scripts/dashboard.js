@@ -96,13 +96,14 @@ async function logoutFirebase(){
 }
 
 function ensureAuthenticated(){
-  // TODO: Implementar autenticacao - por enquanto permite tudo
-  // Phase 2: Implement proper authentication
-  return true;
+  if(currentUser) return true;
+  setAuthOverlay(true,'Sessao expirada. Faca login novamente.');
+  setSyncStatus('err','Login necessario','Entre com email e senha para continuar');
+  return false;
 }
 
 async function loadFromFirebase(){
-  // TODO: Implementar autenticacao - por enquanto permite carregar sem login
+  if(!ensureAuthenticated()) return;
   setSyncStatus('loading','Conectando Firebase...','');
   try{
     const contractsSnap = await fbDb.collection('contratos').get();
@@ -244,12 +245,18 @@ function init(){
   refreshAuthUI();
 
   if(initFirebaseIfConfigured()){
-    // Carregar dados sem esperar por autenticacao (fase temporaria)
-    setAuthOverlay(false);
-    loadFromFirebase().then(()=>startAutoSync()).catch(()=>console.log('Carregar background'));
-    // Mostrar dados mesmo que haja erro
-    renderDash();
-    renderTbl();
+    fbAuth.onAuthStateChanged((user)=>{
+      currentUser=user||null;
+      refreshAuthUI();
+      clearInterval(syncTimer);
+      if(currentUser){
+        setAuthOverlay(false);
+        loadFromFirebase().then(()=>startAutoSync());
+      }else{
+        setSyncStatus('err','Login necessario','Entre com email e senha para carregar os dados');
+        setAuthOverlay(true);
+      }
+    });
     return;
   }
 
