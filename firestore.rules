@@ -1,0 +1,81 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // Option A: control by custom claim set in Firebase Auth token
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    // Option B: control by admin UID list in document /meta/security
+    function isAdminByUid() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/meta/security) &&
+        request.auth.uid in get(/databases/$(database)/documents/meta/security).data.adminUids;
+    }
+
+    function canWrite() {
+      return isAdmin() || isAdminByUid();
+    }
+
+    function validContractCreate() {
+      return request.resource.data.keys().hasOnly([
+          'uid','data','cliente','mes','area','acao','tipo','origem','adv','status','obs'
+        ]) &&
+        request.resource.data.uid is string && request.resource.data.uid.size() >= 6 && request.resource.data.uid.size() <= 50 &&
+        request.resource.data.data is string && request.resource.data.data.size() <= 10 &&
+        request.resource.data.cliente is string && request.resource.data.cliente.size() >= 2 && request.resource.data.cliente.size() <= 140 &&
+        request.resource.data.mes is string && request.resource.data.mes.size() <= 20 &&
+        request.resource.data.area is string && request.resource.data.area.size() <= 60 &&
+        request.resource.data.acao is string && request.resource.data.acao.size() <= 80 &&
+        request.resource.data.tipo is string && request.resource.data.tipo.size() <= 40 &&
+        request.resource.data.origem is string && request.resource.data.origem.size() <= 40 &&
+        request.resource.data.adv is string && request.resource.data.adv.size() <= 40 &&
+        request.resource.data.status is string && request.resource.data.status in ['Ativo','Encerrado','Suspenso'] &&
+        request.resource.data.obs is string && request.resource.data.obs.size() <= 800;
+    }
+
+    function validContractUpdate() {
+      return validContractCreate() &&
+        // immutable uid after creation
+        request.resource.data.uid == resource.data.uid;
+    }
+
+    match /contratos/{docId} {
+      allow read: if signedIn();
+      allow create: if canWrite() && validContractCreate();
+      allow update: if canWrite() && validContractUpdate();
+      allow delete: if canWrite();
+    }
+
+    match /meta/lists {
+      allow read: if signedIn();
+      allow write: if canWrite() &&
+        request.resource.data.keys().hasOnly(['AREAS','ACOES','TIPOS','ORIGENS','ADVS','MESES_REF']) &&
+        request.resource.data.AREAS is list && request.resource.data.AREAS.size() <= 200 &&
+        request.resource.data.ACOES is list && request.resource.data.ACOES.size() <= 300 &&
+        request.resource.data.TIPOS is list && request.resource.data.TIPOS.size() <= 80 &&
+        request.resource.data.ORIGENS is list && request.resource.data.ORIGENS.size() <= 80 &&
+        request.resource.data.ADVS is list && request.resource.data.ADVS.size() <= 120 &&
+        request.resource.data.MESES_REF is list && request.resource.data.MESES_REF.size() <= 24;
+    }
+
+    match /meta/photos {
+      allow read: if signedIn();
+      allow write: if canWrite();
+    }
+
+    // Keep this document admin-only because it controls authorization.
+    match /meta/security {
+      allow read, write: if canWrite();
+    }
+
+    // Deny everything else by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
