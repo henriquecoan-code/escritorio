@@ -96,14 +96,13 @@ async function logoutFirebase(){
 }
 
 function ensureAuthenticated(){
-  if(currentUser) return true;
-  setAuthOverlay(true,'Sessao expirada. Faca login novamente.');
-  setSyncStatus('err','Login necessario','Entre com email e senha para continuar');
-  return false;
+  // TODO: Implementar autenticacao - por enquanto permite tudo
+  // Phase 2: Implement proper authentication
+  return true;
 }
 
 async function loadFromFirebase(){
-  if(!ensureAuthenticated()) return;
+  // TODO: Implementar autenticacao - por enquanto permite carregar sem login
   setSyncStatus('loading','Conectando Firebase...','');
   try{
     const contractsSnap = await fbDb.collection('contratos').get();
