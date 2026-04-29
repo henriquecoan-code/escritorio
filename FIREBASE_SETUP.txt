@@ -52,6 +52,12 @@ service cloud.firestore {
 9) Pendencia registrada
 - Implementar Firebase Auth e endurecer Rules (request.auth != null) na proxima fase.
 
+10) Authentication (implementado)
+- No Firebase Console: Build > Authentication > Sign-in method > habilitar Email/Password.
+- Criar pelo menos um usuario em Authentication > Users.
+- O dashboard agora exige login para ler/escrever dados no Firestore.
+- Se o usuario nao estiver autenticado, a tela de login e exibida automaticamente.
+
 Observacao
 - Esta etapa integra Firestore no frontend.
-- Se quiser, no proximo passo eu implemento autenticacao Firebase Auth e regras recomendadas.
+- Recomendacao atual: manter Rules com request.auth != null para contratos e meta.

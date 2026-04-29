@@ -1,7 +1,7 @@
-REGRAS FIRESTORE PARA IMPORTACAO TEMPORARIA
+REGRAS FIRESTORE - IMPORTACAO E PRODUCAO
 
 1) REGRA TEMPORARIA (somente para importar)
-Cole no Firebase Console > Firestore Database > Rules e publique:
+Use apenas durante migracao/importacao. Depois remova.
 
 rules_version = '2';
 service cloud.firestore {
@@ -16,24 +16,33 @@ service cloud.firestore {
 Depois de publicar a regra temporaria, execute:
 - .\import_firestore.ps1
 
-3) REGRA MINIMA APOS IMPORTACAO (mais segura)
-Substitua pela regra abaixo assim que terminar:
+3) REGRA FINAL RECOMENDADA (PRODUCAO)
+Use esta regra com Firebase Authentication habilitado.
 
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Contratos do dashboard
     match /contratos/{docId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn();
     }
+
+    // Listas auxiliares: areas, acoes, advs, tipos, origens, meses e fotos
     match /meta/{docId} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isSignedIn();
     }
+
+    // Bloqueia qualquer outra rota nao usada pelo app
     match /{document=**} {
       allow read, write: if false;
     }
   }
 }
 
-Observacao:
-- A regra segura acima exige login (Firebase Auth).
-- Se ainda nao tiver Auth, use a regra temporaria apenas durante a migracao e troque em seguida.
+Observacoes:
+- Esta regra exige login para todo acesso de app.
+- Se quiser restringir por perfil (somente admin editar), o proximo passo e usar custom claims.
