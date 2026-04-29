@@ -531,6 +531,7 @@ let syncTimer=null;
 const PG=20;
 const FIREBASE_CFG = window.OB_FIREBASE_CONFIG || null;
 let USE_FIREBASE=false, fbDb=null;
+let firebasePermissionWarned=false;
 
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 
@@ -588,10 +589,22 @@ async function loadFromFirebase(){
 
     const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     setSyncStatus('ok','Firebase conectado',`${DB.length} registros · ${now}`);
+    firebasePermissionWarned=false;
     fillSelects();fillFilters();renderDash();renderTbl();
   }catch(e){
     console.error(e);
-    setSyncStatus('err','Erro no Firebase','Verifique firebase-config.js');
+    const code = (e && (e.code || e.status)) ? String(e.code || e.status) : '';
+    const isPermission = code.includes('permission-denied') || code.includes('PERMISSION_DENIED');
+    if(isPermission){
+      setSyncStatus('err','Firestore bloqueou acesso','Ajuste as Rules para liberar leitura/escrita sem Auth (temporario)');
+      if(!firebasePermissionWarned){
+        toast('Permissao negada no Firestore. Verifique as Rules.','err');
+        firebasePermissionWarned=true;
+      }
+      clearInterval(syncTimer);
+      return;
+    }
+    setSyncStatus('err','Erro no Firebase','Verifique firebase-config.js e as Rules');
     toast('Erro ao carregar dados do Firebase.','err');
   }
 }

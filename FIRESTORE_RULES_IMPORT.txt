@@ -1,0 +1,39 @@
+REGRAS FIRESTORE PARA IMPORTACAO TEMPORARIA
+
+1) REGRA TEMPORARIA (somente para importar)
+Cole no Firebase Console > Firestore Database > Rules e publique:
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+
+2) IMPORTAR DADOS
+Depois de publicar a regra temporaria, execute:
+- .\import_firestore.ps1
+
+3) REGRA MINIMA APOS IMPORTACAO (mais segura)
+Substitua pela regra abaixo assim que terminar:
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /contratos/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    match /meta/{docId} {
+      allow read, write: if request.auth != null;
+    }
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+Observacao:
+- A regra segura acima exige login (Firebase Auth).
+- Se ainda nao tiver Auth, use a regra temporaria apenas durante a migracao e troque em seguida.

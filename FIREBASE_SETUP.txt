@@ -30,6 +30,28 @@ CONFIGURACAO FIREBASE - DASHBOARD
 - Na primeira carga com Firebase vazio, o sistema publica automaticamente o SEED_DATA
 - Depois disso, os novos salvamentos/edicoes/exclusoes vao para Firestore
 
+8) Regras temporarias sem autenticacao (fase atual)
+- Se voce ainda nao vai usar Firebase Auth, as Rules precisam permitir acesso sem login.
+- Exemplo temporario:
+
+rules_version = '2';
+service cloud.firestore {
+	match /databases/{database}/documents {
+		match /contratos/{docId} {
+			allow read, write: if true;
+		}
+		match /meta/{docId} {
+			allow read, write: if true;
+		}
+		match /{document=**} {
+			allow read, write: if false;
+		}
+	}
+}
+
+9) Pendencia registrada
+- Implementar Firebase Auth e endurecer Rules (request.auth != null) na proxima fase.
+
 Observacao
 - Esta etapa integra Firestore no frontend.
 - Se quiser, no proximo passo eu implemento autenticacao Firebase Auth e regras recomendadas.
