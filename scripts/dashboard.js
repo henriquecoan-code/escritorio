@@ -244,21 +244,11 @@ function init(){
   refreshAuthUI();
 
   if(initFirebaseIfConfigured()){
-    // Tentar carregar dados sem autenticacao primeiro (fase temporaria)
+    // Carregar dados diretamente sem autenticacao (fase temporaria)
+    setAuthOverlay(false);
     loadFromFirebase().then(()=>startAutoSync()).catch((err)=>{
-      // Se falhar, pedir login
-      fbAuth.onAuthStateChanged((user)=>{
-        currentUser=user||null;
-        refreshAuthUI();
-        clearInterval(syncTimer);
-        if(currentUser){
-          setAuthOverlay(false);
-          loadFromFirebase().then(()=>startAutoSync());
-        }else{
-          setSyncStatus('err','Login necessario','Entre com email e senha para carregar os dados');
-          setAuthOverlay(true);
-        }
-      });
+      setSyncStatus('err','Erro ao carregar','Verifique sua conexão com a internet');
+      console.error('Erro ao carregar dados:', err);
     });
     return;
   }
