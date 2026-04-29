@@ -45,7 +45,8 @@ service cloud.firestore {
     }
 
     match /contratos/{docId} {
-      allow read: if signedIn();
+      // TODO: Implementar autenticacao - por enquanto permite leitura sem login
+      allow read: if true;
       allow create: if canWrite() && validContractCreate();
       allow update: if canWrite() && validContractUpdate();
       allow delete: if canWrite();
