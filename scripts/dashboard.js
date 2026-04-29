@@ -305,6 +305,7 @@ const cnt=(d,f,v)=>d.filter(r=>r[f]===v).length;
 const cntM=(d,m,f,v)=>d.filter(r=>r.mes===m&&r[f]===v).length;
 const fmtDate=iso=>iso?iso.split('-').reverse().join('/'):'';
 const isoDate=dmy=>{const p=dmy.split('/');return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:'';};
+const dateToSort=dmy=>{const p=(dmy||'').split('/');return p.length===3?`${p[2]}${p[1]}${p[0]}`:'';};
 
 /* .. SAVE TO SERVER .. */
 async function serverSave(record){
@@ -520,7 +521,14 @@ function getFiltered(){
 }
 function renderTbl(){
   let rows=[...getFiltered()].sort((a,b)=>{
-    const av=(a[sortCol]||'').toString().toLowerCase(),bv=(b[sortCol]||'').toString().toLowerCase();
+    let av,bv;
+    if(sortCol==='data'){
+      av=dateToSort(a.data||'');
+      bv=dateToSort(b.data||'');
+    }else{
+      av=(a[sortCol]||'').toString().toLowerCase();
+      bv=(b[sortCol]||'').toString().toLowerCase();
+    }
     return av<bv?-sortDir:av>bv?sortDir:0;
   });
   const total=rows.length,pages=Math.ceil(total/PG)||1;
