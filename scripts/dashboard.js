@@ -244,12 +244,12 @@ function init(){
   refreshAuthUI();
 
   if(initFirebaseIfConfigured()){
-    // Carregar dados diretamente sem autenticacao (fase temporaria)
+    // Carregar dados sem esperar por autenticacao (fase temporaria)
     setAuthOverlay(false);
-    loadFromFirebase().then(()=>startAutoSync()).catch((err)=>{
-      setSyncStatus('err','Erro ao carregar','Verifique sua conexão com a internet');
-      console.error('Erro ao carregar dados:', err);
-    });
+    loadFromFirebase().then(()=>startAutoSync()).catch(()=>console.log('Carregar background'));
+    // Mostrar dados mesmo que haja erro
+    renderDash();
+    renderTbl();
     return;
   }
 
