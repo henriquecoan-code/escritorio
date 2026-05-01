@@ -1,0 +1,1925 @@
+<html lang="pt-BR"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oliveira &amp; Benedet — Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --g:#C9A84C;--g2:#E8C96A;
+  --d0:#07070F;--d2:#131328;--d3:#1A1A35;--d4:#22223F;
+  --t:#F2EFE8;--t2:#B8B4CC;--t3:#6E6A88;
+  --b:rgba(201,168,76,.14);--b2:rgba(201,168,76,.06);
+  --blue:#4E8FE8;--green:#5EC97A;--rose:#E8735A;--amber:#F0A732;--purple:#A78BFA;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--d0);font-family:'Segoe UI',system-ui,Arial,sans-serif;color:var(--t);overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse 80% 60% at 0% 0%,rgba(201,168,76,.07),transparent 55%),
+             radial-gradient(ellipse 60% 40% at 100% 100%,rgba(78,143,232,.05),transparent 55%);}
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
+  background-image:linear-gradient(rgba(201,168,76,.022) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(201,168,76,.022) 1px,transparent 1px);background-size:52px 52px;}
+#app{position:relative;z-index:1;max-width:1600px;margin:0 auto;padding:0 36px 80px;}
+
+/* HEADER */
+.hd{display:flex;align-items:center;justify-content:space-between;padding:24px 0 20px;
+  border-bottom:1px solid var(--b);margin-bottom:20px;gap:14px;flex-wrap:wrap;}
+.hd-logo{height:46px;object-fit:contain;}
+.hd-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.chip{padding:4px 12px;border:1px solid var(--b);font-size:10px;letter-spacing:2px;
+  text-transform:uppercase;color:var(--g);background:var(--b2);}
+
+/* BUTTONS */
+.btn{padding:7px 15px;border:1px solid var(--b);font-size:10px;letter-spacing:1.5px;
+  text-transform:uppercase;color:var(--t3);background:transparent;cursor:pointer;
+  font-family:inherit;transition:all .2s;white-space:nowrap;}
+.btn:hover,.btn.on{border-color:var(--g);color:var(--g);background:var(--b2);}
+.btn.pri{border-color:var(--g);color:var(--d0);background:var(--g);font-weight:600;}
+.btn.pri:hover{background:var(--g2);}
+.btn.exp{border-color:rgba(94,201,122,.4);color:var(--green);}
+.btn.exp:hover{background:rgba(94,201,122,.07);}
+.btn.dng{border-color:rgba(232,115,90,.4);color:var(--rose);}
+.btn.dng:hover{background:rgba(232,115,90,.07);}
+.btn.sm{padding:5px 10px;font-size:9px;}
+.nav-tabs{display:flex;gap:2px;background:var(--d2);border:1px solid var(--b);padding:3px;}
+.nav-tab{padding:7px 16px;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--t3);cursor:pointer;transition:all .2s;border:1px solid transparent;
+  background:none;font-family:inherit;}
+.nav-tab:hover{color:var(--t2);}
+.nav-tab.on{background:var(--d3);border-color:var(--b);color:var(--g);}
+
+/* MONTH BAR */
+.mbar{display:flex;align-items:center;gap:8px;margin-bottom:20px;
+  background:var(--d2);border:1px solid var(--b);padding:9px 14px;flex-wrap:wrap;}
+.mbar-lbl{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);white-space:nowrap;}
+.mpill{padding:5px 13px;border:1px solid var(--b);font-size:11px;color:var(--t3);
+  cursor:pointer;background:transparent;font-family:inherit;transition:all .2s;white-space:nowrap;}
+.mpill:hover{border-color:rgba(201,168,76,.4);color:var(--t2);}
+.mpill.on{border-color:var(--g);color:var(--d0);background:var(--g);font-weight:600;}
+.mdiv{width:1px;height:18px;background:var(--b);margin:0 4px;flex-shrink:0;}
+.mbar-info{font-size:11px;color:var(--t3);margin-left:auto;}
+
+/* TOAST */
+#toast{position:fixed;bottom:26px;right:26px;z-index:9999;display:flex;flex-direction:column;gap:7px;pointer-events:none;}
+.ti{padding:10px 16px;border:1px solid;font-size:12px;background:var(--d2);animation:tIn .3s ease;min-width:210px;}
+.tok{border-color:rgba(94,201,122,.4);color:var(--green);}
+.terr{border-color:rgba(232,115,90,.4);color:var(--rose);}
+.tinf{border-color:var(--b);color:var(--t2);}
+@keyframes tIn{from{opacity:0;transform:translateY(7px);}to{opacity:1;transform:none;}}
+
+/* KPI */
+.krow{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:20px;}
+.kpi{border:1px solid var(--b);background:var(--d2);padding:15px 14px;position:relative;overflow:hidden;transition:transform .25s;}
+.kpi:hover{transform:translateY(-2px);}
+.kpi::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:linear-gradient(180deg,var(--g),transparent);}
+.kpi-l{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);margin-bottom:7px;}
+.kpi-v{font-size:32px;font-weight:300;color:var(--g);line-height:1;font-family:Georgia,serif;}
+.kpi-v.sm{font-size:18px;padding-top:5px;}
+.kpi-v.bl{color:var(--blue);}
+.kpi-s{font-size:10px;color:var(--t3);margin-top:5px;}
+
+/* SECTION */
+.sl{display:flex;align-items:center;gap:12px;margin:22px 0 13px;}
+.sl-l{flex:1;height:1px;background:var(--b);}
+.sl-t{font-size:9px;letter-spacing:3px;text-transform:uppercase;color:var(--g);white-space:nowrap;}
+
+/* GRIDS */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin-bottom:13px;}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px;margin-bottom:13px;}
+.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:13px;margin-bottom:13px;}
+.gw{display:grid;grid-template-columns:3fr 2fr;gap:13px;margin-bottom:13px;}
+.gnw{display:grid;grid-template-columns:2fr 1fr;gap:13px;margin-bottom:13px;}
+
+/* CARD */
+.card{background:linear-gradient(145deg,var(--d3),var(--d2));border:1px solid var(--b);padding:18px 20px;position:relative;}
+.card::before{content:'';position:absolute;top:0;left:16px;right:16px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(201,168,76,.2),transparent);}
+.ct{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);margin-bottom:12px;
+  display:flex;align-items:center;justify-content:space-between;}
+.ct-n{font-size:17px;color:var(--g);font-family:Georgia,serif;}
+
+/* TIME METRIC CARD */
+.tcard{background:linear-gradient(145deg,rgba(19,19,40,.98),rgba(13,13,28,.98));
+  border:1px solid rgba(78,143,232,.22);padding:18px 20px;position:relative;}
+.tcard::before{content:'';position:absolute;top:0;left:16px;right:16px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(78,143,232,.28),transparent);}
+.tm-l{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:6px;}
+.tm-v{font-family:Georgia,serif;font-size:36px;font-weight:300;line-height:1;}
+.tm-s{font-size:10px;color:var(--t3);margin-top:5px;}
+.tm-bar-bg{height:3px;background:rgba(255,255,255,.06);border-radius:2px;margin:8px 0 5px;}
+.tm-bar{height:3px;border-radius:2px;transition:width 1.2s cubic-bezier(.16,1,.3,1);}
+.tm-meta{display:flex;justify-content:space-between;font-size:10px;color:var(--t3);}
+
+/* MC */
+.mc-wrap{display:flex;gap:9px;height:100%;align-items:stretch;}
+.mc{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:14px 7px;border:1px solid var(--b);background:var(--b2);text-align:center;
+  position:relative;cursor:pointer;transition:all .2s;}
+.mc::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,transparent,var(--g),transparent);}
+.mc.am{border-color:rgba(201,168,76,.5);background:rgba(201,168,76,.08);}
+.mc-m{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);margin-bottom:5px;}
+.mc-n{font-size:40px;font-weight:300;color:var(--g);line-height:1;font-family:Georgia,serif;}
+.mc-s{font-size:10px;color:var(--t3);margin-top:4px;}
+.mc-d{display:inline-block;margin-top:5px;padding:2px 8px;font-size:10px;border:1px solid;}
+.up{color:var(--green);border-color:rgba(94,201,122,.3);}
+.dn{color:var(--rose);border-color:rgba(232,115,90,.3);}
+
+/* PHOTO RANK */
+.prank{display:flex;flex-direction:column;gap:7px;}
+.pr{display:grid;grid-template-columns:42px 1fr auto;align-items:center;gap:10px;
+  padding:8px 11px;border:1px solid rgba(201,168,76,.07);background:rgba(255,255,255,.015);
+  transition:all .2s;position:relative;overflow:hidden;}
+.pr:hover{background:rgba(201,168,76,.04);border-color:rgba(201,168,76,.18);}
+.pr.r1{border-color:rgba(201,168,76,.28);background:rgba(201,168,76,.05);}
+.pr.r1::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--g);}
+.av{width:42px;height:42px;border-radius:50%;border:1.5px solid rgba(201,168,76,.3);
+  overflow:hidden;background:var(--d4);display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;position:relative;cursor:pointer;}
+.av img{width:100%;height:100%;object-fit:cover;}
+.av .ini{font-size:15px;color:var(--g);font-family:Georgia,serif;}
+.av .cam{position:absolute;inset:0;border-radius:50%;background:rgba(0,0,0,.6);
+  display:flex;align-items:center;justify-content:center;opacity:0;transition:.2s;font-size:14px;}
+.pr:hover .cam{opacity:1;}
+.pr-pn{font-size:12px;font-weight:500;color:var(--t);margin-bottom:1px;}
+.pr-ro{font-size:9px;color:var(--t3);}
+.pb-bg{flex:1;height:3px;background:rgba(255,255,255,.05);}
+.pb{height:3px;transition:width 1.3s cubic-bezier(.16,1,.3,1);}
+.pb.tot{background:linear-gradient(90deg,var(--g),var(--g2));}
+.pb.mon{background:linear-gradient(90deg,var(--blue),#7AADEE);}
+.pr-n{font-size:23px;font-weight:300;color:var(--g);line-height:1;font-family:Georgia,serif;}
+
+/* HBARS */
+.hbl{display:flex;flex-direction:column;gap:7px;}
+.hbr{display:flex;flex-direction:column;gap:2px;}
+.hbn-name{font-size:10px;color:var(--t2);}
+.hbrow{display:flex;align-items:center;gap:7px;}
+.hblbl{font-size:9px;text-align:right;flex-shrink:0;width:38px;}
+.hblbl.t{color:var(--g);}
+.hblbl.m{color:var(--blue);}
+.hbb{flex:1;height:4px;background:rgba(255,255,255,.04);border-radius:2px;}
+.hbf{height:4px;border-radius:2px;transition:width 1.3s cubic-bezier(.16,1,.3,1);}
+.hbf.t{background:linear-gradient(90deg,var(--g),var(--g2));}
+.hbf.m{background:linear-gradient(90deg,var(--blue),#7AADEE);}
+.hbv{width:20px;font-size:10px;text-align:right;font-weight:600;}
+.hbv.t{color:var(--g);}
+.hbv.m{color:var(--blue);}
+
+/* DONUT */
+.dw{display:flex;gap:14px;align-items:center;}
+.dleg{display:flex;flex-direction:column;gap:7px;flex:1;}
+.di{display:flex;align-items:center;gap:7px;font-size:11px;}
+.dd{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.dn2{flex:1;color:var(--t2);}
+.dv{color:var(--t);font-weight:600;}
+.dv2{color:var(--blue);font-size:10px;margin-left:2px;}
+.dp{color:var(--g);font-size:10px;min-width:26px;text-align:right;}
+
+/* STBL */
+.stbl{width:100%;border-collapse:collapse;}
+.stbl th{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);
+  padding:6px 9px;text-align:left;border-bottom:1px solid var(--b);}
+.stbl td{padding:6px 9px;font-size:12px;border-bottom:1px solid rgba(201,168,76,.04);}
+.stbl tr:last-child td{border-bottom:none;}
+.tag{display:inline-block;padding:2px 7px;font-size:9px;letter-spacing:1px;text-transform:uppercase;
+  border:1px solid rgba(201,168,76,.3);color:var(--g);background:rgba(201,168,76,.07);}
+.tag.b{border-color:rgba(78,143,232,.3);color:var(--blue);background:rgba(78,143,232,.07);}
+
+/* VIEWS */
+.view{display:none;}
+.view.on{display:block;}
+
+/* TABLE */
+.tbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px;gap:11px;flex-wrap:wrap;}
+.tbar h2{font-size:19px;font-weight:300;font-family:Georgia,serif;}
+.ttools{display:flex;gap:7px;align-items:center;flex-wrap:wrap;}
+.sb{padding:8px 12px;background:var(--d2);border:1px solid var(--b);color:var(--t);
+  font-family:inherit;font-size:12px;outline:none;width:190px;transition:border-color .2s;}
+.sb:focus{border-color:rgba(201,168,76,.45);}
+.fsel{padding:7px 9px;background:var(--d2);border:1px solid var(--b);color:var(--t2);
+  font-family:inherit;font-size:11px;outline:none;cursor:pointer;min-width:100px;}
+.fsel:focus{border-color:rgba(201,168,76,.45);}
+.fsel option{background:var(--d2);}
+.twrap{overflow-x:auto;border:1px solid var(--b);}
+.ctbl{width:100%;border-collapse:collapse;font-size:12px;}
+.ctbl th{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);
+  padding:9px 10px;text-align:left;background:var(--d3);border-bottom:1px solid var(--b);
+  white-space:nowrap;cursor:pointer;user-select:none;transition:color .2s;}
+.ctbl th:hover{color:var(--g);}
+.ctbl th.srt{color:var(--g);}
+.ctbl th.ns{cursor:default;}
+.ctbl td{padding:8px 10px;border-bottom:1px solid rgba(201,168,76,.04);color:var(--t2);white-space:nowrap;}
+.ctbl tbody tr:hover td{background:rgba(201,168,76,.04);cursor:pointer;}
+.ctbl tbody tr:last-child td{border-bottom:none;}
+.cl{color:var(--t);font-weight:500;}
+.bx{display:inline-block;padding:2px 7px;font-size:9px;letter-spacing:.5px;text-transform:uppercase;border:1px solid;white-space:nowrap;}
+.bg{color:var(--g);border-color:rgba(201,168,76,.3);background:rgba(201,168,76,.07);}
+.bb{color:var(--blue);border-color:rgba(78,143,232,.3);background:rgba(78,143,232,.07);}
+.bgr{color:var(--green);border-color:rgba(94,201,122,.3);background:rgba(94,201,122,.07);}
+.bam{color:var(--amber);border-color:rgba(240,167,50,.3);background:rgba(240,167,50,.07);}
+.bpu{color:var(--purple);border-color:rgba(167,139,250,.3);background:rgba(167,139,250,.07);}
+.bm{color:var(--t3);border-color:rgba(110,106,136,.22);background:rgba(110,106,136,.04);}
+.ebx{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;font-size:9px;letter-spacing:.5px;text-transform:uppercase;border:1px solid;white-space:nowrap;}
+.e1{color:var(--t3);border-color:rgba(110,106,136,.3);}
+.e2{color:var(--amber);border-color:rgba(240,167,50,.3);}
+.e3{color:var(--blue);border-color:rgba(78,143,232,.3);}
+.e4{color:var(--purple);border-color:rgba(167,139,250,.3);}
+.e5{color:var(--green);border-color:rgba(94,201,122,.4);font-weight:600;}
+.db{display:inline-block;padding:2px 7px;font-size:10px;font-weight:600;border:1px solid;}
+.dok{color:var(--green);border-color:rgba(94,201,122,.3);}
+.dwn{color:var(--amber);border-color:rgba(240,167,50,.3);}
+.ddg{color:var(--rose);border-color:rgba(232,115,90,.3);}
+.pdots{display:flex;align-items:center;gap:0;margin-top:3px;}
+.pdot{width:7px;height:7px;border-radius:50%;border:1px solid;}
+.pdot.dn{background:var(--g);border-color:var(--g);}
+.pdot.ac{background:var(--amber);border-color:var(--amber);}
+.pdot.pd{background:transparent;border-color:var(--t3);opacity:.35;}
+.pln{width:7px;height:1px;background:var(--b);}
+.ra{display:flex;gap:3px;}
+.rb{background:none;border:1px solid transparent;color:var(--t3);cursor:pointer;padding:3px 6px;font-size:13px;transition:all .18s;}
+.rb:hover{border-color:var(--b);color:var(--g);background:var(--b2);}
+.rb.dl:hover{border-color:rgba(232,115,90,.4);color:var(--rose);}
+.pag{display:flex;align-items:center;justify-content:space-between;margin-top:13px;}
+.pag-i{font-size:11px;color:var(--t3);}
+.pag-b{display:flex;gap:5px;}
+.pb2{padding:5px 10px;border:1px solid var(--b);background:none;color:var(--t3);cursor:pointer;font-family:inherit;font-size:11px;transition:all .18s;}
+.pb2:hover,.pb2.on{border-color:var(--g);color:var(--g);}
+.pb2:disabled{opacity:.3;cursor:default;}
+
+/* ══ MODAL ÚNICO ══ */
+.ov{position:fixed;inset:0;z-index:800;background:rgba(7,7,15,.9);backdrop-filter:blur(5px);
+  display:none;align-items:flex-start;justify-content:center;padding:16px 16px 40px;overflow-y:auto;}
+.ov.open{display:flex;}
+.mbox{width:840px;background:var(--d2);border:1px solid var(--b);position:relative;
+  margin:auto;max-width:100%;}
+.mbox::before{content:'';position:absolute;top:0;left:20px;right:20px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(201,168,76,.35),transparent);}
+.mhd{padding:17px 24px 13px;border-bottom:1px solid var(--b);
+  display:flex;align-items:center;justify-content:space-between;}
+.mhd h2{font-size:17px;font-weight:300;font-family:Georgia,serif;}
+.mcl{background:none;border:none;color:var(--t3);font-size:24px;cursor:pointer;transition:color .2s;line-height:1;}
+.mcl:hover{color:var(--g);}
+
+/* ETAPA SELECTOR */
+.esel{display:flex;border-bottom:1px solid var(--b);}
+.esb{flex:1;padding:9px 5px;text-align:center;font-size:9px;letter-spacing:.5px;text-transform:uppercase;
+  cursor:pointer;border:none;background:transparent;border-bottom:2px solid transparent;
+  color:var(--t3);font-family:inherit;transition:all .2s;line-height:1.4;}
+.esb:hover{color:var(--t2);}
+.esb .esi{font-size:15px;display:block;margin-bottom:3px;}
+.esb.on{color:var(--g);border-bottom-color:var(--g);background:var(--b2);}
+
+/* FORM LAYOUT */
+.mgrid{padding:16px 24px 4px;display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.mgrid.g3{grid-template-columns:1fr 1fr 1fr;}
+.msec{padding:13px 24px 4px;border-top:1px solid var(--b);}
+.mst{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--g);
+  margin-bottom:9px;display:flex;align-items:center;gap:7px;}
+.mst::before{content:'';width:13px;height:1px;background:var(--g);}
+.mg2{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+.mg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;}
+.mg7{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;}
+.field{display:flex;flex-direction:column;gap:5px;margin-top:0;}
+.field label{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);}
+.req{color:var(--rose);}
+.field input,.field select,.field textarea{background:var(--d3);border:1px solid var(--b);
+  color:var(--t);padding:8px 11px;font-family:inherit;font-size:12px;outline:none;
+  transition:border-color .2s;width:100%;appearance:none;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:rgba(201,168,76,.5);}
+.field select option{background:var(--d2);}
+.field textarea{resize:vertical;min-height:58px;}
+.hint{font-size:10px;color:var(--t3);margin-top:3px;line-height:1.4;}
+
+/* DURAÇÃO CALCULADA */
+.dur-box{display:none;margin:10px 24px;padding:12px 14px;
+  background:rgba(78,143,232,.05);border:1px solid rgba(78,143,232,.2);}
+.dur-box.show{display:block;}
+.dur-title{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:8px;}
+.dur-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.dur-item{text-align:center;padding:7px;border:1px solid rgba(78,143,232,.12);}
+.dur-lbl{font-size:9px;color:var(--t3);margin-bottom:3px;}
+.dur-val{font-family:Georgia,serif;font-size:20px;font-weight:300;line-height:1;}
+
+/* INTEGRAÇÃO BOX */
+.ibox{display:none;margin:0 24px 4px;padding:9px 13px;
+  background:rgba(94,201,122,.05);border:1px solid rgba(94,201,122,.2);}
+.ibox.show{display:block;}
+
+/* CONTRATO SEC */
+.csec{display:none;}
+.csec.show{display:block;}
+
+/* MFOOT */
+.mfoot{padding:13px 24px 18px;display:flex;gap:8px;justify-content:flex-end;border-top:1px solid var(--b);}
+
+/* DELETE */
+.dov{position:fixed;inset:0;z-index:900;background:rgba(7,7,15,.9);display:none;align-items:center;justify-content:center;}
+.dov.open{display:flex;}
+.dbox{width:370px;background:var(--d2);border:1px solid rgba(232,115,90,.3);padding:26px;text-align:center;}
+.dbox h3{font-size:14px;font-weight:400;margin-bottom:8px;font-family:Georgia,serif;color:var(--rose);}
+.dbox p{font-size:12px;color:var(--t3);margin-bottom:18px;line-height:1.6;}
+.dacts{display:flex;gap:8px;justify-content:center;}
+
+/* SETTINGS */
+.cfg-h{margin-bottom:18px;}
+.cfg-h h2{font-size:19px;font-weight:300;font-family:Georgia,serif;margin-bottom:3px;}
+.cfg-h p{font-size:12px;color:var(--t3);}
+.cfg-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:13px;}
+.ccard{background:linear-gradient(145deg,var(--d3),var(--d2));border:1px solid var(--b);padding:18px 20px;position:relative;}
+.ccard::before{content:'';position:absolute;top:0;left:16px;right:16px;height:1px;
+  background:linear-gradient(90deg,transparent,rgba(201,168,76,.2),transparent);}
+.chd{display:flex;align-items:center;gap:11px;margin-bottom:12px;padding-bottom:11px;border-bottom:1px solid var(--b);}
+.cion{font-size:20px;}
+.ctit{font-size:13px;font-weight:600;color:var(--t);}
+.csub{font-size:10px;color:var(--t3);margin-top:2px;}
+.citems{display:flex;flex-direction:column;gap:4px;margin-bottom:11px;max-height:200px;overflow-y:auto;}
+.citem{display:flex;align-items:center;gap:7px;padding:5px 9px;
+  background:rgba(255,255,255,.02);border:1px solid rgba(201,168,76,.06);transition:all .18s;}
+.citem:hover{background:rgba(201,168,76,.04);border-color:rgba(201,168,76,.15);}
+.cin{flex:1;font-size:12px;color:var(--t);}
+.cu{font-size:10px;color:var(--t3);padding:1px 5px;border:1px solid var(--b);margin-right:2px;}
+.cdel{background:none;border:1px solid transparent;color:var(--t3);cursor:pointer;padding:2px 5px;font-size:12px;transition:all .18s;}
+.cdel:hover:not(:disabled){border-color:rgba(232,115,90,.4);color:var(--rose);}
+.cdel:disabled{opacity:.3;cursor:default;}
+.carow{display:flex;gap:6px;}
+.cinp{flex:1;padding:7px 10px;background:var(--d3);border:1px solid var(--b);color:var(--t);
+  font-family:inherit;font-size:12px;outline:none;transition:border-color .2s;}
+.cinp:focus{border-color:rgba(201,168,76,.5);}
+.cempty{font-size:11px;color:var(--t3);text-align:center;padding:12px 0;font-style:italic;}
+
+@keyframes fu{from{opacity:0;transform:translateY(11px);}to{opacity:1;transform:none;}}
+.fu{opacity:0;animation:fu .45s ease forwards;}
+::-webkit-scrollbar{width:3px;height:3px;}
+::-webkit-scrollbar-track{background:var(--d0);}
+::-webkit-scrollbar-thumb{background:rgba(201,168,76,.3);}
+@media(max-width:1200px){.krow{grid-template-columns:repeat(3,1fr);}}
+@media(max-width:900px){.g2,.gw,.gnw,.g3,.g4{grid-template-columns:1fr;}.dur-grid{grid-template-columns:1fr 1fr;}}
+@media(max-width:640px){.krow{grid-template-columns:repeat(2,1fr);}#app{padding:0 14px 60px;}.hd{flex-direction:column;align-items:flex-start;}}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header class="hd">
+    <img id="hd-logo" class="hd-logo" alt="O&amp;B" src="data:image/png;base64,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">
+    <div class="hd-right">
+      <div class="chip" id="period-chip">Março</div>
+      <span id="ts" style="font-size:11px;color:var(--t3)">27 de abril de 2026</span>
+      <div class="nav-tabs">
+        <button class="nav-tab" id="tab-dash" onclick="sw('dash')">📊 Dashboard</button>
+        <button class="nav-tab on" id="tab-registros" onclick="sw('registros')">📁 Registros</button>
+        <button class="nav-tab" id="tab-cfg" onclick="sw('cfg')">⚙ Configurações</button>
+      </div>
+      <button class="btn pri" onclick="openM()">＋ Novo Registro</button>
+      <button class="btn exp" onclick="exportHTML()">⬇ Exportar</button>
+    </div>
+  </header>
+
+  <!-- DASHBOARD -->
+  <div id="view-dash" class="view">
+    <div class="mbar" id="mbar">
+      <span class="mbar-lbl">Filtrar mês:</span>
+      <button class="mpill" id="pill-all" onclick="setMonth('all')">Acumulado</button>
+      <div class="mdiv"></div>
+      <div id="mpills">
+    <button class="mpill on" id="pill-Março" onclick="setMonth('Março')">Março</button>
+    <button class="mpill " id="pill-Abril" onclick="setMonth('Abril')">Abril</button></div>
+      <span class="mbar-info" id="mbar-info">1 contrato assinados em Março</span>
+    </div>
+
+    <div class="krow" id="krow">
+    <div class="kpi fu" style="animation-delay:0s">
+      <div class="kpi-l">Março</div>
+      <div class="kpi-v  ">1</div>
+      <div class="kpi-s">de 2 total</div>
+    </div>
+    <div class="kpi fu" style="animation-delay:0.05s">
+      <div class="kpi-l">Em Andamento</div>
+      <div class="kpi-v  ">72</div>
+      <div class="kpi-s">pastas em aberto</div>
+    </div>
+    <div class="kpi fu" style="animation-delay:0.1s">
+      <div class="kpi-l">Concluídos</div>
+      <div class="kpi-v  ">1</div>
+      <div class="kpi-s">entregues ao advogado</div>
+    </div>
+    <div class="kpi fu" style="animation-delay:0.15000000000000002s">
+      <div class="kpi-l">Total Registros</div>
+      <div class="kpi-v  ">73</div>
+      <div class="kpi-s">cadastrados</div>
+    </div>
+    <div class="kpi fu" style="animation-delay:0.2s">
+      <div class="kpi-l">Variação</div>
+      <div class="kpi-v sm ">—</div>
+      <div class="kpi-s">vs mês anterior</div>
+    </div>
+    <div class="kpi fu" style="animation-delay:0.25s">
+      <div class="kpi-l">Tempo Médio Total</div>
+      <div class="kpi-v sm bl">39d</div>
+      <div class="kpi-s">chegada → entrega</div>
+    </div></div>
+
+    <!-- MÉTRICAS DE TEMPO COMERCIAL -->
+    <div class="sl"><div class="sl-l"></div><div class="sl-t">⏱ Tempo Médio no Comercial — Permanência da Pasta</div><div class="sl-l"></div></div>
+    <div class="g4" id="tmetrics"><div class="tcard fu" style="animation-delay:0s">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div><div class="tm-l">Chegada → Assinatura</div>
+          <div class="tm-v" style="color:var(--rose)">21d</div></div>
+        <div style="font-size:26px;opacity:.5">✍</div>
+      </div>
+      <div class="tm-s">Da entrada no comercial até a assinatura do contrato</div>
+      <div class="tm-bar-bg"><div class="tm-bar" style="background: rgb(232, 115, 90); width: 100%;" data-w="100%"></div></div>
+      <div class="tm-meta"><span>3 registros com dados</span><span>Meta: ≤10d</span></div>
+    </div><div class="tcard fu" style="animation-delay:0.06s">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div><div class="tm-l">Chegada → Docs Solicit.</div>
+          <div class="tm-v" style="color:var(--rose)">27d</div></div>
+        <div style="font-size:26px;opacity:.5">📋</div>
+      </div>
+      <div class="tm-s">Da entrada até a solicitação dos documentos</div>
+      <div class="tm-bar-bg"><div class="tm-bar" style="background: rgb(232, 115, 90); width: 100%;" data-w="100%"></div></div>
+      <div class="tm-meta"><span>2 registros com dados</span><span>Meta: ≤7d</span></div>
+    </div><div class="tcard fu" style="animation-delay:0.12s">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div><div class="tm-l">Chegada → Docs Recebidos</div>
+          <div class="tm-v" style="color:var(--rose)">30d</div></div>
+        <div style="font-size:26px;opacity:.5">📦</div>
+      </div>
+      <div class="tm-s">Tempo total até receber todos os documentos</div>
+      <div class="tm-bar-bg"><div class="tm-bar" style="background: rgb(232, 115, 90); width: 100%;" data-w="100%"></div></div>
+      <div class="tm-meta"><span>2 registros com dados</span><span>Meta: ≤15d</span></div>
+    </div><div class="tcard fu" style="animation-delay:0.18s">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div><div class="tm-l">Chegada → Entrega Adv.</div>
+          <div class="tm-v" style="color:var(--rose)">39d</div></div>
+        <div style="font-size:26px;opacity:.5">🏁</div>
+      </div>
+      <div class="tm-s">Tempo total do processo comercial completo</div>
+      <div class="tm-bar-bg"><div class="tm-bar" style="background: rgb(232, 115, 90); width: 100%;" data-w="100%"></div></div>
+      <div class="tm-meta"><span>2 registros com dados</span><span>Meta: ≤20d</span></div>
+    </div></div>
+    <div class="card fu" style="margin-bottom:13px;animation-delay:.12s">
+      <div class="ct">Detalhamento das Métricas Comerciais por Etapa</div>
+      <div id="tmetrics-detail" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px"><div style="padding:10px;border:1px solid var(--b);background:var(--b2)">
+      <div style="font-size:9px;color:var(--t3);letter-spacing:1px;margin-bottom:4px">Assinatura → Docs Rec.</div>
+      <div style="font-family:Georgia,serif;font-size:22px;font-weight:300;color:var(--t3)">—</div>
+      <div style="font-size:9px;color:var(--t3);margin-top:3px">2 registros · meta ≤10d</div>
+    </div><div style="padding:10px;border:1px solid var(--b);background:var(--b2)">
+      <div style="font-size:9px;color:var(--t3);letter-spacing:1px;margin-bottom:4px">Docs Rec. → Entrega</div>
+      <div style="font-family:Georgia,serif;font-size:22px;font-weight:300;color:var(--rose)">9d</div>
+      <div style="font-size:9px;color:var(--t3);margin-top:3px">2 registros · meta ≤5d</div>
+    </div><div style="padding:10px;border:1px solid var(--b);background:var(--b2)">
+      <div style="font-size:9px;color:var(--t3);letter-spacing:1px;margin-bottom:4px">Chegada → 1º Contato</div>
+      <div style="font-family:Georgia,serif;font-size:22px;font-weight:300;color:var(--rose)">52d</div>
+      <div style="font-size:9px;color:var(--t3);margin-top:3px">2 registros · meta ≤3d</div>
+    </div><div style="padding:10px;border:1px solid var(--b);background:var(--b2)">
+      <div style="font-size:9px;color:var(--t3);letter-spacing:1px;margin-bottom:4px">1º Contato → Envio Contr.</div>
+      <div style="font-family:Georgia,serif;font-size:22px;font-weight:300;color:var(--green)">1d</div>
+      <div style="font-size:9px;color:var(--t3);margin-top:3px">2 registros · meta ≤5d</div>
+    </div><div style="padding:10px;border:1px solid var(--b);background:var(--b2)">
+      <div style="font-size:9px;color:var(--t3);letter-spacing:1px;margin-bottom:4px">Envio → Assinatura</div>
+      <div style="font-family:Georgia,serif;font-size:22px;font-weight:300;color:var(--amber)">6d</div>
+      <div style="font-size:9px;color:var(--t3);margin-top:3px">2 registros · meta ≤7d</div>
+    </div><div style="padding:10px;border:1px solid var(--b);background:var(--b2);text-align:center">
+        <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:5px">Pastas Concluídas / Total</div>
+        <div style="font-family:Georgia,serif;font-size:24px;color:var(--green)">1<span style="font-size:14px;color:var(--t3)">/73</span></div>
+      </div></div>
+    </div>
+
+    <div class="sl"><div class="sl-l"></div><div class="sl-t">Evolução &amp; Volume</div><div class="sl-l"></div></div>
+    <div class="gw">
+      <div class="card fu" style="animation-delay:.04s">
+        <div class="ct">Contratos por Mês <span style="font-size:9px;font-style:italic;color:var(--t3)">▬ assinados · - - recebidos</span></div>
+        <div style="height:200px"><canvas id="evolChart" style="box-sizing: border-box; display: block; height: 200px; width: 867px;" width="867" height="200"></canvas></div>
+      </div>
+      <div class="card fu" style="animation-delay:.08s">
+        <div class="ct">Comparativo Mensal</div>
+        <div class="mc-wrap" id="mc-wrap" style="min-height:200px"><div class="mc am" onclick="setMonth('Março')">
+      <div class="mc-m">Março</div><div class="mc-n">1</div>
+      <div class="mc-s"><strong style="color:var(--g)">selecionado</strong></div>
+      <div style="font-size:10px;color:var(--t3);margin-top:2px">47 recebidos</div>
+    </div><div class="mc " onclick="setMonth('Abril')">
+      <div class="mc-m">Abril</div><div class="mc-n">1</div>
+      <div class="mc-s">assinados</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:2px">26 recebidos</div><div class="mc-d up">▲ 0%</div>
+    </div></div>
+      </div>
+    </div>
+
+    <div class="sl"><div class="sl-l"></div><div class="sl-t">Advogados &amp; Áreas</div><div class="sl-l"></div></div>
+    <div class="gnw">
+      <div class="card fu" style="animation-delay:.1s">
+        <div class="ct">Ranking — Advogado Responsável <span style="font-size:9px;color:var(--t3);font-style:italic">clique na foto para alterar</span></div>
+        <div class="prank" id="prank"><div class="pr r1">
+      <div class="av" onclick="trigPh('pi_Sandra')"><div class="ini">S</div><div class="cam">📷</div></div>
+      <div style="flex:1"><div class="pr-pn">Sandra</div><div class="pr-ro">Advogado Líder</div>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:5px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--t3);width:46px;text-align:right">Total</span><div class="pb-bg"><div class="pb tot" style="width: 100%;" data-w="100%"></div></div></div>
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--blue);width:46px;text-align:right">Mar</span><div class="pb-bg"><div class="pb mon" style="width: 0%;" data-w="0%"></div></div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        <div class="pr-n">1</div>
+        <div style="font-size:9px;color:var(--t3)">total</div><div style="font-size:12px;font-weight:600;color:var(--blue)">0<span style="font-size:9px;color:var(--t3);font-weight:normal"> mês</span></div>
+        <div style="font-size:12px">🥇</div>
+      </div>
+    </div><div class="pr ">
+      <div class="av" onclick="trigPh('pi_Liandra')"><div class="ini">L</div><div class="cam">📷</div></div>
+      <div style="flex:1"><div class="pr-pn">Liandra</div><div class="pr-ro">Advogado</div>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:5px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--t3);width:46px;text-align:right">Total</span><div class="pb-bg"><div class="pb tot" style="width: 100%;" data-w="100%"></div></div></div>
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--blue);width:46px;text-align:right">Mar</span><div class="pb-bg"><div class="pb mon" style="width: 100%;" data-w="100%"></div></div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        <div class="pr-n">1</div>
+        <div style="font-size:9px;color:var(--t3)">total</div><div style="font-size:12px;font-weight:600;color:var(--blue)">1<span style="font-size:9px;color:var(--t3);font-weight:normal"> mês</span></div>
+        <div style="font-size:12px">🥈</div>
+      </div>
+    </div><div class="pr ">
+      <div class="av" onclick="trigPh('pi_Valdirlei')"><div class="ini">V</div><div class="cam">📷</div></div>
+      <div style="flex:1"><div class="pr-pn">Valdirlei</div><div class="pr-ro">Advogado</div>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:5px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--t3);width:46px;text-align:right">Total</span><div class="pb-bg"><div class="pb tot" style="width: 0%;" data-w="0%"></div></div></div>
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--blue);width:46px;text-align:right">Mar</span><div class="pb-bg"><div class="pb mon" style="width: 0%;" data-w="0%"></div></div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        <div class="pr-n">0</div>
+        <div style="font-size:9px;color:var(--t3)">total</div><div style="font-size:12px;font-weight:600;color:var(--blue)">0<span style="font-size:9px;color:var(--t3);font-weight:normal"> mês</span></div>
+        <div style="font-size:12px">🥉</div>
+      </div>
+    </div><div class="pr ">
+      <div class="av" onclick="trigPh('pi_Jaime')"><div class="ini">J</div><div class="cam">📷</div></div>
+      <div style="flex:1"><div class="pr-pn">Jaime</div><div class="pr-ro">Advogado</div>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:5px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--t3);width:46px;text-align:right">Total</span><div class="pb-bg"><div class="pb tot" style="width: 0%;" data-w="0%"></div></div></div>
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--blue);width:46px;text-align:right">Mar</span><div class="pb-bg"><div class="pb mon" style="width: 0%;" data-w="0%"></div></div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        <div class="pr-n">0</div>
+        <div style="font-size:9px;color:var(--t3)">total</div><div style="font-size:12px;font-weight:600;color:var(--blue)">0<span style="font-size:9px;color:var(--t3);font-weight:normal"> mês</span></div>
+        <div style="font-size:12px"></div>
+      </div>
+    </div><div class="pr ">
+      <div class="av" onclick="trigPh('pi_Camilla')"><div class="ini">C</div><div class="cam">📷</div></div>
+      <div style="flex:1"><div class="pr-pn">Camilla</div><div class="pr-ro">Advogado</div>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:5px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--t3);width:46px;text-align:right">Total</span><div class="pb-bg"><div class="pb tot" style="width: 0%;" data-w="0%"></div></div></div>
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--blue);width:46px;text-align:right">Mar</span><div class="pb-bg"><div class="pb mon" style="width: 0%;" data-w="0%"></div></div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        <div class="pr-n">0</div>
+        <div style="font-size:9px;color:var(--t3)">total</div><div style="font-size:12px;font-weight:600;color:var(--blue)">0<span style="font-size:9px;color:var(--t3);font-weight:normal"> mês</span></div>
+        <div style="font-size:12px"></div>
+      </div>
+    </div><div class="pr ">
+      <div class="av" onclick="trigPh('pi_Matheus')"><div class="ini">M</div><div class="cam">📷</div></div>
+      <div style="flex:1"><div class="pr-pn">Matheus</div><div class="pr-ro">Advogado</div>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:5px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--t3);width:46px;text-align:right">Total</span><div class="pb-bg"><div class="pb tot" style="width: 0%;" data-w="0%"></div></div></div>
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--blue);width:46px;text-align:right">Mar</span><div class="pb-bg"><div class="pb mon" style="width: 0%;" data-w="0%"></div></div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        <div class="pr-n">0</div>
+        <div style="font-size:9px;color:var(--t3)">total</div><div style="font-size:12px;font-weight:600;color:var(--blue)">0<span style="font-size:9px;color:var(--t3);font-weight:normal"> mês</span></div>
+        <div style="font-size:12px"></div>
+      </div>
+    </div></div>
+      </div>
+      <div class="card fu" style="animation-delay:.13s">
+        <div class="ct">Por Área Jurídica <span class="ct-n" id="area-tot">1</span></div>
+        <div class="hbl" id="hbar-area"><div class="hbr"><div class="hbn-name">Previdenciário</div>
+      <div class="hbrow"><div class="hblbl t">Total</div><div class="hbb"><div class="hbf t" style="width: 100%;" data-w="100%"></div></div><div class="hbv t">1</div></div>
+      <div class="hbrow"><div class="hblbl m">Mar</div><div class="hbb"><div class="hbf m" style="width: 0%;" data-w="0%"></div></div><div class="hbv m">0</div></div>
+    </div><div class="hbr"><div class="hbn-name">Trabalhista</div>
+      <div class="hbrow"><div class="hblbl t">Total</div><div class="hbb"><div class="hbf t" style="width: 100%;" data-w="100%"></div></div><div class="hbv t">1</div></div>
+      <div class="hbrow"><div class="hblbl m">Mar</div><div class="hbb"><div class="hbf m" style="width: 100%;" data-w="100%"></div></div><div class="hbv m">1</div></div>
+    </div><div class="hbr"><div class="hbn-name">Seguro</div>
+      <div class="hbrow"><div class="hblbl t">Total</div><div class="hbb"><div class="hbf t" style="width: 0%;" data-w="0%"></div></div><div class="hbv t">0</div></div>
+      <div class="hbrow"><div class="hblbl m">Mar</div><div class="hbb"><div class="hbf m" style="width: 0%;" data-w="0%"></div></div><div class="hbv m">0</div></div>
+    </div><div class="hbr"><div class="hbn-name">Cobrança</div>
+      <div class="hbrow"><div class="hblbl t">Total</div><div class="hbb"><div class="hbf t" style="width: 0%;" data-w="0%"></div></div><div class="hbv t">0</div></div>
+      <div class="hbrow"><div class="hblbl m">Mar</div><div class="hbb"><div class="hbf m" style="width: 0%;" data-w="0%"></div></div><div class="hbv m">0</div></div>
+    </div><div class="hbr"><div class="hbn-name">Inventário</div>
+      <div class="hbrow"><div class="hblbl t">Total</div><div class="hbb"><div class="hbf t" style="width: 0%;" data-w="0%"></div></div><div class="hbv t">0</div></div>
+      <div class="hbrow"><div class="hblbl m">Mar</div><div class="hbb"><div class="hbf m" style="width: 0%;" data-w="0%"></div></div><div class="hbv m">0</div></div>
+    </div><div class="hbr"><div class="hbn-name">Indenizatória</div>
+      <div class="hbrow"><div class="hblbl t">Total</div><div class="hbb"><div class="hbf t" style="width: 0%;" data-w="0%"></div></div><div class="hbv t">0</div></div>
+      <div class="hbrow"><div class="hblbl m">Mar</div><div class="hbb"><div class="hbf m" style="width: 0%;" data-w="0%"></div></div><div class="hbv m">0</div></div>
+    </div><div class="hbr"><div class="hbn-name">Alimentos</div>
+      <div class="hbrow"><div class="hblbl t">Total</div><div class="hbb"><div class="hbf t" style="width: 0%;" data-w="0%"></div></div><div class="hbv t">0</div></div>
+      <div class="hbrow"><div class="hblbl m">Mar</div><div class="hbb"><div class="hbf m" style="width: 0%;" data-w="0%"></div></div><div class="hbv m">0</div></div>
+    </div><div class="hbr"><div class="hbn-name">Divórcio</div>
+      <div class="hbrow"><div class="hblbl t">Total</div><div class="hbb"><div class="hbf t" style="width: 0%;" data-w="0%"></div></div><div class="hbv t">0</div></div>
+      <div class="hbrow"><div class="hblbl m">Mar</div><div class="hbb"><div class="hbf m" style="width: 0%;" data-w="0%"></div></div><div class="hbv m">0</div></div>
+    </div><div class="hbr"><div class="hbn-name">Trânsito</div>
+      <div class="hbrow"><div class="hblbl t">Total</div><div class="hbb"><div class="hbf t" style="width: 0%;" data-w="0%"></div></div><div class="hbv t">0</div></div>
+      <div class="hbrow"><div class="hblbl m">Mar</div><div class="hbb"><div class="hbf m" style="width: 0%;" data-w="0%"></div></div><div class="hbv m">0</div></div>
+    </div><div class="hbr"><div class="hbn-name">Imobiliário</div>
+      <div class="hbrow"><div class="hblbl t">Total</div><div class="hbb"><div class="hbf t" style="width: 0%;" data-w="0%"></div></div><div class="hbv t">0</div></div>
+      <div class="hbrow"><div class="hblbl m">Mar</div><div class="hbb"><div class="hbf m" style="width: 0%;" data-w="0%"></div></div><div class="hbv m">0</div></div>
+    </div></div>
+      </div>
+    </div>
+
+    <div class="sl"><div class="sl-l"></div><div class="sl-t">Tipo · Ação · Origem</div><div class="sl-l"></div></div>
+    <div class="g3">
+      <div class="card fu" style="animation-delay:.15s">
+        <div class="ct">Tipo de Contrato <span class="ct-n" id="tipo-tot">1</span></div>
+        <div class="dw"><div style="height:165px;width:160px;flex-shrink:0"><canvas id="tipoChart" style="box-sizing: border-box; display: block; height: 165px; width: 160px;" width="160" height="165"></canvas></div><div class="dleg" id="tipo-leg"><div class="di"><div class="dd" style="background:#C9A84C"></div>
+      <div class="dn2">Entrada + Êxito</div><div class="dv">1</div>
+      <span class="dv2">/ 1</span><div class="dp">100%</div></div><div class="di"><div class="dd" style="background:rgba(201,168,76,.5)"></div>
+      <div class="dn2">Somente no Êxito</div><div class="dv">0</div>
+      <span class="dv2">/ 1</span><div class="dp">0%</div></div><div class="di"><div class="dd" style="background:rgba(201,168,76,.2)"></div>
+      <div class="dn2">Pró-labore sem Êxito</div><div class="dv">0</div>
+      <span class="dv2">/ 0</span><div class="dp">0%</div></div></div></div>
+      </div>
+      <div class="card fu" style="animation-delay:.18s">
+        <div class="ct">Tipos de Ação — Top 10</div>
+        <div class="hbl" id="hbar-acao"><div class="hbr"><div class="hbn-name" style="font-size:10px">Usucapião</div>
+      <div class="hbrow"><div class="hblbl t" style="width:34px;font-size:9px">Total</div><div class="hbb"><div class="hbf t" style="width: 100%; background: linear-gradient(90deg, rgb(91, 140, 219), rgb(122, 173, 238));" data-w="100%"></div></div><div class="hbv t" style="color:var(--blue)">1</div></div>
+      <div class="hbrow"><div class="hblbl m" style="width:34px;font-size:9px">Mar</div><div class="hbb"><div class="hbf m" style="width: 100%;" data-w="100%"></div></div><div class="hbv m">1</div></div>
+    </div><div class="hbr"><div class="hbn-name" style="font-size:10px">Aposentadoria Especial</div>
+      <div class="hbrow"><div class="hblbl t" style="width:34px;font-size:9px">Total</div><div class="hbb"><div class="hbf t" style="width: 100%; background: linear-gradient(90deg, rgb(91, 140, 219), rgb(122, 173, 238));" data-w="100%"></div></div><div class="hbv t" style="color:var(--blue)">1</div></div>
+      <div class="hbrow"><div class="hblbl m" style="width:34px;font-size:9px">Mar</div><div class="hbb"><div class="hbf m" style="width: 0%;" data-w="0%"></div></div><div class="hbv m">0</div></div>
+    </div></div>
+      </div>
+      <div class="card fu" style="animation-delay:.21s">
+        <div class="ct">Origem do Lead <span class="ct-n" id="orig-tot">1</span></div>
+        <div class="dw"><div style="height:165px;width:160px;flex-shrink:0"><canvas id="origChart" style="box-sizing: border-box; display: block; height: 165px; width: 160px;" width="160" height="165"></canvas></div><div class="dleg" id="orig-leg"><div class="di"><div class="dd" style="background:#4E8FE8"></div>
+      <div class="dn2">Convencional</div><div class="dv">0</div>
+      <span class="dv2">/ 1</span><div class="dp">0%</div></div><div class="di"><div class="dd" style="background:rgba(78,143,232,.5)"></div>
+      <div class="dn2">Tráfego</div><div class="dv">1</div>
+      <span class="dv2">/ 1</span><div class="dp">100%</div></div><div class="di"><div class="dd" style="background:rgba(78,143,232,.2)"></div>
+      <div class="dn2">Prospecção</div><div class="dv">0</div>
+      <span class="dv2">/ 0</span><div class="dp">0%</div></div></div></div>
+      </div>
+    </div>
+
+    <div class="sl"><div class="sl-l"></div><div class="sl-t">Advogado × Mês · Resumo</div><div class="sl-l"></div></div>
+    <div class="gnw">
+      <div class="card fu" style="animation-delay:.23s">
+        <div class="ct">Contratos Assinados por Advogado — por Mês</div>
+        <div style="height:230px"><canvas id="advChart" style="box-sizing: border-box; display: block; height: 230px; width: 968px;" width="968" height="230"></canvas></div>
+      </div>
+      <div class="card fu" style="animation-delay:.26s">
+        <div class="ct">Resumo Executivo</div>
+        <table class="stbl" id="sum-tbl">
+    <thead><tr><th>Indicador</th><th>Março</th><th>Acumulado</th></tr></thead>
+    <tbody><tr><td style="color:var(--t3)">Contratos assinados</td>
+      <td><span class="tag">1</span></td>
+      <td><span class="tag b">2</span></td></tr><tr><td style="color:var(--t3)">Área Líder</td>
+      <td><span class="tag">Trabalhista</span></td>
+      <td><span class="tag b">1</span></td></tr><tr><td style="color:var(--t3)">Ação Mais Comum</td>
+      <td><span class="tag">Usucapião</span></td>
+      <td><span class="tag b">1</span></td></tr><tr><td style="color:var(--t3)">Tipo Predominante</td>
+      <td><span class="tag">Entrada + Êxito</span></td>
+      <td><span class="tag b">1</span></td></tr><tr><td style="color:var(--t3)">Advogado Líder</td>
+      <td><span class="tag">Liandra</span></td>
+      <td><span class="tag b">1</span></td></tr><tr><td style="color:var(--t3)">⏱ Média Chegada→Assin.</td>
+      <td><span class="tag">21d</span></td>
+      <td><span class="tag b">21d</span></td></tr><tr><td style="color:var(--t3)">⏱ Média Chegada→Docs</td>
+      <td><span class="tag">30d</span></td>
+      <td><span class="tag b">30d</span></td></tr>
+    </tbody></table>
+      </div>
+    </div>
+  </div>
+
+  <!-- REGISTROS -->
+  <div id="view-registros" class="view on">
+    <div class="tbar">
+      <h2>Registros <span style="font-size:14px;color:var(--t3);font-family:inherit" id="ct-count">— 73 registros</span></h2>
+      <div class="ttools">
+        <input class="sb" id="srch" placeholder="🔍 Buscar..." oninput="onSearch()">
+        <select class="fsel" id="ff-e" onchange="pg=1;renderTbl()">
+          <option value="">Todas etapas</option>
+          <option value="1">📥 Recebida</option>
+          <option value="2">📞 Negociação</option>
+          <option value="3">✍ Contrato</option>
+          <option value="4">📋 Documentação</option>
+          <option value="5">✅ Concluído</option>
+        </select>
+        <select class="fsel" id="ff-adv" onchange="pg=1;renderTbl()"><option value="">Todos adv.</option><option value="Sandra">Sandra</option><option value="Valdirlei">Valdirlei</option><option value="Liandra">Liandra</option><option value="Jaime">Jaime</option><option value="Camilla">Camilla</option><option value="Matheus">Matheus</option></select>
+        <select class="fsel" id="ff-mes" onchange="pg=1;renderTbl()"><option value="">Todos meses</option><option value="Abril">Abril</option><option value="Março">Março</option></select>
+        <select class="fsel" id="ff-area" onchange="pg=1;renderTbl()"><option value="">Todas áreas</option><option value="Previdenciário">Previdenciário</option><option value="Trabalhista">Trabalhista</option><option value="Seguro">Seguro</option><option value="Cobrança">Cobrança</option><option value="Inventário">Inventário</option><option value="Indenizatória">Indenizatória</option><option value="Alimentos">Alimentos</option><option value="Divórcio">Divórcio</option><option value="Trânsito">Trânsito</option><option value="Imobiliário">Imobiliário</option><option value="Crime">Crime</option><option value="Consumidor">Consumidor</option><option value="Família">Família</option><option value="Ambiental">Ambiental</option><option value="Administrativo">Administrativo</option><option value="Agentes Públicos">Agentes Públicos</option><option value="Eleitoral">Eleitoral</option><option value="Assessoria Empresarial">Assessoria Empresarial</option><option value="Empresarial">Empresarial</option></select>
+        <button class="btn sm" onclick="clearF()">✕ Limpar</button>
+      </div>
+    </div>
+    <div class="twrap">
+      <table class="ctbl">
+        <thead><tr>
+          <th onclick="srt('cliente')" data-c="cliente">Cliente ↕</th>
+          <th onclick="srt('adv')" data-c="adv">Advogado ↕</th>
+          <th onclick="srt('area')" data-c="area">Área ↕</th>
+          <th onclick="srt('acao')" data-c="acao">Tipo de Ação ↕</th>
+          <th onclick="srt('tipo')" data-c="tipo">Tipo Contr. ↕</th>
+          <th onclick="srt('etapa')" data-c="etapa">Etapa ↕</th>
+          <th onclick="srt('dtChegada')" data-c="dtChegada" class="srt">📥 Chegada ↓</th>
+          <th onclick="srt('dtAssinatura')" data-c="dtAssinatura">✍ Assinatura ↕</th>
+          <th onclick="srt('dtDocsRec')" data-c="dtDocsRec">📦 Docs Rec. ↕</th>
+          <th onclick="srt('dtEntrega')" data-c="dtEntrega">🏁 Entrega ↕</th>
+          <th onclick="srt('mes')" data-c="mes">Mês Ref. ↕</th>
+          <th onclick="srt('_dc')" data-c="_dc">⏱ Comercial ↕</th>
+          <th class="ns" style="width:68px">Ações</th>
+        </tr></thead>
+        <tbody id="ctbody"><tr onclick="openM('mod5km1i3znw')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Vanderleia Felisbino">Vanderleia Felisbino</div>
+        <div class="pdots"><div class="pdot dn" title="Recebida"></div><div class="pln"></div><div class="pdot dn" title="Negociação"></div><div class="pln"></div><div class="pdot dn" title="Contrato"></div><div class="pln"></div><div class="pdot dn" title="Documentação"></div><div class="pln"></div><div class="pdot ac" title="Concluído"></div></div></td>
+      <td style="font-size:12px">Sandra</td>
+      <td style="font-size:12px">Previdenciário</td>
+      <td><span class="bx bb" title="Aposentadoria Especial" style="max-width:120px;display:inline-block;overflow:hidden;text-overflow:ellipsis">Aposentadoria Especial</span></td><td><span class="bx bg">Somente no Êxito</span></td><td><span class="ebx e5">✅ Concluído</span></td>
+      <td style="font-size:11px">06/03/2026</td>
+      <td style="font-size:11px">27/04/2026</td>
+      <td style="font-size:11px">24/04/2026</td>
+      <td style="font-size:11px">27/04/2026</td>
+      <td style="font-size:11px">Abril</td>
+      <td><span class="db ddg">52d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1i3znw')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1i3znw')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1ijvyd')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Cooperativa de Eletrificação - Coopermila">Cooperativa de Eletrificação - Coopermila</div>
+        <div class="pdots"><div class="pdot dn" title="Recebida"></div><div class="pln"></div><div class="pdot dn" title="Negociação"></div><div class="pln"></div><div class="pdot ac" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px">Liandra</td>
+      <td style="font-size:12px">Trabalhista</td>
+      <td><span class="bx bb" title="Usucapião" style="max-width:120px;display:inline-block;overflow:hidden;text-overflow:ellipsis">Usucapião</span></td><td><span class="bx bg">Entrada + Êxito</span></td><td><span class="ebx e3">✍ Contrato</span></td>
+      <td style="font-size:11px">06/03/2026</td>
+      <td style="font-size:11px">18/03/2026</td>
+      <td style="font-size:11px">17/03/2026</td>
+      <td style="font-size:11px">31/03/2026</td>
+      <td style="font-size:11px">Março</td>
+      <td><span class="db ddg">25d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1ijvyd')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1ijvyd')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1i88v0')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Ângela Maria Campos Lima">Ângela Maria Campos Lima</div>
+        <div class="pdots"><div class="pdot ac" title="Recebida"></div><div class="pln"></div><div class="pdot pd" title="Negociação"></div><div class="pln"></div><div class="pdot pd" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td style="font-size:12px">Previdenciário</td>
+      <td><span class="bx bm">—</span></td><td><span class="bx bm">—</span></td><td><span class="ebx e1">📥 Recebida</span></td>
+      <td style="font-size:11px">06/03/2026</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">Março</td>
+      <td><span class="db ddg">52d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1i88v0')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1i88v0')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1iyymy')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Alexsandro Fernandes">Alexsandro Fernandes</div>
+        <div class="pdots"><div class="pdot ac" title="Recebida"></div><div class="pln"></div><div class="pdot pd" title="Negociação"></div><div class="pln"></div><div class="pdot pd" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td style="font-size:12px">Previdenciário</td>
+      <td><span class="bx bm">—</span></td><td><span class="bx bm">—</span></td><td><span class="ebx e1">📥 Recebida</span></td>
+      <td style="font-size:11px">04/03/2026</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">Março</td>
+      <td><span class="db ddg">54d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1iyymy')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1iyymy')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1imbmt')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Murialdo de Moraes">Murialdo de Moraes</div>
+        <div class="pdots"><div class="pdot ac" title="Recebida"></div><div class="pln"></div><div class="pdot pd" title="Negociação"></div><div class="pln"></div><div class="pdot pd" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td style="font-size:12px">Previdenciário</td>
+      <td><span class="bx bm">—</span></td><td><span class="bx bm">—</span></td><td><span class="ebx e1">📥 Recebida</span></td>
+      <td style="font-size:11px">04/03/2026</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">Março</td>
+      <td><span class="db ddg">54d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1imbmt')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1imbmt')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1ij2tx')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Francisco Donizete Batista">Francisco Donizete Batista</div>
+        <div class="pdots"><div class="pdot ac" title="Recebida"></div><div class="pln"></div><div class="pdot pd" title="Negociação"></div><div class="pln"></div><div class="pdot pd" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td style="font-size:12px">Previdenciário</td>
+      <td><span class="bx bm">—</span></td><td><span class="bx bg">Entrada + Êxito</span></td><td><span class="ebx e1">📥 Recebida</span></td>
+      <td style="font-size:11px">02/04/2026</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">Abril</td>
+      <td><span class="db ddg">25d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1ij2tx')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1ij2tx')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1i4ph3')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Edson Jose Matos">Edson Jose Matos</div>
+        <div class="pdots"><div class="pdot ac" title="Recebida"></div><div class="pln"></div><div class="pdot pd" title="Negociação"></div><div class="pln"></div><div class="pdot pd" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td style="font-size:12px">Previdenciário</td>
+      <td><span class="bx bm">—</span></td><td><span class="bx bg">Somente no Êxito</span></td><td><span class="ebx e1">📥 Recebida</span></td>
+      <td style="font-size:11px">02/04/2026</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">Abril</td>
+      <td><span class="db ddg">25d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1i4ph3')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1i4ph3')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1ir8a1')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Julio Cesar Mendes">Julio Cesar Mendes</div>
+        <div class="pdots"><div class="pdot ac" title="Recebida"></div><div class="pln"></div><div class="pdot pd" title="Negociação"></div><div class="pln"></div><div class="pdot pd" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td style="font-size:12px">Previdenciário</td>
+      <td><span class="bx bm">—</span></td><td><span class="bx bm">—</span></td><td><span class="ebx e1">📥 Recebida</span></td>
+      <td style="font-size:11px">02/03/2026</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">Março</td>
+      <td><span class="db ddg">56d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1ir8a1')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1ir8a1')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1ijlsy')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Rodimar Candido">Rodimar Candido</div>
+        <div class="pdots"><div class="pdot ac" title="Recebida"></div><div class="pln"></div><div class="pdot pd" title="Negociação"></div><div class="pln"></div><div class="pdot pd" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td style="font-size:12px">Trabalhista</td>
+      <td><span class="bx bm">—</span></td><td><span class="bx bg">Somente no Êxito</span></td><td><span class="ebx e1">📥 Recebida</span></td>
+      <td style="font-size:11px">01/04/2026</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">Abril</td>
+      <td><span class="db ddg">26d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1ijlsy')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1ijlsy')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1ibj6v')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Maria Cristina Elias">Maria Cristina Elias</div>
+        <div class="pdots"><div class="pdot ac" title="Recebida"></div><div class="pln"></div><div class="pdot pd" title="Negociação"></div><div class="pln"></div><div class="pdot pd" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td style="font-size:12px">Previdenciário</td>
+      <td><span class="bx bm">—</span></td><td><span class="bx bg">Somente no Êxito</span></td><td><span class="ebx e1">📥 Recebida</span></td>
+      <td style="font-size:11px">01/04/2026</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">Abril</td>
+      <td><span class="db ddg">26d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1ibj6v')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1ibj6v')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1i5s9m')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Laura de Medeiros Candido">Laura de Medeiros Candido</div>
+        <div class="pdots"><div class="pdot ac" title="Recebida"></div><div class="pln"></div><div class="pdot pd" title="Negociação"></div><div class="pln"></div><div class="pdot pd" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td><span class="bx bm">—</span></td><td><span class="bx bm">—</span></td><td><span class="ebx e1">📥 Recebida</span></td>
+      <td style="font-size:11px">01/04/2026</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">Abril</td>
+      <td><span class="db ddg">26d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1i5s9m')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1i5s9m')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1ib4r2')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Gilliard Maciel dos Santos">Gilliard Maciel dos Santos</div>
+        <div class="pdots"><div class="pdot ac" title="Recebida"></div><div class="pln"></div><div class="pdot pd" title="Negociação"></div><div class="pln"></div><div class="pdot pd" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td style="font-size:12px">Trabalhista</td>
+      <td><span class="bx bm">—</span></td><td><span class="bx bg">Entrada + Êxito</span></td><td><span class="ebx e1">📥 Recebida</span></td>
+      <td style="font-size:11px">01/04/2026</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">Abril</td>
+      <td><span class="db ddg">26d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1ib4r2')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1ib4r2')" title="Excluir">🗑</button>
+      </div></td>
+    </tr><tr onclick="openM('mod5km1iblrr')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="Daniela Zappelini Rosa">Daniela Zappelini Rosa</div>
+        <div class="pdots"><div class="pdot ac" title="Recebida"></div><div class="pln"></div><div class="pdot pd" title="Negociação"></div><div class="pln"></div><div class="pdot pd" title="Contrato"></div><div class="pln"></div><div class="pdot pd" title="Documentação"></div><div class="pln"></div><div class="pdot pd" title="Concluído"></div></div></td>
+      <td style="font-size:12px"><span style="color:var(--t3)">—</span></td>
+      <td style="font-size:12px">Divórcio</td>
+      <td><span class="bx bm">—</span></td><td><span class="bx bm">—</span></td><td><span class="ebx e1">📥 Recebida</span></td>
+      <td style="font-size:11px">01/04/2026</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">—</td>
+      <td style="font-size:11px">Abril</td>
+      <td><span class="db ddg">26d</span></td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('mod5km1iblrr')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('mod5km1iblrr')" title="Excluir">🗑</button>
+      </div></td>
+    </tr></tbody>
+      </table>
+    </div>
+    <div class="pag"><div class="pag-i" id="pag-i">73 registros · Página 4 de 4</div><div class="pag-b" id="pag-b"><button class="pb2" onclick="goPg(3)">‹</button><button class="pb2 " onclick="goPg(1)">1</button><button class="pb2 " onclick="goPg(2)">2</button><button class="pb2 " onclick="goPg(3)">3</button><button class="pb2 on" onclick="goPg(4)">4</button><button class="pb2" onclick="goPg(5)" disabled="">›</button></div></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div id="view-cfg" class="view">
+    <div class="cfg-h"><h2>⚙ Configurações</h2><p>Gerencie as listas. Itens em uso não podem ser removidos.</p></div>
+    <div class="cfg-grid">
+      <div class="ccard"><div class="chd"><span class="cion">🏛</span><div><div class="ctit">Áreas Jurídicas</div><div class="csub" id="cnt-areas">19 áreas</div></div></div><div class="citems" id="lst-areas"><div class="citem"><span class="cin">Previdenciário</span>
+      <span class="cu">35 usos</span>
+      <button class="cdel" onclick="remC('areas',0)" disabled="" title="35 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Trabalhista</span>
+      <span class="cu">6 usos</span>
+      <button class="cdel" onclick="remC('areas',1)" disabled="" title="6 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Seguro</span>
+      <span class="cu">3 usos</span>
+      <button class="cdel" onclick="remC('areas',2)" disabled="" title="3 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Cobrança</span>
+      <span class="cu">4 usos</span>
+      <button class="cdel" onclick="remC('areas',3)" disabled="" title="4 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Inventário</span>
+      <span class="cu">2 usos</span>
+      <button class="cdel" onclick="remC('areas',4)" disabled="" title="2 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Indenizatória</span>
+      <span class="cu">3 usos</span>
+      <button class="cdel" onclick="remC('areas',5)" disabled="" title="3 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Alimentos</span>
+      <span class="cu">1 uso</span>
+      <button class="cdel" onclick="remC('areas',6)" disabled="" title="1 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Divórcio</span>
+      <span class="cu">1 uso</span>
+      <button class="cdel" onclick="remC('areas',7)" disabled="" title="1 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Trânsito</span>
+      <span class="cu">1 uso</span>
+      <button class="cdel" onclick="remC('areas',8)" disabled="" title="1 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Imobiliário</span>
+      
+      <button class="cdel" onclick="remC('areas',9)">✕</button>
+    </div><div class="citem"><span class="cin">Crime</span>
+      
+      <button class="cdel" onclick="remC('areas',10)">✕</button>
+    </div><div class="citem"><span class="cin">Consumidor</span>
+      
+      <button class="cdel" onclick="remC('areas',11)">✕</button>
+    </div><div class="citem"><span class="cin">Família</span>
+      
+      <button class="cdel" onclick="remC('areas',12)">✕</button>
+    </div><div class="citem"><span class="cin">Ambiental</span>
+      
+      <button class="cdel" onclick="remC('areas',13)">✕</button>
+    </div><div class="citem"><span class="cin">Administrativo</span>
+      
+      <button class="cdel" onclick="remC('areas',14)">✕</button>
+    </div><div class="citem"><span class="cin">Agentes Públicos</span>
+      
+      <button class="cdel" onclick="remC('areas',15)">✕</button>
+    </div><div class="citem"><span class="cin">Eleitoral</span>
+      
+      <button class="cdel" onclick="remC('areas',16)">✕</button>
+    </div><div class="citem"><span class="cin">Assessoria Empresarial</span>
+      
+      <button class="cdel" onclick="remC('areas',17)">✕</button>
+    </div><div class="citem"><span class="cin">Empresarial</span>
+      
+      <button class="cdel" onclick="remC('areas',18)">✕</button>
+    </div></div><div class="carow"><input class="cinp" id="ni-areas" placeholder="Nova área..." maxlength="50"><button class="btn pri sm" onclick="addC('areas')">＋</button></div></div>
+      <div class="ccard"><div class="chd"><span class="cion">⚡</span><div><div class="ctit">Tipos de Ação</div><div class="csub" id="cnt-acoes">31 açãos</div></div></div><div class="citems" id="lst-acoes"><div class="citem"><span class="cin">Usucapião</span>
+      <span class="cu">1 uso</span>
+      <button class="cdel" onclick="remC('acoes',0)" disabled="" title="1 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Divórcio</span>
+      
+      <button class="cdel" onclick="remC('acoes',1)">✕</button>
+    </div><div class="citem"><span class="cin">Adjudicação</span>
+      
+      <button class="cdel" onclick="remC('acoes',2)">✕</button>
+    </div><div class="citem"><span class="cin">Aposentadoria Especial</span>
+      <span class="cu">2 usos</span>
+      <button class="cdel" onclick="remC('acoes',3)" disabled="" title="2 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Aposentadoria por Invalidez</span>
+      
+      <button class="cdel" onclick="remC('acoes',4)">✕</button>
+    </div><div class="citem"><span class="cin">Auxílio Acidente</span>
+      
+      <button class="cdel" onclick="remC('acoes',5)">✕</button>
+    </div><div class="citem"><span class="cin">Auxílio Doença</span>
+      
+      <button class="cdel" onclick="remC('acoes',6)">✕</button>
+    </div><div class="citem"><span class="cin">LOAS</span>
+      
+      <button class="cdel" onclick="remC('acoes',7)">✕</button>
+    </div><div class="citem"><span class="cin">Inventário</span>
+      
+      <button class="cdel" onclick="remC('acoes',8)">✕</button>
+    </div><div class="citem"><span class="cin">Dano Moral</span>
+      
+      <button class="cdel" onclick="remC('acoes',9)">✕</button>
+    </div><div class="citem"><span class="cin">Dano Material</span>
+      
+      <button class="cdel" onclick="remC('acoes',10)">✕</button>
+    </div><div class="citem"><span class="cin">Retificação de Registro Civil</span>
+      
+      <button class="cdel" onclick="remC('acoes',11)">✕</button>
+    </div><div class="citem"><span class="cin">Ação Penal</span>
+      
+      <button class="cdel" onclick="remC('acoes',12)">✕</button>
+    </div><div class="citem"><span class="cin">Acompanhamento na Delegacia</span>
+      
+      <button class="cdel" onclick="remC('acoes',13)">✕</button>
+    </div><div class="citem"><span class="cin">Reintegração de Posse</span>
+      
+      <button class="cdel" onclick="remC('acoes',14)">✕</button>
+    </div><div class="citem"><span class="cin">Imissão na Posse</span>
+      
+      <button class="cdel" onclick="remC('acoes',15)">✕</button>
+    </div><div class="citem"><span class="cin">Alvará Judicial</span>
+      
+      <button class="cdel" onclick="remC('acoes',16)">✕</button>
+    </div><div class="citem"><span class="cin">Reclamatória Trabalhista</span>
+      
+      <button class="cdel" onclick="remC('acoes',17)">✕</button>
+    </div><div class="citem"><span class="cin">Consignação em Pagamento</span>
+      
+      <button class="cdel" onclick="remC('acoes',18)">✕</button>
+    </div><div class="citem"><span class="cin">Restabelecimento de Benefício</span>
+      
+      <button class="cdel" onclick="remC('acoes',19)">✕</button>
+    </div><div class="citem"><span class="cin">Mandado de Segurança</span>
+      
+      <button class="cdel" onclick="remC('acoes',20)">✕</button>
+    </div><div class="citem"><span class="cin">Cobrança de Seguro em Grupo</span>
+      
+      <button class="cdel" onclick="remC('acoes',21)">✕</button>
+    </div><div class="citem"><span class="cin">Cobrança de Título</span>
+      
+      <button class="cdel" onclick="remC('acoes',22)">✕</button>
+    </div><div class="citem"><span class="cin">Execução de Título</span>
+      
+      <button class="cdel" onclick="remC('acoes',23)">✕</button>
+    </div><div class="citem"><span class="cin">Erro Médico</span>
+      
+      <button class="cdel" onclick="remC('acoes',24)">✕</button>
+    </div><div class="citem"><span class="cin">Outras</span>
+      
+      <button class="cdel" onclick="remC('acoes',25)">✕</button>
+    </div><div class="citem"><span class="cin">Alimentos</span>
+      
+      <button class="cdel" onclick="remC('acoes',26)">✕</button>
+    </div><div class="citem"><span class="cin">Aposentadoria por tempo de contribuição</span>
+      
+      <button class="cdel" onclick="remC('acoes',27)">✕</button>
+    </div><div class="citem"><span class="cin">Recurso administrativo</span>
+      
+      <button class="cdel" onclick="remC('acoes',28)">✕</button>
+    </div><div class="citem"><span class="cin">Salário maternidade</span>
+      
+      <button class="cdel" onclick="remC('acoes',29)">✕</button>
+    </div><div class="citem"><span class="cin">Suscitação de dúvidas</span>
+      
+      <button class="cdel" onclick="remC('acoes',30)">✕</button>
+    </div></div><div class="carow"><input class="cinp" id="ni-acoes" placeholder="Novo tipo de ação..." maxlength="60"><button class="btn pri sm" onclick="addC('acoes')">＋</button></div></div>
+      <div class="ccard"><div class="chd"><span class="cion">👤</span><div><div class="ctit">Advogados</div><div class="csub" id="cnt-advs">6 advogados</div></div></div><div class="citems" id="lst-advs"><div class="citem"><span class="cin">Sandra</span>
+      <span class="cu">3 usos</span>
+      <button class="cdel" onclick="remC('advs',0)" disabled="" title="3 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Valdirlei</span>
+      
+      <button class="cdel" onclick="remC('advs',1)">✕</button>
+    </div><div class="citem"><span class="cin">Liandra</span>
+      <span class="cu">3 usos</span>
+      <button class="cdel" onclick="remC('advs',2)" disabled="" title="3 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Jaime</span>
+      
+      <button class="cdel" onclick="remC('advs',3)">✕</button>
+    </div><div class="citem"><span class="cin">Camilla</span>
+      
+      <button class="cdel" onclick="remC('advs',4)">✕</button>
+    </div><div class="citem"><span class="cin">Matheus</span>
+      
+      <button class="cdel" onclick="remC('advs',5)">✕</button>
+    </div></div><div class="carow"><input class="cinp" id="ni-advs" placeholder="Nome..." maxlength="40"><button class="btn pri sm" onclick="addC('advs')">＋</button></div></div>
+      <div class="ccard"><div class="chd"><span class="cion">📋</span><div><div class="ctit">Tipos de Contrato</div><div class="csub" id="cnt-tipos">3 tipos</div></div></div><div class="citems" id="lst-tipos"><div class="citem"><span class="cin">Entrada + Êxito</span>
+      <span class="cu">23 usos</span>
+      <button class="cdel" onclick="remC('tipos',0)" disabled="" title="23 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Somente no Êxito</span>
+      <span class="cu">18 usos</span>
+      <button class="cdel" onclick="remC('tipos',1)" disabled="" title="18 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Pró-labore sem Êxito</span>
+      
+      <button class="cdel" onclick="remC('tipos',2)">✕</button>
+    </div></div><div class="carow"><input class="cinp" id="ni-tipos" placeholder="Novo tipo..." maxlength="40"><button class="btn pri sm" onclick="addC('tipos')">＋</button></div></div>
+      <div class="ccard"><div class="chd"><span class="cion">📡</span><div><div class="ctit">Origens do Lead</div><div class="csub" id="cnt-origens">3 origems</div></div></div><div class="citems" id="lst-origens"><div class="citem"><span class="cin">Convencional</span>
+      <span class="cu">3 usos</span>
+      <button class="cdel" onclick="remC('origens',0)" disabled="" title="3 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Tráfego</span>
+      <span class="cu">1 uso</span>
+      <button class="cdel" onclick="remC('origens',1)" disabled="" title="1 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Prospecção</span>
+      <span class="cu">1 uso</span>
+      <button class="cdel" onclick="remC('origens',2)" disabled="" title="1 em uso">🔒</button>
+    </div></div><div class="carow"><input class="cinp" id="ni-origens" placeholder="Nova origem..." maxlength="40"><button class="btn pri sm" onclick="addC('origens')">＋</button></div></div>
+      <div class="ccard"><div class="chd"><span class="cion">📅</span><div><div class="ctit">Meses de Referência</div><div class="csub" id="cnt-meses">12 mêss</div></div></div><div class="citems" id="lst-meses"><div class="citem"><span class="cin">Janeiro</span>
+      
+      <button class="cdel" onclick="remC('meses',0)">✕</button>
+    </div><div class="citem"><span class="cin">Fevereiro</span>
+      
+      <button class="cdel" onclick="remC('meses',1)">✕</button>
+    </div><div class="citem"><span class="cin">Março</span>
+      <span class="cu">47 usos</span>
+      <button class="cdel" onclick="remC('meses',2)" disabled="" title="47 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Abril</span>
+      <span class="cu">26 usos</span>
+      <button class="cdel" onclick="remC('meses',3)" disabled="" title="26 em uso">🔒</button>
+    </div><div class="citem"><span class="cin">Maio</span>
+      
+      <button class="cdel" onclick="remC('meses',4)">✕</button>
+    </div><div class="citem"><span class="cin">Junho</span>
+      
+      <button class="cdel" onclick="remC('meses',5)">✕</button>
+    </div><div class="citem"><span class="cin">Julho</span>
+      
+      <button class="cdel" onclick="remC('meses',6)">✕</button>
+    </div><div class="citem"><span class="cin">Agosto</span>
+      
+      <button class="cdel" onclick="remC('meses',7)">✕</button>
+    </div><div class="citem"><span class="cin">Setembro</span>
+      
+      <button class="cdel" onclick="remC('meses',8)">✕</button>
+    </div><div class="citem"><span class="cin">Outubro</span>
+      
+      <button class="cdel" onclick="remC('meses',9)">✕</button>
+    </div><div class="citem"><span class="cin">Novembro</span>
+      
+      <button class="cdel" onclick="remC('meses',10)">✕</button>
+    </div><div class="citem"><span class="cin">Dezembro</span>
+      
+      <button class="cdel" onclick="remC('meses',11)">✕</button>
+    </div></div><div class="carow"><input class="cinp" id="ni-meses" placeholder="Ex: Maio..." maxlength="20"><button class="btn pri sm" onclick="addC('meses')">＋</button></div></div>
+    </div>
+  </div>
+</div><!-- /app -->
+
+<!-- ══ MODAL ÚNICO DE LANÇAMENTO ══ -->
+<div class="ov" id="ov" onclick="ovBg(event)">
+<div class="mbox">
+  <div class="mhd">
+    <h2 id="m-title">✏️  Editar Registro</h2>
+    <button class="mcl" onclick="closeM()">×</button>
+  </div>
+  <input type="hidden" id="m-uid" value="mod5km1ijvyd">
+
+  <!-- ETAPA -->
+  <div class="esel" id="esel">
+    <button class="esb" data-e="1" onclick="setE(1)"><span class="esi">📥</span>Recebida</button>
+    <button class="esb" data-e="2" onclick="setE(2)"><span class="esi">📞</span>Negociação</button>
+    <button class="esb on" data-e="3" onclick="setE(3)"><span class="esi">✍</span>Contrato</button>
+    <button class="esb" data-e="4" onclick="setE(4)"><span class="esi">📋</span>Documentação</button>
+    <button class="esb" data-e="5" onclick="setE(5)"><span class="esi">✅</span>Concluído</button>
+  </div>
+
+  <!-- SEC 1: IDENTIFICAÇÃO -->
+  <div class="msec">
+    <div class="mst">Identificação do Cliente</div>
+    <div class="mg2">
+      <div class="field"><label>Nome do Cliente <span class="req">*</span></label><input type="text" id="m-cliente" placeholder="Nome completo"></div>
+      <div class="field"><label>Advogado Responsável</label><select id="m-adv"><option value="">— Selecionar —</option><option value="Sandra">Sandra</option><option value="Valdirlei">Valdirlei</option><option value="Liandra">Liandra</option><option value="Jaime">Jaime</option><option value="Camilla">Camilla</option><option value="Matheus">Matheus</option></select></div>
+      <div class="field"><label>Área Jurídica</label><select id="m-area"><option value="">— Selecionar —</option><option value="Previdenciário">Previdenciário</option><option value="Trabalhista">Trabalhista</option><option value="Seguro">Seguro</option><option value="Cobrança">Cobrança</option><option value="Inventário">Inventário</option><option value="Indenizatória">Indenizatória</option><option value="Alimentos">Alimentos</option><option value="Divórcio">Divórcio</option><option value="Trânsito">Trânsito</option><option value="Imobiliário">Imobiliário</option><option value="Crime">Crime</option><option value="Consumidor">Consumidor</option><option value="Família">Família</option><option value="Ambiental">Ambiental</option><option value="Administrativo">Administrativo</option><option value="Agentes Públicos">Agentes Públicos</option><option value="Eleitoral">Eleitoral</option><option value="Assessoria Empresarial">Assessoria Empresarial</option><option value="Empresarial">Empresarial</option></select></div>
+      <div class="field"><label>Tipo de Ação</label><select id="m-acao"><option value="">— Selecionar —</option><option value="Usucapião">Usucapião</option><option value="Divórcio">Divórcio</option><option value="Adjudicação">Adjudicação</option><option value="Aposentadoria Especial">Aposentadoria Especial</option><option value="Aposentadoria por Invalidez">Aposentadoria por Invalidez</option><option value="Auxílio Acidente">Auxílio Acidente</option><option value="Auxílio Doença">Auxílio Doença</option><option value="LOAS">LOAS</option><option value="Inventário">Inventário</option><option value="Dano Moral">Dano Moral</option><option value="Dano Material">Dano Material</option><option value="Retificação de Registro Civil">Retificação de Registro Civil</option><option value="Ação Penal">Ação Penal</option><option value="Acompanhamento na Delegacia">Acompanhamento na Delegacia</option><option value="Reintegração de Posse">Reintegração de Posse</option><option value="Imissão na Posse">Imissão na Posse</option><option value="Alvará Judicial">Alvará Judicial</option><option value="Reclamatória Trabalhista">Reclamatória Trabalhista</option><option value="Consignação em Pagamento">Consignação em Pagamento</option><option value="Restabelecimento de Benefício">Restabelecimento de Benefício</option><option value="Mandado de Segurança">Mandado de Segurança</option><option value="Cobrança de Seguro em Grupo">Cobrança de Seguro em Grupo</option><option value="Cobrança de Título">Cobrança de Título</option><option value="Execução de Título">Execução de Título</option><option value="Erro Médico">Erro Médico</option><option value="Outras">Outras</option><option value="Alimentos">Alimentos</option><option value="Aposentadoria por tempo de contribuição">Aposentadoria por tempo de contribuição</option><option value="Recurso administrativo">Recurso administrativo</option><option value="Salário maternidade">Salário maternidade</option><option value="Suscitação de dúvidas">Suscitação de dúvidas</option></select></div>
+    </div>
+  </div>
+
+  <!-- SEC 2: DATAS COMERCIAIS -->
+  <div class="msec">
+    <div class="mst">Controle de Datas — Processo Comercial</div>
+    <div class="mg3" style="margin-bottom:10px">
+      <div class="field">
+        <label>📥 Chegada da Pasta</label>
+        <input type="date" id="m-dtChegada" onchange="calcDur()">
+        <div class="hint">Entrada no comercial</div>
+      </div>
+      <div class="field">
+        <label>📞 Último Contato</label>
+        <input type="date" id="m-dtContato" onchange="calcDur()">
+        <div class="hint">Data do último contato</div>
+      </div>
+      <div class="field">
+        <label>📄 Envio do Contrato</label>
+        <input type="date" id="m-dtEnvioContrato" onchange="calcDur()">
+        <div class="hint">Contrato enviado ao cliente</div>
+      </div>
+      <div class="field">
+        <label>✍ Assinatura do Contrato</label>
+        <input type="date" id="m-dtAssinatura" onchange="onAssin()">
+        <div class="hint">Preencher quando assinar</div>
+      </div>
+      <div class="field">
+        <label>📋 Solicitação de Documentos</label>
+        <input type="date" id="m-dtDocs" onchange="calcDur()">
+        <div class="hint">Docs solicitados ao cliente</div>
+      </div>
+      <div class="field">
+        <label>📦 Recebimento de Documentos</label>
+        <input type="date" id="m-dtDocsRec" onchange="calcDur()">
+        <div class="hint">Docs recebidos do cliente</div>
+      </div>
+    </div>
+    <div class="field" style="padding:0 0 4px">
+      <label>🏁 Entrega ao Advogado — Conclusão do Comercial</label>
+      <input type="date" id="m-dtEntrega" onchange="calcDur()">
+      <div class="hint">Data de entrega da pasta ao advogado — encerra o fluxo comercial e a pasta segue para produção jurídica</div>
+    </div>
+  </div>
+
+  <!-- DURAÇÃO CALCULADA -->
+  <div class="dur-box show" id="dur-box">
+    <div class="dur-title">⏱ Durações calculadas automaticamente</div>
+    <div class="dur-grid" id="dur-grid"><div class="dur-item"><div class="dur-lbl">Chegada → Assinatura</div><div class="dur-val" style="color:var(--rose)">12d</div></div><div class="dur-item"><div class="dur-lbl">Chegada → Docs Rec.</div><div class="dur-val" style="color:var(--amber)">11d</div></div><div class="dur-item"><div class="dur-lbl">Total Comercial</div><div class="dur-val" style="color:var(--rose)">25d</div></div></div>
+  </div>
+
+  <!-- INTEGRAÇÃO ALERTA -->
+  <div class="ibox show" id="ibox">
+    <div style="font-size:11px;color:var(--green);font-weight:600;margin-bottom:3px">✅ Contrato assinado — preencha abaixo para registrar no dashboard de métricas</div>
+    <div style="font-size:11px;color:var(--t3)">Os dados de contrato alimentam os gráficos e indicadores de contratos assinados.</div>
+  </div>
+
+  <!-- SEC 3: DADOS DO CONTRATO (etapa ≥ 3) -->
+  <div class="msec csec show" id="csec">
+    <div class="mst">Dados do Contrato — Dashboard</div>
+    <div class="mg2">
+      <div class="field"><label>Tipo de Contrato</label><select id="m-tipo"><option value="">— Selecionar —</option><option value="Entrada + Êxito">Entrada + Êxito</option><option value="Somente no Êxito">Somente no Êxito</option><option value="Pró-labore sem Êxito">Pró-labore sem Êxito</option></select></div>
+      <div class="field"><label>Origem do Lead</label><select id="m-orig"><option value="">— Selecionar —</option><option value="Convencional">Convencional</option><option value="Tráfego">Tráfego</option><option value="Prospecção">Prospecção</option></select></div>
+      <div class="field">
+        <label>Mês de Referência</label>
+        <select id="m-mes"><option value="Março">Março</option><option value="Abril">Abril</option><option value="Janeiro">Janeiro</option><option value="Fevereiro">Fevereiro</option><option value="Maio">Maio</option><option value="Junho">Junho</option><option value="Julho">Julho</option><option value="Agosto">Agosto</option><option value="Setembro">Setembro</option><option value="Outubro">Outubro</option><option value="Novembro">Novembro</option><option value="Dezembro">Dezembro</option></select>
+        <div class="hint">Mês contabilizado nos gráficos</div>
+      </div>
+      <div class="field"><label>Status do Contrato</label><select id="m-status"><option>Em andamento</option><option>Ativo</option><option>Encerrado</option><option>Suspenso</option></select></div>
+    </div>
+  </div>
+
+  <!-- SEC 4: OBS -->
+  <div class="msec">
+    <div class="mst">Observações</div>
+    <div class="field"><textarea id="m-obs" placeholder="Histórico de contatos, pendências, informações relevantes..."></textarea></div>
+  </div>
+
+  <div class="mfoot">
+    <button class="btn" onclick="closeM()">Cancelar</button>
+    <button class="btn pri" onclick="saveC()">💾 Salvar Registro</button>
+  </div>
+</div>
+</div>
+
+<!-- DELETE -->
+<div class="dov" id="dov" onclick="if(event.target===this)closeDel()">
+<div class="dbox">
+  <h3>⚠ Confirmar Exclusão</h3><p id="del-msg"></p>
+  <div class="dacts"><button class="btn" onclick="closeDel()">Cancelar</button><button class="btn dng" id="del-btn">🗑 Excluir</button></div>
+</div>
+</div>
+
+<div id="toast"></div>
+<div id="photo-inputs" style="display:none"><input type="file" accept="image/*" id="pi_Sandra"><input type="file" accept="image/*" id="pi_Liandra"><input type="file" accept="image/*" id="pi_Valdirlei"><input type="file" accept="image/*" id="pi_Jaime"><input type="file" accept="image/*" id="pi_Camilla"><input type="file" accept="image/*" id="pi_Matheus"></div>
+
+<script>
+const LOGO_B64  = 'data:image/png;base64,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';
+const SEED_DATA = [{"data":"02/03/2026","cliente":"Julio Cesar Mendes","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1ir8a1","acao":"","obs":"","etapa":"1","dtChegada":"02/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"04/03/2026","cliente":"Alexsandro Fernandes","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1iyymy","acao":"","obs":"","etapa":"1","dtChegada":"04/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"04/03/2026","cliente":"Murialdo de Moraes","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1imbmt","acao":"","obs":"","etapa":"1","dtChegada":"04/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"06/03/2026","cliente":"Andre de Barros Fernandes","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1ihad9","acao":"","obs":"","etapa":"1","dtChegada":"06/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"uid":"mod5km1i3znw","cliente":"Vanderleia Felisbino","adv":"Sandra","area":"Previdenciário","acao":"Aposentadoria Especial","tipo":"Somente no Êxito","origem":"Convencional","mes":"Abril","status":"Ativo","obs":"contrato enviado ao financeiro","etapa":"5","data":"27/04/2026","dtChegada":"06/03/2026","dtContato":"27/04/2026","dtEnvioContrato":"27/04/2026","dtAssinatura":"27/04/2026","dtDocs":"23/04/2026","dtDocsRec":"24/04/2026","dtEntrega":"27/04/2026"},{"uid":"mod5km1ijvyd","cliente":"Cooperativa de Eletrificação - Coopermila","adv":"Liandra","area":"Trabalhista","acao":"Usucapião","tipo":"Entrada + Êxito","origem":"Tráfego","mes":"Março","status":"Ativo","obs":"ok","etapa":"3","data":"18/03/2026","dtChegada":"06/03/2026","dtContato":"05/03/2026","dtEnvioContrato":"06/03/2026","dtAssinatura":"18/03/2026","dtDocs":"11/03/2026","dtDocsRec":"17/03/2026","dtEntrega":"31/03/2026"},{"data":"06/03/2026","cliente":"Ângela Maria Campos Lima","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1i88v0","acao":"","obs":"","etapa":"1","dtChegada":"06/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"11/03/2026","cliente":"Darlene Macedo Velho Damaceno","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1i64po","acao":"","obs":"","etapa":"1","dtChegada":"11/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"11/03/2026","cliente":"Franco Dani Mateus Danielski","mes":"Março","tipo":"","area":"Trabalhista","adv":"","origem":"","status":"Ativo","uid":"mod5km1iy1e7","acao":"","obs":"","etapa":"1","dtChegada":"11/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"12/03/2026","cliente":"Ramon Geremias Sangaletti","mes":"Março","tipo":"","area":"Cobrança","adv":"","origem":"","status":"Ativo","uid":"mod5km1io14d","acao":"","obs":"","etapa":"1","dtChegada":"12/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"16/03/2026","cliente":"Geovana Pedroso Bianco","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1iyzl9","acao":"","obs":"","etapa":"1","dtChegada":"16/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"16/03/2026","cliente":"Anderson Mariano","mes":"Março","tipo":"","area":"Seguro","adv":"","origem":"","status":"Ativo","uid":"mod5km1ijkui","acao":"","obs":"","etapa":"1","dtChegada":"16/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"16/03/2026","cliente":"Mauricio de Souza","mes":"Março","tipo":"","area":"Indenizatória","adv":"","origem":"","status":"Ativo","uid":"mod5km1ij9en","acao":"","obs":"","etapa":"1","dtChegada":"16/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"16/03/2026","cliente":"Suelen Mara Salvador","mes":"Março","tipo":"","area":"Indenizatória","adv":"","origem":"","status":"Ativo","uid":"mod5km1ib4lz","acao":"","obs":"","etapa":"1","dtChegada":"16/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"17/03/2026","cliente":"Comercial Caciatori LTDA.","mes":"Março","tipo":"","area":"Cobrança","adv":"","origem":"","status":"Ativo","uid":"mod5km1iv15a","acao":"","obs":"","etapa":"1","dtChegada":"17/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"18/03/2026","cliente":"Roberto Citadin Fontanella","mes":"Março","tipo":"","area":"Indenizatória","adv":"","origem":"","status":"Ativo","uid":"mod5km1ipnrr","acao":"","obs":"","etapa":"1","dtChegada":"18/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"18/03/2026","cliente":"Eder de Figueredo Margotti","mes":"Março","tipo":"","area":"Inventário","adv":"","origem":"","status":"Ativo","uid":"mod5km1ifp7o","acao":"","obs":"","etapa":"1","dtChegada":"18/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"19/03/2026","cliente":"Edilane Mota Braga","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1i3r7y","acao":"","obs":"","etapa":"1","dtChegada":"19/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"20/03/2026","cliente":"Albertina Martignago Bez Batti","mes":"Março","tipo":"Entrada + Êxito","area":"Cobrança","adv":"","origem":"","status":"Ativo","uid":"mod5km1ihe4r","acao":"","obs":"","etapa":"1","dtChegada":"20/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"20/03/2026","cliente":"Otavia Rossi Pacheco","mes":"Março","tipo":"Somente no Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1imrri","acao":"","obs":"","etapa":"1","dtChegada":"20/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"20/03/2026","cliente":"Elizandro Luiz Citadin","mes":"Março","tipo":"Somente no Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1id567","acao":"","obs":"","etapa":"1","dtChegada":"20/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"23/03/2026","cliente":"Rhyan Nowaski da Silva","mes":"Março","tipo":"","area":"Alimentos","adv":"","origem":"","status":"Ativo","uid":"mod5km1ir8kj","acao":"","obs":"","etapa":"1","dtChegada":"23/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"24/03/2026","cliente":"Luana Benedet Citadin","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1ig2gj","acao":"","obs":"","etapa":"1","dtChegada":"24/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"24/03/2026","cliente":"Luciano de Jesus de Souza","mes":"Março","tipo":"","area":"Trabalhista","adv":"","origem":"","status":"Ativo","uid":"mod5km1i4zr1","acao":"","obs":"","etapa":"1","dtChegada":"24/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"25/03/2026","cliente":"Maria Fatima Genovêncio","mes":"Março","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1ix43g","acao":"","obs":"","etapa":"1","dtChegada":"25/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"25/03/2026","cliente":"Anderson Mariano","mes":"Março","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1ija47","acao":"","obs":"","etapa":"1","dtChegada":"25/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"25/03/2026","cliente":"Anderson Mariano","mes":"Março","tipo":"Entrada + Êxito","area":"Seguro","adv":"","origem":"","status":"Ativo","uid":"mod5km1iwcdx","acao":"","obs":"","etapa":"1","dtChegada":"25/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"25/03/2026","cliente":"Cecilia Souza Padilha","mes":"Março","tipo":"Somente no Êxito","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1ihkl8","acao":"","obs":"","etapa":"1","dtChegada":"25/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"25/03/2026","cliente":"Edilamar Comelli","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1irazj","acao":"","obs":"","etapa":"1","dtChegada":"25/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"26/03/2026","cliente":"Douglas Vicente Mauricio","mes":"Março","tipo":"Somente no Êxito","area":"Seguro","adv":"","origem":"","status":"Ativo","uid":"mod5km1i9e3a","acao":"","obs":"","etapa":"1","dtChegada":"26/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"26/03/2026","cliente":"Douglas Vicente Mauricio","mes":"Março","tipo":"Entrada + Êxito","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1i4cv8","acao":"","obs":"","etapa":"1","dtChegada":"26/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"26/03/2026","cliente":"Roberto da Silva","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1ioukp","acao":"","obs":"","etapa":"1","dtChegada":"26/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"26/03/2026","cliente":"Rodrigo Marcelino Pereira","mes":"Março","tipo":"Entrada + Êxito","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1i9pfy","acao":"","obs":"","etapa":"1","dtChegada":"26/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"26/03/2026","cliente":"Marco Adriano Paz","mes":"Março","tipo":"Somente no Êxito","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1igpgp","acao":"","obs":"","etapa":"1","dtChegada":"26/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"27/03/2026","cliente":"Arthur de Medeiros Jung","mes":"Março","tipo":"Somente no Êxito","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1iz557","acao":"","obs":"","etapa":"1","dtChegada":"27/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"30/03/2026","cliente":"Roberto Carlos Serra Pinto","mes":"Março","tipo":"","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1iinxh","acao":"","obs":"","etapa":"1","dtChegada":"30/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"30/03/2026","cliente":"Santilino de Souza","mes":"Março","tipo":"","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1ifzwg","acao":"","obs":"","etapa":"1","dtChegada":"30/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"30/03/2026","cliente":"Patricia Pizoni","mes":"Março","tipo":"","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1iqilj","acao":"","obs":"","etapa":"1","dtChegada":"30/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"30/03/2026","cliente":"Hotel do Rastro","mes":"Março","tipo":"Somente no Êxito","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1ichqk","acao":"","obs":"","etapa":"1","dtChegada":"30/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"30/03/2026","cliente":"Nilton Nunes Liberato Neto","mes":"Março","tipo":"Somente no Êxito","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1ikmqh","acao":"","obs":"","etapa":"1","dtChegada":"30/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"30/03/2026","cliente":"Patricia Pizoni","mes":"Março","tipo":"Entrada + Êxito","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1i0eh0","acao":"","obs":"","etapa":"1","dtChegada":"30/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"30/03/2026","cliente":"Priscila Indian Conceição Rangel","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1i9cvu","acao":"","obs":"","etapa":"1","dtChegada":"30/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"31/03/2026","cliente":"Flavio Rodrigues","mes":"Março","tipo":"Entrada + Êxito","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1imsk3","acao":"","obs":"","etapa":"1","dtChegada":"31/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"31/03/2026","cliente":"Ederson Elias","mes":"Março","tipo":"Somente no Êxito","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1iyvrd","acao":"","obs":"","etapa":"1","dtChegada":"31/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"31/03/2026","cliente":"Bruno Spricigo Salvador","mes":"Março","tipo":"","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1ijcqm","acao":"","obs":"","etapa":"1","dtChegada":"31/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"31/03/2026","cliente":"Juliano Alves Demetrio","mes":"Março","tipo":"","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1i5osx","acao":"","obs":"","etapa":"1","dtChegada":"31/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"31/03/2026","cliente":"Sergio da Silva Rosa","mes":"Março","tipo":"Entrada + Êxito","area":"Cobrança","adv":"","origem":"","status":"Ativo","uid":"mod5km1ilpz2","acao":"","obs":"","etapa":"1","dtChegada":"31/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"31/03/2026","cliente":"Juliano Alves Demétrio","mes":"Março","tipo":"","area":"Inventário","adv":"","origem":"","status":"Ativo","uid":"mod5km1i8xys","acao":"","obs":"","etapa":"1","dtChegada":"31/03/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"01/04/2026","cliente":"Rodimar Candido","mes":"Abril","tipo":"Somente no Êxito","area":"Trabalhista","adv":"","origem":"","status":"Ativo","uid":"mod5km1ijlsy","acao":"","obs":"","etapa":"1","dtChegada":"01/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"01/04/2026","cliente":"Maria Cristina Elias","mes":"Abril","tipo":"Somente no Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1ibj6v","acao":"","obs":"","etapa":"1","dtChegada":"01/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"01/04/2026","cliente":"Laura de Medeiros Candido","mes":"Abril","tipo":"","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1i5s9m","acao":"","obs":"","etapa":"1","dtChegada":"01/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"01/04/2026","cliente":"Gilliard Maciel dos Santos","mes":"Abril","tipo":"Entrada + Êxito","area":"Trabalhista","adv":"","origem":"","status":"Ativo","uid":"mod5km1ib4r2","acao":"","obs":"","etapa":"1","dtChegada":"01/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"01/04/2026","cliente":"Daniela Zappelini Rosa","mes":"Abril","tipo":"","area":"Divórcio","adv":"","origem":"","status":"Ativo","uid":"mod5km1iblrr","acao":"","obs":"","etapa":"1","dtChegada":"01/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"02/04/2026","cliente":"Francisco Donizete Batista","mes":"Abril","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1ij2tx","acao":"","obs":"","etapa":"1","dtChegada":"02/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"02/04/2026","cliente":"Edson Jose Matos","mes":"Abril","tipo":"Somente no Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1i4ph3","acao":"","obs":"","etapa":"1","dtChegada":"02/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"06/04/2026","cliente":"Darci Henrique Amaral de Oliveira","mes":"Abril","tipo":"Somente no Êxito","area":"Trabalhista","adv":"","origem":"","status":"Ativo","uid":"mod5km1ia66k","acao":"","obs":"","etapa":"1","dtChegada":"06/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"06/04/2026","cliente":"Antônio Lucio Furtado de Oliveira","mes":"Abril","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1i1aeu","acao":"","obs":"","etapa":"1","dtChegada":"06/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"07/04/2026","cliente":"Silvio Mouro","mes":"Abril","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1iandc","acao":"","obs":"","etapa":"1","dtChegada":"07/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"07/04/2026","cliente":"Graziela Nezzi","mes":"Abril","tipo":"Somente no Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1im051","acao":"","obs":"","etapa":"1","dtChegada":"07/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"06/04/2026","cliente":"Orlando de Souza","mes":"Abril","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1iir7w","acao":"","obs":"","etapa":"1","dtChegada":"06/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"08/04/2026","cliente":"Michele Cristina Tasca","mes":"Abril","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"Sandra","origem":"Convencional","status":"Ativo","uid":"mod5km1ijed9","acao":"","obs":"","etapa":"1","dtChegada":"08/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"08/04/2026","cliente":"Rafaela Marques da Luz","mes":"Abril","tipo":"Somente no Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1irvv6","acao":"","obs":"","etapa":"1","dtChegada":"08/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"08/04/2026","cliente":"Marivalda Rocha da Silva","mes":"Abril","tipo":"Somente no Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1iqavi","acao":"","obs":"","etapa":"1","dtChegada":"08/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"09/04/2026","cliente":"Angelina Costa Mattei Radovanski","mes":"Abril","tipo":"","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1i19wp","acao":"","obs":"","etapa":"1","dtChegada":"09/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"09/04/2026","cliente":"Vania Canever","mes":"Abril","tipo":"Entrada + Êxito","area":"","adv":"","origem":"","status":"Ativo","uid":"mod5km1iavor","acao":"","obs":"","etapa":"1","dtChegada":"09/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"09/04/2026","cliente":"Sirlangio Bonot","mes":"Abril","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1irjaz","acao":"","obs":"","etapa":"1","dtChegada":"09/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"09/04/2026","cliente":"WS Transportes","mes":"Abril","tipo":"Entrada + Êxito","area":"Trânsito","adv":"","origem":"","status":"Ativo","uid":"mod5km1i5zrz","acao":"","obs":"","etapa":"1","dtChegada":"09/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"10/04/2026","cliente":"Lilian Gomes Vicente","mes":"Abril","tipo":"Somente no Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1i5jki","acao":"","obs":"","etapa":"1","dtChegada":"10/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"10/04/2026","cliente":"Ana Regina Gertrudes","mes":"Abril","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1ivm0k","acao":"","obs":"","etapa":"1","dtChegada":"10/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"10/04/2026","cliente":"Emerson Cesconetto","mes":"Abril","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"","origem":"","status":"Ativo","uid":"mod5km1ilypb","acao":"","obs":"","etapa":"1","dtChegada":"10/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"13/04/2026","cliente":"teste","mes":"Abril","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"Liandra","origem":"Prospecção","status":"Ativo","uid":"mod5km1i4n8a","acao":"","obs":"","etapa":"1","dtChegada":"13/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"data":"13/04/2026","cliente":"teste da li","mes":"Abril","tipo":"Entrada + Êxito","area":"Previdenciário","adv":"Liandra","origem":"Convencional","status":"Ativo","uid":"mod5km1i13kh","acao":"","obs":"","etapa":"1","dtChegada":"13/04/2026","dtContato":"","dtEnvioContrato":"","dtAssinatura":"","dtDocs":"","dtDocsRec":"","dtEntrega":""},{"uid":"mod5oindapqw","data":"24/04/2026","cliente":"Alison Luiz de Oliveira","mes":"Abril","area":"Previdenciário","acao":"Aposentadoria Especial","tipo":"","origem":"","adv":"Sandra","status":"Ativo","obs":"Criado automaticamente via Controle de Pastas.","dtAssinatura":"24/04/2026","etapa":"1","dtChegada":"24/04/2026","dtContato":"","dtEnvioContrato":"","dtDocs":"","dtDocsRec":"","dtEntrega":""}];
+/* ══ DEFAULT LISTS ══ */
+let AREAS   = ["Previdenciário", "Trabalhista", "Seguro", "Cobrança", "Inventário", "Indenizatória", "Alimentos", "Divórcio", "Trânsito", "Imobiliário", "Crime", "Consumidor", "Família", "Ambiental", "Administrativo", "Agentes Públicos", "Eleitoral", "Assessoria Empresarial", "Empresarial"];
+let ACOES   = ["Usucapião", "Divórcio", "Adjudicação", "Aposentadoria Especial", "Aposentadoria por Invalidez", "Auxílio Acidente", "Auxílio Doença", "LOAS", "Inventário", "Dano Moral", "Dano Material", "Retificação de Registro Civil", "Ação Penal", "Acompanhamento na Delegacia", "Reintegração de Posse", "Imissão na Posse", "Alvará Judicial", "Reclamatória Trabalhista", "Consignação em Pagamento", "Restabelecimento de Benefício", "Mandado de Segurança", "Cobrança de Seguro em Grupo", "Cobrança de Título", "Execução de Título", "Erro Médico", "Outras", "Alimentos", "Aposentadoria por tempo de contribuição", "Recurso administrativo", "Salário maternidade", "Suscitação de dúvidas"];
+let TIPOS   = ["Entrada + Êxito", "Somente no Êxito", "Pró-labore sem Êxito"];
+let ORIGENS = ["Convencional", "Tráfego", "Prospecção"];
+let ADVS    = ["Sandra", "Valdirlei", "Liandra", "Jaime", "Camilla", "Matheus"];
+let MESES_REF = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+
+const ETAPAS={1:{l:'Recebida',i:'📥',c:'e1'},2:{l:'Negociação',i:'📞',c:'e2'},3:{l:'Contrato',i:'✍',c:'e3'},4:{l:'Documentação',i:'📋',c:'e4'},5:{l:'Concluído',i:'✅',c:'e5'}};
+const MEDALS=['🥇','🥈','🥉','','',''];
+const TT={backgroundColor:'#0D0D1C',borderColor:'rgba(201,168,76,.35)',borderWidth:1,padding:10,cornerRadius:0};
+Chart.defaults.color='#6E6A88';Chart.defaults.borderColor='rgba(201,168,76,.07)';
+Chart.defaults.font.family="'Segoe UI',Arial,sans-serif";Chart.defaults.font.size=11;
+
+let DB=[],photos={},charts={},pg=1,sCol='dtChegada',sDir=-1,pendDelUID=null;
+let activeMon='all',curEtapa=1;
+const PG=20;
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const saveDB=()=>{try{localStorage.setItem('ob_db',JSON.stringify(DB));}catch(e){}};
+const savePh=()=>{try{localStorage.setItem('ob_ph',JSON.stringify(photos));}catch(e){}};
+const saveLists=()=>{try{localStorage.setItem('ob_lists',JSON.stringify({AREAS,ACOES,TIPOS,ORIGENS,ADVS,MESES_REF}));}catch(e){}};
+
+function toast(msg,t='ok'){
+  const el=document.createElement('div');
+  el.className=`ti t${t}`;el.textContent=msg;
+  document.getElementById('toast').appendChild(el);
+  setTimeout(()=>el.remove(),3500);
+}
+
+/* DATE HELPERS */
+const hoje=()=>new Date().toISOString().split('T')[0];
+const fmt=iso=>{if(!iso)return'';const p=iso.includes('-')?iso.split('-'):[iso];return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:iso;};
+const iso=dmy=>{if(!dmy)return'';const p=dmy.includes('/')?dmy.split('/'):null;return p&&p.length===3?`${p[2]}-${p[1]}-${p[0]}`:dmy;};
+function dBetween(d1,d2){
+  if(!d1||!d2)return null;
+  const toN=s=>{const p=s.includes('/')?s.split('/').reverse().join('-'):s;return new Date(p).getTime();};
+  const a=toN(d1),b=toN(d2);
+  if(isNaN(a)||isNaN(b))return null;
+  return Math.round((b-a)/86400000);
+}
+function dSince(d){
+  if(!d)return null;
+  const toN=s=>{const p=s.includes('/')?s.split('/').reverse().join('-'):s;return new Date(p).getTime();};
+  const n=toN(d);if(isNaN(n))return null;
+  return Math.round((Date.now()-n)/86400000);
+}
+function dbadge(d){
+  if(d===null||d===undefined)return'<span style="color:var(--t3);font-size:10px">—</span>';
+  const c=d<=7?'dok':d<=15?'dwn':'ddg';
+  return`<span class="db ${c}">${d}d</span>`;
+}
+
+const isSigned=r=>(parseInt(r.etapa)||1)>=3&&!!r.dtAssinatura;
+const isDone=r=>(parseInt(r.etapa)||1)===5;
+function comDias(r){
+  if(!r.dtChegada)return null;
+  return r.dtEntrega?dBetween(r.dtChegada,r.dtEntrega):dSince(r.dtChegada);
+}
+function avg(arr){
+  const v=arr.filter(x=>x!==null&&x>=0);
+  return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;
+}
+
+/* INIT */
+function init(){
+  document.getElementById('hd-logo').src=LOGO_B64;
+  document.getElementById('ts').textContent=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  try{
+    const l=JSON.parse(localStorage.getItem('ob_lists')||'{}');
+    if(l.AREAS?.length)AREAS=l.AREAS;if(l.ACOES?.length)ACOES=l.ACOES;
+    if(l.TIPOS?.length)TIPOS=l.TIPOS;if(l.ORIGENS?.length)ORIGENS=l.ORIGENS;
+    if(l.ADVS?.length)ADVS=l.ADVS;if(l.MESES_REF?.length)MESES_REF=l.MESES_REF;
+  }catch(e){}
+  try{
+    const SIG='68_mnxuminex19o';
+    const s=localStorage.getItem('ob_db'),sig=localStorage.getItem('ob_file_sig');
+    if(s&&sig===SIG){DB=JSON.parse(s);}
+    else{DB=JSON.parse(JSON.stringify(SEED_DATA));localStorage.setItem('ob_file_sig',SIG);}
+    DB.forEach(r=>{
+      if(!r.uid)r.uid=uid();
+      r.etapa=r.etapa||'1';r.obs=r.obs||'';r.acao=r.acao||'';
+      r.dtChegada=r.dtChegada||r.data||'';
+      ['dtContato','dtEnvioContrato','dtAssinatura','dtDocs','dtDocsRec','dtEntrega'].forEach(f=>{r[f]=r[f]||'';});
+      r.status=r.status||'Em andamento';
+    });
+    const p=localStorage.getItem('ob_ph');if(p)photos=JSON.parse(p);
+  }catch(e){DB=JSON.parse(JSON.stringify(SEED_DATA)).map(r=>({...r,uid:uid(),etapa:'1'}));}
+  fillSel();fillF();renderDash();renderTbl();
+}
+
+/* VIEWS */
+function sw(v){
+  ['dash','registros','cfg'].forEach(k=>{
+    document.getElementById(`view-${k}`).classList.toggle('on',k===v);
+    document.getElementById(`tab-${k}`).classList.toggle('on',k===v);
+  });
+  if(v==='dash')renderDash();
+  if(v==='registros'){fillF();renderTbl();}
+  if(v==='cfg')renderAllCfg();
+}
+
+/* MONTH */
+function setMonth(m){
+  activeMon=m;
+  document.querySelectorAll('.mpill').forEach(p=>p.classList.remove('on'));
+  document.getElementById(m==='all'?'pill-all':`pill-${m.replace(/\s/g,'_')}`)?.classList.add('on');
+  renderDash();
+}
+function buildPills(){
+  const ms=[...new Set(DB.map(r=>r.mes).filter(Boolean))].sort((a,b)=>MESES_REF.indexOf(a)-MESES_REF.indexOf(b));
+  document.getElementById('mpills').innerHTML=ms.map(m=>`
+    <button class="mpill ${activeMon===m?'on':''}" id="pill-${m.replace(/\s/g,'_')}" onclick="setMonth('${m}')">${m}</button>`).join('');
+}
+
+/* HELPERS */
+const cnt=(d,f,v)=>d.filter(r=>r[f]===v).length;
+const cntM=(d,m,f,v)=>d.filter(r=>r.mes===m&&r[f]===v).length;
+function getView(){return(activeMon==='all'?DB:DB.filter(r=>r.mes===activeMon)).filter(isSigned);}
+
+/* DASHBOARD */
+function renderDash(){
+  Object.values(charts).forEach(c=>{try{c.destroy();}catch(e){}});charts={};
+  const allMs=[...new Set(DB.map(r=>r.mes).filter(Boolean))].sort((a,b)=>MESES_REF.indexOf(a)-MESES_REF.indexOf(b));
+  buildPills();
+  const signed=getView(),isF=activeMon!=='all',total=signed.length;
+  const totS=allMs.map(m=>DB.filter(r=>r.mes===m&&isSigned(r)).length);
+  const totA=allMs.map(m=>DB.filter(r=>r.mes===m).length);
+  document.getElementById('period-chip').textContent=isF?activeMon:allMs.join(' · ')||'2026';
+  document.getElementById('mbar-info').textContent=isF?`${total} contrato${total!==1?'s':''} assinados em ${activeMon}`:`${total} contratos assinados`;
+
+  const pi=isF?allMs.indexOf(activeMon)-1:-1;
+  const pt=pi>=0?DB.filter(r=>r.mes===allMs[pi]&&isSigned(r)).length:null;
+  const delta=pt!=null&&pt>0?((total-pt)/pt*100).toFixed(0):null;
+  const topA=AREAS.reduce((a,b)=>cnt(signed,'area',a)>=cnt(signed,'area',b)?a:b,AREAS[0]);
+
+  /* ── MÉTRICAS DE TEMPO ── */
+  const tmDefs=[
+    {l:'Chegada → Assinatura',  icon:'✍',  vals:DB.filter(r=>r.dtChegada&&r.dtAssinatura).map(r=>dBetween(r.dtChegada,r.dtAssinatura)), ref:10, desc:'Da entrada no comercial até a assinatura do contrato'},
+    {l:'Chegada → Docs Solicit.',icon:'📋', vals:DB.filter(r=>r.dtChegada&&r.dtDocs).map(r=>dBetween(r.dtChegada,r.dtDocs)),            ref:7,  desc:'Da entrada até a solicitação dos documentos'},
+    {l:'Chegada → Docs Recebidos',icon:'📦',vals:DB.filter(r=>r.dtChegada&&r.dtDocsRec).map(r=>dBetween(r.dtChegada,r.dtDocsRec)),      ref:15, desc:'Tempo total até receber todos os documentos'},
+    {l:'Chegada → Entrega Adv.', icon:'🏁', vals:DB.filter(r=>r.dtChegada&&r.dtEntrega).map(r=>dBetween(r.dtChegada,r.dtEntrega)),       ref:20, desc:'Tempo total do processo comercial completo'},
+  ];
+
+  document.getElementById('tmetrics').innerHTML=tmDefs.map((tm,i)=>{
+    const a=avg(tm.vals);
+    const col=a===null?'var(--t3)':a<=tm.ref*.7?'var(--green)':a<=tm.ref?'var(--amber)':'var(--rose)';
+    const barCol=a===null?'rgba(110,106,136,.3)':a<=tm.ref*.7?'#5EC97A':a<=tm.ref?'#F0A732':'#E8735A';
+    const pct=a!==null?Math.min(a/tm.ref*100,100):0;
+    const n=tm.vals.length;
+    return`<div class="tcard fu" style="animation-delay:${i*.06}s">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div><div class="tm-l">${tm.l}</div>
+          <div class="tm-v" style="color:${col}">${a!==null?a+'d':'—'}</div></div>
+        <div style="font-size:26px;opacity:.5">${tm.icon}</div>
+      </div>
+      <div class="tm-s">${tm.desc}</div>
+      <div class="tm-bar-bg"><div class="tm-bar" style="background:${barCol};width:0" data-w="${pct}%"></div></div>
+      <div class="tm-meta"><span>${n} registro${n!==1?'s':''} com dados</span><span>Meta: ≤${tm.ref}d</span></div>
+    </div>`;
+  }).join('');
+
+  /* Detalhamento adicional */
+  const extra=[
+    {l:'Assinatura → Docs Rec.',  vals:DB.filter(r=>r.dtAssinatura&&r.dtDocsRec).map(r=>dBetween(r.dtAssinatura,r.dtDocsRec)), ref:10},
+    {l:'Docs Rec. → Entrega',     vals:DB.filter(r=>r.dtDocsRec&&r.dtEntrega).map(r=>dBetween(r.dtDocsRec,r.dtEntrega)),        ref:5},
+    {l:'Chegada → 1º Contato',    vals:DB.filter(r=>r.dtChegada&&r.dtContato).map(r=>dBetween(r.dtChegada,r.dtContato)),        ref:3},
+    {l:'1º Contato → Envio Contr.',vals:DB.filter(r=>r.dtContato&&r.dtEnvioContrato).map(r=>dBetween(r.dtContato,r.dtEnvioContrato)),ref:5},
+    {l:'Envio → Assinatura',      vals:DB.filter(r=>r.dtEnvioContrato&&r.dtAssinatura).map(r=>dBetween(r.dtEnvioContrato,r.dtAssinatura)),ref:7},
+    {l:'Taxa de Conclusão',       special:'conv'},
+  ];
+
+  document.getElementById('tmetrics-detail').innerHTML=extra.map(tm=>{
+    if(tm.special==='conv'){
+      const conv=DB.length?Math.round(isDone(DB.filter(isDone).length/DB.length*100)||DB.filter(isDone).length/DB.length*100)+'%':'—';
+      return`<div style="padding:10px;border:1px solid var(--b);background:var(--b2);text-align:center">
+        <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin-bottom:5px">Pastas Concluídas / Total</div>
+        <div style="font-family:Georgia,serif;font-size:24px;color:var(--green)">${DB.filter(isDone).length}<span style="font-size:14px;color:var(--t3)">/${DB.length}</span></div>
+      </div>`;
+    }
+    const a=avg(tm.vals),n=tm.vals.length;
+    const col=a===null?'var(--t3)':a<=tm.ref*.7?'var(--green)':a<=tm.ref?'var(--amber)':'var(--rose)';
+    return`<div style="padding:10px;border:1px solid var(--b);background:var(--b2)">
+      <div style="font-size:9px;color:var(--t3);letter-spacing:1px;margin-bottom:4px">${tm.l}</div>
+      <div style="font-family:Georgia,serif;font-size:22px;font-weight:300;color:${col}">${a!==null?a+'d':'—'}</div>
+      <div style="font-size:9px;color:var(--t3);margin-top:3px">${n} registros · meta ≤${tm.ref}d</div>
+    </div>`;
+  }).join('');
+
+  /* KPIs */
+  const avgCom=avg(DB.filter(r=>r.dtChegada&&r.dtEntrega).map(r=>dBetween(r.dtChegada,r.dtEntrega)));
+  document.getElementById('krow').innerHTML=[
+    {l:isF?activeMon:'Contratos Assinados',v:total,s:isF?`de ${DB.filter(isSigned).length} total`:'com assinatura'},
+    {l:'Em Andamento',v:DB.filter(r=>!isDone(r)).length,s:'pastas em aberto'},
+    {l:'Concluídos',v:DB.filter(isDone).length,s:'entregues ao advogado'},
+    {l:'Total Registros',v:DB.length,s:'cadastrados'},
+    {l:'Variação',v:delta!=null?(+delta>0?'+':'')+delta+'%':'—',s:'vs mês anterior',sm:true},
+    {l:'Tempo Médio Total',v:avgCom!=null?avgCom+'d':'—',s:'chegada → entrega',sm:true,bl:true},
+  ].map((k,i)=>`
+    <div class="kpi fu" style="animation-delay:${i*.05}s">
+      <div class="kpi-l">${k.l}</div>
+      <div class="kpi-v ${k.sm?'sm':''} ${k.bl?'bl':''}">${k.v}</div>
+      <div class="kpi-s">${k.s}</div>
+    </div>`).join('');
+
+  /* MC */
+  const mc=document.getElementById('mc-wrap');mc.innerHTML='';
+  allMs.forEach((m,i)=>{
+    const v=DB.filter(r=>r.mes===m&&isSigned(r)).length;
+    const vA=DB.filter(r=>r.mes===m).length;
+    const prev=i>0?DB.filter(r=>r.mes===allMs[i-1]&&isSigned(r)).length:null;
+    const d=prev!=null?((v-prev)/(prev||1)*100).toFixed(0):null;
+    const tag=d!=null?`<div class="mc-d ${+d>=0?'up':'dn'}">${+d>=0?'▲':'▼'} ${Math.abs(d)}%</div>`:'';
+    mc.innerHTML+=`<div class="mc ${activeMon===m?'am':''}" onclick="setMonth('${m}')">
+      <div class="mc-m">${m}</div><div class="mc-n">${v}</div>
+      <div class="mc-s">${activeMon===m?'<strong style="color:var(--g)">selecionado</strong>':'assinados'}</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:2px">${vA} recebidos</div>${tag}
+    </div>`;
+  });
+
+  /* LINE */
+  const ec=document.getElementById('evolChart').getContext('2d');
+  const gr=ec.createLinearGradient(0,0,0,190);gr.addColorStop(0,'rgba(201,168,76,.2)');gr.addColorStop(1,'rgba(201,168,76,0)');
+  charts.evol=new Chart(ec,{type:'line',data:{labels:allMs,datasets:[
+    {label:'Assinados',data:totS,borderColor:'#C9A84C',backgroundColor:gr,borderWidth:2.5,
+      pointBackgroundColor:allMs.map(m=>m===activeMon?'#E8C96A':'#C9A84C'),
+      pointBorderColor:'#07070F',pointBorderWidth:2,pointRadius:allMs.map(m=>m===activeMon?9:5),tension:.4,fill:true},
+    {label:'Total recebidos',data:totA,borderColor:'rgba(78,143,232,.4)',backgroundColor:'transparent',
+      borderWidth:1.5,borderDash:[5,4],pointRadius:3,tension:.4},
+  ]},options:{responsive:true,maintainAspectRatio:false,
+    onClick:(_,els)=>{if(els.length)setMonth(allMs[els[0].index]);},
+    plugins:{legend:{labels:{color:'#6E6A88',boxWidth:9,padding:12}},tooltip:TT},
+    scales:{x:{grid:{color:'rgba(201,168,76,.04)'},ticks:{color:'#6E6A88'}},y:{grid:{color:'rgba(201,168,76,.04)'},ticks:{color:'#6E6A88'},min:0}}}});
+
+  /* PHOTO RANK */
+  const aT=ADVS.map(a=>cnt(DB.filter(isSigned),'adv',a));
+  const aTV=ADVS.map(a=>cnt(signed,'adv',a));
+  const aMax=Math.max(...aT,1);
+  buildRank(ADVS.map((n,i)=>({n,vAll:aT[i],vView:aTV[i]})).sort((a,b)=>b.vAll-a.vAll),aMax,isF);
+
+  /* AREA */
+  const arA=AREAS.map(a=>cnt(DB.filter(isSigned),'area',a));
+  const arV=AREAS.map(a=>cnt(signed,'area',a));
+  const arMx=Math.max(...arA,1);
+  document.getElementById('area-tot').textContent=total;
+  const hA=document.getElementById('hbar-area');hA.innerHTML='';
+  AREAS.map((a,i)=>({a,vA:arA[i],vV:arV[i]})).sort((x,y)=>y.vA-x.vA).slice(0,10).forEach(({a,vA,vV})=>{
+    hA.innerHTML+=`<div class="hbr"><div class="hbn-name">${a}</div>
+      <div class="hbrow"><div class="hblbl t">Total</div><div class="hbb"><div class="hbf t" style="width:0" data-w="${Math.round(vA/arMx*100)}%"></div></div><div class="hbv t">${vA}</div></div>
+      ${isF?`<div class="hbrow"><div class="hblbl m">${activeMon.slice(0,3)}</div><div class="hbb"><div class="hbf m" style="width:0" data-w="${Math.round(vV/arMx*100)}%"></div></div><div class="hbv m">${vV}</div></div>`:''}
+    </div>`;
+  });
+
+  /* ACAO */
+  const acA=ACOES.map(a=>cnt(DB.filter(isSigned),'acao',a));
+  const acV=ACOES.map(a=>cnt(signed,'acao',a));
+  const acMx=Math.max(...acA,1);
+  const hAc=document.getElementById('hbar-acao');hAc.innerHTML='';
+  ACOES.map((a,i)=>({a,vA:acA[i],vV:acV[i]})).filter(x=>x.vA>0).sort((x,y)=>y.vA-x.vA).slice(0,10).forEach(({a,vA,vV})=>{
+    hAc.innerHTML+=`<div class="hbr"><div class="hbn-name" style="font-size:10px">${a}</div>
+      <div class="hbrow"><div class="hblbl t" style="width:34px;font-size:9px">Total</div><div class="hbb"><div class="hbf t" style="width:0;background:linear-gradient(90deg,#5B8CDB,#7AADEE)" data-w="${Math.round(vA/acMx*100)}%"></div></div><div class="hbv t" style="color:var(--blue)">${vA}</div></div>
+      ${isF?`<div class="hbrow"><div class="hblbl m" style="width:34px;font-size:9px">${activeMon.slice(0,3)}</div><div class="hbb"><div class="hbf m" style="width:0" data-w="${Math.round(vV/acMx*100)}%"></div></div><div class="hbv m">${vV}</div></div>`:''}
+    </div>`;
+  });
+  if(!hAc.innerHTML)hAc.innerHTML=`<p style="color:var(--t3);font-size:11px;text-align:center;padding:14px;font-style:italic">Nenhuma ação registrada</p>`;
+
+  /* TIPO DONUT */
+  const tiA=TIPOS.map(t=>cnt(DB.filter(isSigned),'tipo',t));
+  const tiV=TIPOS.map(t=>cnt(signed,'tipo',t));
+  const tiSum=tiV.reduce((a,b)=>a+b,0);
+  document.getElementById('tipo-tot').textContent=tiSum||'—';
+  const tiC=['#C9A84C','rgba(201,168,76,.5)','rgba(201,168,76,.2)'];
+  charts.tipo=new Chart(document.getElementById('tipoChart'),{type:'doughnut',
+    data:{labels:TIPOS,datasets:[{data:tiSum?tiV:[1,1,1],backgroundColor:tiC,borderColor:'#07070F',borderWidth:3,hoverOffset:5}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{legend:{display:false},tooltip:TT}}});
+  const tl=document.getElementById('tipo-leg');tl.innerHTML='';
+  TIPOS.forEach((l,i)=>{const p=tiSum?Math.round(tiV[i]/tiSum*100):0;
+    tl.innerHTML+=`<div class="di"><div class="dd" style="background:${tiC[i]}"></div>
+      <div class="dn2">${l}</div><div class="dv">${tiV[i]}</div>
+      ${isF?`<span class="dv2">/ ${tiA[i]}</span>`:''}<div class="dp">${p}%</div></div>`;});
+
+  /* ORIGEM DONUT */
+  const orA=ORIGENS.map(o=>cnt(DB.filter(isSigned),'origem',o));
+  const orV=ORIGENS.map(o=>cnt(signed,'origem',o));
+  const orSum=orV.reduce((a,b)=>a+b,0);
+  document.getElementById('orig-tot').textContent=orSum||'—';
+  const orC=['#4E8FE8','rgba(78,143,232,.5)','rgba(78,143,232,.2)'];
+  charts.orig=new Chart(document.getElementById('origChart'),{type:'doughnut',
+    data:{labels:ORIGENS,datasets:[{data:orSum?orV:[1,1,1],backgroundColor:orC,borderColor:'#07070F',borderWidth:3,hoverOffset:5}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{legend:{display:false},tooltip:TT}}});
+  const ol=document.getElementById('orig-leg');ol.innerHTML='';
+  ORIGENS.forEach((l,i)=>{const p=orSum?Math.round(orV[i]/orSum*100):0;
+    ol.innerHTML+=`<div class="di"><div class="dd" style="background:${orC[i]}"></div>
+      <div class="dn2">${l}</div><div class="dv">${orV[i]}</div>
+      ${isF?`<span class="dv2">/ ${orA[i]}</span>`:''}<div class="dp">${p}%</div></div>`;});
+
+  /* ADV × MÊS */
+  const bC=['rgba(201,168,76,.8)','rgba(78,143,232,.65)','rgba(94,201,122,.55)','rgba(232,115,90,.55)'];
+  charts.adv=new Chart(document.getElementById('advChart'),{type:'bar',
+    data:{labels:ADVS,datasets:allMs.map((m,i)=>({label:m,data:ADVS.map(a=>cntM(DB.filter(isSigned),m,'adv',a)),
+      backgroundColor:bC[i%bC.length],borderRadius:3,borderWidth:activeMon===m?2:0,borderColor:'rgba(255,255,255,.6)'}))},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#6E6A88',boxWidth:9,padding:12}},tooltip:TT},
+      scales:{x:{grid:{display:false},ticks:{color:'#6E6A88'}},y:{grid:{color:'rgba(201,168,76,.04)'},ticks:{color:'#6E6A88'}}}}});
+
+  /* SUMMARY */
+  const tAdv=ADVS.reduce((a,b)=>cnt(signed,'adv',a)>=cnt(signed,'adv',b)?a:b,ADVS[0]);
+  const tTipo=TIPOS.reduce((a,b)=>cnt(signed,'tipo',a)>=cnt(signed,'tipo',b)?a:b,TIPOS[0]);
+  const tAcao=ACOES.reduce((a,b)=>cnt(signed,'acao',a)>=cnt(signed,'acao',b)?a:b,ACOES[0]);
+  const avgAs=avg(DB.filter(r=>r.dtChegada&&r.dtAssinatura).map(r=>dBetween(r.dtChegada,r.dtAssinatura)));
+  const avgDoc=avg(DB.filter(r=>r.dtChegada&&r.dtDocsRec).map(r=>dBetween(r.dtChegada,r.dtDocsRec)));
+  document.getElementById('sum-tbl').innerHTML=`
+    <thead><tr><th>Indicador</th><th>${isF?activeMon:'Total'}</th>${isF?'<th>Acumulado</th>':''}</tr></thead>
+    <tbody>${[
+      ['Contratos assinados',total,DB.filter(isSigned).length],
+      ['Área Líder',cnt(signed,'area',topA)?topA:'—',cnt(DB.filter(isSigned),'area',topA)],
+      ['Ação Mais Comum',cnt(signed,'acao',tAcao)?tAcao:'—',cnt(DB.filter(isSigned),'acao',tAcao)],
+      ['Tipo Predominante',cnt(signed,'tipo',tTipo)?tTipo:'—',cnt(DB.filter(isSigned),'tipo',tTipo)],
+      ['Advogado Líder',cnt(signed,'adv',tAdv)?tAdv:'—',cnt(DB.filter(isSigned),'adv',tAdv)],
+      ['⏱ Média Chegada→Assin.',avgAs!=null?avgAs+'d':'—',avgAs!=null?avgAs+'d':'—'],
+      ['⏱ Média Chegada→Docs',avgDoc!=null?avgDoc+'d':'—',avgDoc!=null?avgDoc+'d':'—'],
+    ].map(([k,v,t])=>`<tr><td style="color:var(--t3)">${k}</td>
+      <td><span class="tag">${v}</span></td>
+      ${isF?`<td><span class="tag b">${t}</span></td>`:''}</tr>`).join('')}
+    </tbody>`;
+
+  setTimeout(()=>document.querySelectorAll('[data-w]').forEach(el=>{el.style.width=el.dataset.w;}),300);
+}
+
+/* PHOTO RANK */
+function buildRank(sorted,max,isF){
+  const wrap=document.getElementById('prank'),pinp=document.getElementById('photo-inputs');
+  wrap.innerHTML='';pinp.innerHTML='';
+  sorted.forEach(({n,vAll,vView},i)=>{
+    const pA=Math.round(vAll/max*100),pV=Math.round(vView/max*100);
+    const iid='pi_'+n.replace(/\s/g,'_');
+    const ini=n.split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase();
+    const img=photos[n]?`<img src="${photos[n]}" alt="${n}">`:`<div class="ini">${ini}</div>`;
+    wrap.innerHTML+=`<div class="pr ${i===0?'r1':''}">
+      <div class="av" onclick="trigPh('${iid}')">${img}<div class="cam">📷</div></div>
+      <div style="flex:1"><div class="pr-pn">${n}</div><div class="pr-ro">${i===0?'Advogado Líder':'Advogado'}</div>
+        <div style="display:flex;flex-direction:column;gap:3px;margin-top:5px">
+          <div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--t3);width:46px;text-align:right">Total</span><div class="pb-bg"><div class="pb tot" style="width:0" data-w="${pA}%"></div></div></div>
+          ${isF?`<div style="display:flex;align-items:center;gap:5px"><span style="font-size:9px;color:var(--blue);width:46px;text-align:right">${activeMon.slice(0,3)}</span><div class="pb-bg"><div class="pb mon" style="width:0" data-w="${pV}%"></div></div></div>`:''}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+        <div class="pr-n">${vAll}</div>
+        ${isF?`<div style="font-size:9px;color:var(--t3)">total</div><div style="font-size:12px;font-weight:600;color:var(--blue)">${vView}<span style="font-size:9px;color:var(--t3);font-weight:normal"> mês</span></div>`:''}
+        <div style="font-size:12px">${MEDALS[i]||''}</div>
+      </div>
+    </div>`;
+    const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.id=iid;
+    inp.addEventListener('change',()=>{const f=inp.files[0];if(!f)return;const r=new FileReader();
+      r.onload=e=>{photos[n]=e.target.result;savePh();renderDash();toast(`Foto de ${n} atualizada!`);};r.readAsDataURL(f);});
+    pinp.appendChild(inp);
+  });
+}
+function trigPh(id){document.getElementById(id)?.click();}
+
+/* SELECTS & FILTERS */
+function fillSel(){
+  const m=[...new Set([...DB.map(r=>r.mes).filter(Boolean),...MESES_REF])];
+  const mk=(id,opts,blank='')=>{const el=document.getElementById(id);if(!el)return;
+    el.innerHTML=(blank?[`<option value="">${blank}</option>`]:[]).concat(opts.map(o=>`<option value="${o}">${o||'—'}</option>`)).join('');};
+  mk('m-mes',m);mk('m-area',AREAS,'— Selecionar —');mk('m-acao',ACOES,'— Selecionar —');
+  mk('m-tipo',TIPOS,'— Selecionar —');mk('m-orig',ORIGENS,'— Selecionar —');
+  mk('m-adv',ADVS,'— Selecionar —');
+}
+function fillF(){
+  const m=[...new Set(DB.map(r=>r.mes).filter(Boolean))].sort();
+  const mk=(id,opts,blank)=>{const el=document.getElementById(id);if(!el)return;
+    el.innerHTML=`<option value="">${blank}</option>`+opts.map(o=>`<option value="${o}">${o}</option>`).join('');};
+  mk('ff-mes',m,'Todos meses');mk('ff-area',AREAS,'Todas áreas');mk('ff-adv',ADVS,'Todos adv.');
+}
+function clearF(){['srch','ff-e','ff-adv','ff-mes','ff-area'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});pg=1;renderTbl();}
+let _st;function onSearch(){clearTimeout(_st);_st=setTimeout(()=>{pg=1;renderTbl();},200);}
+
+/* TABLE */
+function getFilt(){
+  const q=(document.getElementById('srch')?.value||'').toLowerCase().trim();
+  const fE=document.getElementById('ff-e')?.value||'';
+  const fA=document.getElementById('ff-adv')?.value||'';
+  const fM=document.getElementById('ff-mes')?.value||'';
+  const fAr=document.getElementById('ff-area')?.value||'';
+  return DB.filter(r=>{
+    if(fE&&String(parseInt(r.etapa)||1)!==fE)return false;
+    if(fA&&r.adv!==fA)return false;if(fM&&r.mes!==fM)return false;
+    if(fAr&&r.area!==fAr)return false;
+    if(q&&![r.cliente,r.area,r.acao,r.adv,r.mes,r.tipo,r.origem,r.obs||''].some(v=>(v||'').toLowerCase().includes(q)))return false;
+    return true;
+  });
+}
+function renderTbl(){
+  let rows=[...getFilt()].sort((a,b)=>{
+    let av,bv;
+    if(sCol==='_dc'){av=comDias(a)??9999;bv=comDias(b)??9999;}
+    else{av=(a[sCol]||'').toString().toLowerCase();bv=(b[sCol]||'').toString().toLowerCase();}
+    return typeof av==='number'?(av-bv)*sDir:av<bv?-sDir:av>bv?sDir:0;
+  });
+  const total=rows.length,pages=Math.ceil(total/PG)||1;
+  pg=Math.min(pg,pages);const slice=rows.slice((pg-1)*PG,pg*PG);
+  document.getElementById('ct-count').textContent=`— ${total} registro${total!==1?'s':''}`;
+  document.querySelectorAll('.ctbl th[data-c]').forEach(th=>{
+    const c=th.dataset.c;th.classList.toggle('srt',c===sCol);
+    th.textContent=th.textContent.replace(/ [↕↑↓]$/,'')+(c===sCol?(sDir===1?' ↑':' ↓'):' ↕');
+  });
+  const tB=t=>t?`<span class="bx bg">${t}</span>`:`<span class="bx bm">—</span>`;
+  const oB=o=>o?`<span class="bx bb">${o}</span>`:`<span class="bx bm">—</span>`;
+  const aB=a=>a?`<span class="bx bb" title="${a}" style="max-width:120px;display:inline-block;overflow:hidden;text-overflow:ellipsis">${a}</span>`:`<span class="bx bm">—</span>`;
+  const eB=e=>{const n=parseInt(e)||1;const s=ETAPAS[n];return`<span class="ebx ${s.c}">${s.i} ${s.l}</span>`;};
+  document.getElementById('ctbody').innerHTML=slice.map(r=>{
+    const dc=comDias(r);const e=parseInt(r.etapa)||1;
+    const dots=[1,2,3,4,5].map((s,i)=>`<div class="pdot ${s<e?'dn':s===e?'ac':'pd'}" title="${ETAPAS[s].l}"></div>${i<4?'<div class="pln"></div>':''}`).join('');
+    return`<tr onclick="openM('${r.uid}')">
+      <td><div class="cl" style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${r.cliente}">${r.cliente}</div>
+        <div class="pdots">${dots}</div></td>
+      <td style="font-size:12px">${r.adv||'<span style="color:var(--t3)">—</span>'}</td>
+      <td style="font-size:12px">${r.area||'<span style="color:var(--t3)">—</span>'}</td>
+      <td>${aB(r.acao)}</td><td>${tB(r.tipo)}</td><td>${eB(r.etapa)}</td>
+      <td style="font-size:11px">${r.dtChegada||'—'}</td>
+      <td style="font-size:11px">${r.dtAssinatura||'—'}</td>
+      <td style="font-size:11px">${r.dtDocsRec||'—'}</td>
+      <td style="font-size:11px">${r.dtEntrega||'—'}</td>
+      <td style="font-size:11px">${r.mes||'—'}</td>
+      <td>${dbadge(dc)}</td>
+      <td onclick="event.stopPropagation()"><div class="ra">
+        <button class="rb" onclick="openM('${r.uid}')" title="Editar">✏️</button>
+        <button class="rb dl" onclick="askDel('${r.uid}')" title="Excluir">🗑</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('pag-i').textContent=`${total} registro${total!==1?'s':''} · Página ${pg} de ${pages}`;
+  const pb=document.getElementById('pag-b');
+  if(pages<=1){pb.innerHTML='';return;}
+  let h=`<button class="pb2" onclick="goPg(${pg-1})" ${pg===1?'disabled':''}>‹</button>`;
+  for(let i=1;i<=pages;i++){
+    if(i===1||i===pages||Math.abs(i-pg)<=2)h+=`<button class="pb2 ${i===pg?'on':''}" onclick="goPg(${i})">${i}</button>`;
+    else if(Math.abs(i-pg)===3)h+=`<span style="color:var(--t3);padding:0 3px">…</span>`;
+  }
+  h+=`<button class="pb2" onclick="goPg(${pg+1})" ${pg===pages?'disabled':''}>›</button>`;
+  pb.innerHTML=h;
+}
+function srt(c){sCol===c?sDir*=-1:(sCol=c,sDir=1);pg=1;renderTbl();}
+function goPg(p){pg=p;renderTbl();}
+
+/* MODAL */
+function setE(e){
+  curEtapa=e;
+  document.querySelectorAll('.esb').forEach(b=>b.classList.toggle('on',parseInt(b.dataset.e)===e));
+  const cs=document.getElementById('csec');
+  const ib=document.getElementById('ibox');
+  cs.classList.toggle('show',e>=3);
+  ib.classList.toggle('show',e>=3);
+}
+function onAssin(){
+  const v=document.getElementById('m-dtAssinatura').value;
+  if(v&&curEtapa<3)setE(3);
+  if(v){
+    const mi=new Date(v).getMonth();
+    const mes=MESES_REF[mi];
+    const mEl=document.getElementById('m-mes');
+    if(mEl&&mes)mEl.value=mes;
+  }
+  calcDur();
+}
+function calcDur(){
+  const g=id=>document.getElementById(id)?.value||'';
+  const ms=[
+    {l:'Chegada → Assinatura', d:dBetween(g('m-dtChegada'),g('m-dtAssinatura')),  ref:10},
+    {l:'Chegada → Docs Rec.',  d:dBetween(g('m-dtChegada'),g('m-dtDocsRec')),     ref:15},
+    {l:'Assin. → Docs Rec.',   d:dBetween(g('m-dtAssinatura'),g('m-dtDocsRec')), ref:7},
+    {l:'Total Comercial',      d:dBetween(g('m-dtChegada'),g('m-dtEntrega')||g('m-dtDocsRec')), ref:20},
+  ].filter(x=>x.d!==null&&x.d>=0);
+  const box=document.getElementById('dur-box');
+  if(!ms.length){box.classList.remove('show');return;}
+  box.classList.add('show');
+  document.getElementById('dur-grid').innerHTML=ms.map(({l,d,ref})=>{
+    const col=d<=ref*.7?'var(--green)':d<=ref?'var(--amber)':'var(--rose)';
+    return`<div class="dur-item"><div class="dur-lbl">${l}</div><div class="dur-val" style="color:${col}">${d}d</div></div>`;
+  }).join('');
+}
+function fillMSel(){
+  const m=[...new Set([...DB.map(r=>r.mes).filter(Boolean),...MESES_REF])];
+  const mk=(id,opts,blank='')=>{const el=document.getElementById(id);if(!el)return;
+    el.innerHTML=(blank?[`<option value="">${blank}</option>`]:[]).concat(opts.map(o=>`<option value="${o}">${o||'—'}</option>`)).join('');};
+  mk('m-mes',m);mk('m-area',AREAS,'— Selecionar —');mk('m-acao',ACOES,'— Selecionar —');
+  mk('m-tipo',TIPOS,'— Selecionar —');mk('m-orig',ORIGENS,'— Selecionar —');
+  mk('m-adv',ADVS,'— Selecionar —');
+}
+function openM(editUid){
+  fillMSel();
+  document.getElementById('m-uid').value=editUid||'';
+  if(editUid){
+    const r=DB.find(x=>x.uid===editUid);if(!r)return;
+    document.getElementById('m-title').textContent='✏️  Editar Registro';
+    document.getElementById('m-cliente').value=r.cliente||'';
+    document.getElementById('m-adv').value=r.adv||'';
+    document.getElementById('m-area').value=r.area||'';
+    document.getElementById('m-acao').value=r.acao||'';
+    document.getElementById('m-tipo').value=r.tipo||'';
+    document.getElementById('m-orig').value=r.origem||'';
+    document.getElementById('m-mes').value=r.mes||'';
+    document.getElementById('m-status').value=r.status||'Em andamento';
+    document.getElementById('m-obs').value=r.obs||'';
+    ['dtChegada','dtContato','dtEnvioContrato','dtAssinatura','dtDocs','dtDocsRec','dtEntrega'].forEach(f=>{
+      const el=document.getElementById(`m-${f}`);if(el)el.value=iso(r[f]||'');});
+    setE(parseInt(r.etapa)||1);
+  }else{
+    document.getElementById('m-title').textContent='📁  Novo Registro';
+    const ms=[...new Set(DB.map(r=>r.mes).filter(Boolean))];
+    ['m-cliente','m-obs'].forEach(id=>document.getElementById(id).value='');
+    ['m-adv','m-area','m-acao','m-tipo','m-orig'].forEach(id=>document.getElementById(id).value='');
+    ['m-dtChegada','m-dtContato','m-dtEnvioContrato','m-dtAssinatura','m-dtDocs','m-dtDocsRec','m-dtEntrega'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('m-dtChegada').value=hoje();
+    document.getElementById('m-mes').value=ms.at(-1)||'Abril';
+    document.getElementById('m-status').value='Em andamento';
+    setE(1);
+  }
+  document.getElementById('dur-box').classList.remove('show');
+  calcDur();
+  document.getElementById('ov').classList.add('open');
+  setTimeout(()=>document.getElementById('m-cliente').focus(),100);
+}
+function closeM(){document.getElementById('ov').classList.remove('open');}
+function ovBg(e){if(e.target===e.currentTarget)closeM();}
+function saveC(){
+  const cli=document.getElementById('m-cliente').value.trim();
+  if(!cli){toast('Informe o nome do cliente.','err');document.getElementById('m-cliente').focus();return;}
+  const editUid=document.getElementById('m-uid').value;
+  const gD=id=>fmt(document.getElementById(id)?.value||'');
+  const gV=id=>document.getElementById(id)?.value||'';
+  const dtAs=document.getElementById('m-dtAssinatura').value;
+  const obj={
+    uid:editUid||uid(), cliente:cli, adv:gV('m-adv'), area:gV('m-area'), acao:gV('m-acao'),
+    tipo:gV('m-tipo'), origem:gV('m-orig'), mes:gV('m-mes'), status:gV('m-status'), obs:gV('m-obs'),
+    etapa:String(curEtapa), data:fmt(dtAs||''),
+    dtChegada:gD('m-dtChegada'), dtContato:gD('m-dtContato'), dtEnvioContrato:gD('m-dtEnvioContrato'),
+    dtAssinatura:gD('m-dtAssinatura'), dtDocs:gD('m-dtDocs'), dtDocsRec:gD('m-dtDocsRec'), dtEntrega:gD('m-dtEntrega'),
+  };
+  if(editUid){const i=DB.findIndex(x=>x.uid===editUid);if(i>=0)DB[i]=obj;toast(`"${cli}" atualizado.`);}
+  else{DB.push(obj);toast(`"${cli}" adicionado.`);}
+  saveDB();fillSel();fillF();closeM();renderDash();renderTbl();
+}
+
+/* DELETE */
+function askDel(u){
+  const r=DB.find(x=>x.uid===u);if(!r)return;pendDelUID=u;
+  document.getElementById('del-msg').innerHTML=`Deseja excluir o registro de<br><strong style="color:var(--t)">"${r.cliente}"</strong>?`;
+  document.getElementById('del-btn').onclick=confirmDel;
+  document.getElementById('dov').classList.add('open');
+}
+function confirmDel(){
+  if(!pendDelUID)return;DB=DB.filter(x=>x.uid!==pendDelUID);pendDelUID=null;
+  saveDB();closeDel();toast('Registro excluído.','inf');renderDash();renderTbl();
+}
+function closeDel(){document.getElementById('dov').classList.remove('open');pendDelUID=null;}
+
+/* SETTINGS */
+const CFG={
+  areas:{list:()=>AREAS,set:v=>{AREAS=v;},input:'ni-areas',items:'lst-areas',cnt:'cnt-areas',field:'area',noun:'área'},
+  acoes:{list:()=>ACOES,set:v=>{ACOES=v;},input:'ni-acoes',items:'lst-acoes',cnt:'cnt-acoes',field:'acao',noun:'ação'},
+  advs:{list:()=>ADVS,set:v=>{ADVS=v;},input:'ni-advs',items:'lst-advs',cnt:'cnt-advs',field:'adv',noun:'advogado'},
+  tipos:{list:()=>TIPOS,set:v=>{TIPOS=v;},input:'ni-tipos',items:'lst-tipos',cnt:'cnt-tipos',field:'tipo',noun:'tipo'},
+  origens:{list:()=>ORIGENS,set:v=>{ORIGENS=v;},input:'ni-origens',items:'lst-origens',cnt:'cnt-origens',field:'origem',noun:'origem'},
+  meses:{list:()=>MESES_REF,set:v=>{MESES_REF=v;},input:'ni-meses',items:'lst-meses',cnt:'cnt-meses',field:'mes',noun:'mês'},
+};
+function renderCfg(key){
+  const c=CFG[key],list=c.list();
+  document.getElementById(c.cnt).textContent=`${list.length} ${list.length===1?c.noun:c.noun+'s'}`;
+  const el=document.getElementById(c.items);
+  if(!list.length){el.innerHTML=`<div class="cempty">Nenhum item ainda.</div>`;return;}
+  el.innerHTML=list.map((item,i)=>{const u=DB.filter(r=>r[c.field]===item).length;
+    return`<div class="citem"><span class="cin">${item}</span>
+      ${u>0?`<span class="cu">${u} uso${u>1?'s':''}</span>`:''}
+      <button class="cdel" onclick="remC('${key}',${i})" ${u>0?`disabled title="${u} em uso"`:''}>${u>0?'🔒':'✕'}</button>
+    </div>`;}).join('');
+}
+function renderAllCfg(){Object.keys(CFG).forEach(renderCfg);}
+function addC(key){
+  const c=CFG[key],inp=document.getElementById(c.input),val=inp.value.trim();
+  if(!val){inp.focus();return;}
+  if(c.list().some(x=>x.toLowerCase()===val.toLowerCase())){toast(`"${val}" já existe.`,'err');inp.focus();return;}
+  c.set([...c.list(),val]);saveLists();inp.value='';renderCfg(key);fillSel();fillF();
+  toast(`"${val}" adicionado(a)!`);inp.focus();
+}
+function remC(key,idx){
+  const c=CFG[key],list=c.list(),item=list[idx];
+  const u=DB.filter(r=>r[c.field]===item).length;
+  if(u>0){toast(`"${item}" está em uso.`,'err');return;}
+  c.set(list.filter((_,i)=>i!==idx));saveLists();renderCfg(key);fillSel();fillF();
+  toast(`"${item}" removido(a).`,'inf');
+}
+
+/* KEYBOARD */
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){closeM();closeDel();}
+  if(e.key==='Enter'&&document.getElementById('ov').classList.contains('open')
+    &&e.target.tagName!=='TEXTAREA'&&e.target.tagName!=='BUTTON'){e.preventDefault();saveC();}
+  if(e.key==='Enter'&&e.target.classList.contains('cinp')){
+    const k=Object.keys(CFG).find(k=>CFG[k].input===e.target.id);if(k)addC(k);}
+});
+window.addEventListener('resize',()=>{if(document.getElementById('view-dash').classList.contains('on'))renderDash();});
+
+/* EXPORT */
+function exportHTML(){
+  const src=document.documentElement.outerHTML;
+  const nd=JSON.stringify(DB,null,0);
+  const upd=src.replace(/const SEED_DATA = [\s\S]*?;\s*\/\* ══ DEFAULT LISTS/,`const SEED_DATA = ${nd};\n/* ══ DEFAULT LISTS`);
+  const blob=new Blob([upd],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;
+  a.download='OB_Dashboard_'+new Date().toISOString().slice(0,10)+'.html';
+  a.click();URL.revokeObjectURL(url);
+  toast('Exportado! ✅');
+}
+
+init();
+</script>
+
+
+</body></html>
