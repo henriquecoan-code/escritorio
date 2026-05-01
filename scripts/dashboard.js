@@ -243,7 +243,7 @@ function renderDashLayout(){
       <div class="card fu" style="animation-delay:.18s"><div class="ct">Tipos de Ação &#8212; Top 10 <span class="ct-n" id="acao-total">--</span></div><div class="hbar-list" id="hbar-acao"></div></div>
       <div class="card fu" style="animation-delay:.21s"><div class="ct">Origem do Lead <span class="ct-n" id="orig-total">--</span></div><div class="dw"><div style="height:170px;width:170px;flex-shrink:0"><canvas id="origChart"></canvas></div><div class="dleg" id="orig-leg"></div></div></div></div></div>`,
     adv_mes:`<div data-widget="adv_mes"><div class="sl"><div class="sl-line"></div><div class="sl-txt">Advogado &#215; Mês · Resumo Executivo</div><div class="sl-line"></div></div>
-      <div class="gnw"><div class="card fu" style="animation-delay:.23s"><div class="ct">Contratos Assinados por Advogado &#8212; por Mês</div><div style="height:240px"><canvas id="advChart"></canvas></div></div>
+      <div class="gnw"><div class="card fu" style="animation-delay:.23s"><div class="ct">Contratos Assinados por Advogado &#8212; por Mês</div><div style="height:220px"><canvas id="advChart"></canvas></div></div>
       <div class="card fu" style="animation-delay:.26s"><div class="ct">Resumo Executivo</div><table class="stbl" id="sum-tbl"></table></div></div></div>`,
     tempo:`<div data-widget="tempo"><div class="sl"><div class="sl-line"></div><div class="sl-txt">Tempo Médio no Comercial &#8212; Permanência da Pasta</div><div class="sl-line"></div></div>
       <div class="g4" id="tempo-grid"></div><div class="card"><div class="ct">Detalhamento por Etapa</div><div id="tempo-detail-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px"></div></div></div>`,
@@ -926,25 +926,35 @@ function getRegView(){
   return list.sort((a,b)=>(dateToSort(b.data)||'').localeCompare(dateToSort(a.data)||''));
 }
 
-function renderRegKpis(list){
-  const el=document.getElementById('reg-kpi-row');if(!el)return;
-  const emAndamento=list.filter(r=>(r.etapa||1)<5&&(r.status||'Ativo')==='Ativo').length;
-  const concluidos=list.filter(r=>(r.etapa||1)===5||(r.status||'')==='Encerrado').length;
-  const comDocsPend=list.filter(r=>Array.isArray(r.docsPendentes)&&r.docsPendentes.length>0).length;
-  // tempo médio chegada → assinatura
-  const durations=list.filter(r=>r.dtChegada&&r.dtAssinatura).map(r=>diffDays(r.dtChegada,r.dtAssinatura)).filter(d=>d!=null&&d>=0);
-  const tempoMedio=durations.length?Math.round(durations.reduce((s,v)=>s+v,0)/durations.length)+'d':'--';
-  el.innerHTML=`
-    <div class="kpi fu"><div class="kl">Tempo Médio Chegada→Assinatura</div><div class="kv">${escHtml(tempoMedio)}</div><div class="ks">${durations.length} com data</div></div>
-    <div class="kpi fu"><div class="kl">Em Andamento</div><div class="kv">${emAndamento}</div><div class="ks">etapa 1-4, ativo</div></div>
-    <div class="kpi fu"><div class="kl">Concluídos</div><div class="kv">${concluidos}</div><div class="ks">etapa 5 ou encerrado</div></div>
-    <div class="kpi fu"><div class="kl">Docs Pendentes</div><div class="kv">${comDocsPend}</div><div class="ks">com documentos em aberto</div></div>
-  `;
+function regStageBadge(etapa){
+  const e=Number(etapa)||1;
+  const defs={
+    1:{c:'c1',l:'Primeiro Contato'},
+    2:{c:'c2',l:'Envio Contrato'},
+    3:{c:'c3',l:'Assinatura'},
+    4:{c:'c4',l:'Documentos'},
+    5:{c:'c5',l:'Entregue'}
+  };
+  const d=defs[e]||defs[1];
+  return `<span class="ebx ${d.c}">${e}. ${d.l}</span>`;
+}
+
+function regDurBadge(rec){
+  const hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const fim=rec.dtEntrega||hoje;
+  const d=diffDays(rec.dtChegada,fim);
+  if(d==null||d<0) return '<span class="bx bm">--</span>';
+  if(d<=10) return `<span class="bx bgr">${d}d</span>`;
+  if(d<=20) return `<span class="bx bam">${d}d</span>`;
+  return `<span class="bx bro">${d}d</span>`;
 }
 
 function buildRegCard(rec){
   const etapa=rec.etapa||1;
-  const statusCls=(rec.status||'Ativo').toLowerCase()==='ativo'?'ativo':'inativo';
+  const signed=Boolean(rec.dtAssinatura)||isDoneRecord(rec);
+  const area=rec.area?(rec.area.length>18?`${rec.area.slice(0,17)}…`:rec.area):'';
+  const docsPend=Array.isArray(rec.docsPendentes)?rec.docsPendentes:[];
+  const dots=[1,2,3,4,5].map((s,i)=>`<div class="pdot ${s<etapa?'dn':s===etapa?'ac':'pd'}"></div>${i<4?'<div class="pln"></div>':''}`).join('');
   const dur=calcRegDur(rec);
   const dateFields=[
     {key:'dtChegada',label:'Chegada'},
@@ -955,49 +965,70 @@ function buildRegCard(rec){
     {key:'dtDocsRec',label:'Docs Receb.'},
     {key:'dtEntrega',label:'Entrega'},
   ];
-  const docsPend=Array.isArray(rec.docsPendentes)?rec.docsPendentes:[];
 
   const pipeHTML=ETAPA_LABELS.map((lbl,i)=>{
     const n=i+1;
-    const cls=n<etapa?'done':n===etapa?'active':'';
-    return `<div class="etapa-step ${cls}" data-set-etapa="${escAttr(rec.uid)}" data-etapa="${n}" title="${escAttr(lbl)}">${escHtml(lbl)}</div>`;
+    const cls=n===etapa?' on':'';
+    return `<button class="eb${cls}" data-set-etapa="${escAttr(rec.uid)}" data-etapa="${n}" title="${escAttr(lbl)}"><span class="ei">${n}</span>${escHtml(lbl)}</button>`;
   }).join('');
 
   const dateHTML=dateFields.map(f=>`
-    <div class="dg-field">
-      <label class="dg-label">${escHtml(f.label)}</label>
+    <div class="ifield ${f.key==='dtEntrega'?'full':''}">
+      <label>${escHtml(f.label)}</label>
       <input class="dg-input" type="date" data-date-field="${escAttr(f.key)}" data-uid="${escAttr(rec.uid)}" value="${escAttr(dmy2iso(rec[f.key]||''))}">
     </div>`).join('');
 
   const chipsHTML=DOCS_LISTA.map(doc=>{
     const pend=docsPend.includes(doc);
-    return `<span class="doc-chip ${pend?'pendente':''}" data-toggle-doc="${escAttr(rec.uid)}" data-doc="${escAttr(doc)}">${escHtml(doc)}</span>`;
+    return `<span class="doc-chip ${pend?'sel':''}" data-toggle-doc="${escAttr(rec.uid)}" data-doc="${escAttr(doc)}">${escHtml(doc)}</span>`;
   }).join('');
 
   return `<div class="reg-card" id="regcard-${escAttr(rec.uid)}">
-  <div class="reg-card-hd" data-toggle-card="${escAttr(rec.uid)}">
-    <span class="reg-card-date">${escHtml(rec.data||'')}</span>
-    <span class="reg-card-cliente">${escHtml(rec.cliente||'')}</span>
-    <span class="reg-card-area">${escHtml(rec.area||'')}</span>
-    <span class="reg-card-status ${statusCls}">${escHtml(rec.status||'Ativo')}</span>
-    <span class="reg-card-etapa-badge">E${etapa}</span>
-    <span class="reg-card-chevron">&#9660;</span>
+  <div class="reg-hdr" data-toggle-card="${escAttr(rec.uid)}">
+    <div>
+      <div class="reg-cli">${escHtml(rec.cliente||'')}</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
+        <div class="pdots">${dots}</div>
+        <span class="reg-meta">${escHtml(area||'—')}${rec.adv?` · ${escHtml(rec.adv)}`:''}</span>
+      </div>
+    </div>
+    <div>${regStageBadge(etapa)}</div>
+    <div style="font-size:11px;color:var(--t3)">${escHtml(rec.mes||'—')}</div>
+    <div>${signed?'<span class="bx bgr">✍ Assinado</span>':'<span class="bx bm">Pendente</span>'}</div>
+    <div>${docsPend.length>0?`<span class="bx bro">📎 ${docsPend.length}</span>`:'<span style="font-size:10px;color:var(--t3)">docs ok</span>'}</div>
+    <div>${regDurBadge(rec)}</div>
+    <button class="reg-btn" id="btn-${escAttr(rec.uid)}">▼ Editar</button>
   </div>
-  <div class="reg-card-body">
+  <div class="reg-panel" id="panel-${escAttr(rec.uid)}">
+    <div class="panel-body">
     <div class="etapa-bar">${pipeHTML}</div>
-    <div class="date-grid">${dateHTML}</div>
-    <div class="dur-strip" id="dur-${escAttr(rec.uid)}">
-      <div class="dur-item"><div class="dur-label">Chegada → Assinatura</div><div class="dur-val">${escHtml(dur.ateSign)}</div></div>
-      <div class="dur-item"><div class="dur-label">Tempo Total (até entrega)</div><div class="dur-val">${escHtml(dur.total)}</div></div>
+    <div class="dg">${dateHTML}</div>
+    <div class="dur-strip show" id="dur-strip-${escAttr(rec.uid)}">
+      <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:6px">Durações calculadas</div>
+      <div class="dur-grid" id="dur-${escAttr(rec.uid)}">
+        <div class="dur-item"><div class="dur-lbl">Chegada→Assin.</div><div class="dur-val">${escHtml(dur.ateSign)}</div></div>
+        <div class="dur-item"><div class="dur-lbl">Chegada→Entrega</div><div class="dur-val">${escHtml(dur.total)}</div></div>
+      </div>
     </div>
-    <div class="docs-section">
-      <div class="docs-label">Documentos Pendentes</div>
-      <div class="docs-chips">${chipsHTML}</div>
+    <div style="margin-top:10px">
+      <div class="ifield">
+        <label>Documentos Pendentes — clique para marcar</label>
+        <div class="docs-sel">${chipsHTML}</div>
+      </div>
     </div>
-    <textarea class="reg-card-obs" data-uid="${escAttr(rec.uid)}" placeholder="Observações...">${escHtml(rec.obs||'')}</textarea>
-    <div class="reg-card-acts">
-      <button class="btn sm" data-reg-save="${escAttr(rec.uid)}">&#10003; Salvar</button>
-      <button class="btn danger sm" data-reg-delete="${escAttr(rec.uid)}">&#128465; Excluir</button>
+    <div style="margin-top:10px">
+      <div class="ifield">
+        <label>Observações</label>
+        <textarea class="reg-card-obs" data-uid="${escAttr(rec.uid)}" placeholder="Observações...">${escHtml(rec.obs||'')}</textarea>
+      </div>
+    </div>
+    </div>
+    <div class="pfooter">
+      <span class="pstatus">Editando — não salvo</span>
+      <div class="pacts">
+        <button class="btn sm danger" data-reg-delete="${escAttr(rec.uid)}">Excluir</button>
+        <button class="btn sm primary" data-reg-save="${escAttr(rec.uid)}">Salvar</button>
+      </div>
     </div>
   </div>
 </div>`;
@@ -1014,7 +1045,6 @@ function renderReg(){
   const slice=list.slice((regPg-1)*REG_PG,regPg*REG_PG);
 
   document.getElementById('reg-count').textContent=`— ${list.length} registro${list.length!==1?'s':''}`;
-  renderRegKpis(list);
   if(!list.length){
     el.innerHTML='<div style="text-align:center;padding:40px;color:var(--t3);">Nenhum registro encontrado.</div>';
     if(infoEl) infoEl.textContent='0 registros';
@@ -1045,25 +1075,23 @@ function goRegPg(p){
 }
 
 function toggleRegCard(uid){
-  const card=document.getElementById(`regcard-${uid}`);if(!card)return;
-  card.classList.toggle('open');
+  const card=document.getElementById(`regcard-${uid}`);
+  const panel=document.getElementById(`panel-${uid}`);
+  const btn=document.getElementById(`btn-${uid}`);
+  if(!card||!panel||!btn)return;
+  const isOpen=panel.classList.contains('open');
+  panel.classList.toggle('open',!isOpen);
+  btn.classList.toggle('open',!isOpen);
+  btn.textContent=isOpen?'▼ Editar':'▲ Fechar';
+  card.classList.toggle('expanded',!isOpen);
 }
 
 async function setRegEtapa(uid,etapa){
   const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
   DB[idx]={...DB[idx],etapa};
   await serverSave(DB[idx]);
-  // Atualiza visualmente sem re-renderizar tudo
-  const card=document.getElementById(`regcard-${uid}`);
-  if(card){
-    // Atualiza badge
-    const badge=card.querySelector('.reg-card-etapa-badge');if(badge)badge.textContent=`E${etapa}`;
-    // Atualiza pipeline
-    card.querySelectorAll('.etapa-step').forEach((el,i)=>{
-      const n=i+1;
-      el.className='etapa-step'+(n<etapa?' done':n===etapa?' active':'');
-    });
-  }
+  renderReg();
+  toggleRegCard(uid);
   toast(`Etapa atualizada para ${ETAPA_LABELS[etapa-1]}.`);
 }
 
@@ -1078,7 +1106,7 @@ function toggleRegDoc(uid,doc){
   const card=document.getElementById(`regcard-${uid}`);
   if(card){
     card.querySelectorAll(`[data-toggle-doc="${uid}"]`).forEach(chip=>{
-      chip.classList.toggle('pendente',docs.includes(chip.dataset.doc));
+      chip.classList.toggle('sel',docs.includes(chip.dataset.doc));
     });
   }
 }
@@ -1104,8 +1132,8 @@ async function saveReg(uid){
   const dur=calcRegDur(DB[idx]);
   const durEl=document.getElementById(`dur-${uid}`);
   if(durEl) durEl.innerHTML=`
-    <div class="dur-item"><div class="dur-label">Chegada → Assinatura</div><div class="dur-val">${escHtml(dur.ateSign)}</div></div>
-    <div class="dur-item"><div class="dur-label">Tempo Total (até entrega)</div><div class="dur-val">${escHtml(dur.total)}</div></div>
+    <div class="dur-item"><div class="dur-lbl">Chegada→Assin.</div><div class="dur-val">${escHtml(dur.ateSign)}</div></div>
+    <div class="dur-item"><div class="dur-lbl">Chegada→Entrega</div><div class="dur-val">${escHtml(dur.total)}</div></div>
   `;
   toast(`"${escHtml(DB[idx].cliente||uid)}" salvo!`);
 }

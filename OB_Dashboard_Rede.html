@@ -28,16 +28,6 @@
     </div>
   </header>
 
-  <!-- SYNC BAR -->
-  <div class="sync-bar" id="sync-bar">
-    <div class="sdot" id="sdot"></div>
-    <span class="slbl" id="slbl"></span>
-    <span id="sdet" style="color:var(--t3)"></span>
-    <div class="sync-acts">
-      <button class="sync-btn" id="sync-now-btn">&#8635; Atualizar</button>
-    </div>
-  </div>
-
   <!-- DASHBOARD -->
   <div id="view-dash" class="view on">
     <div class="month-bar" id="month-bar">
@@ -89,7 +79,7 @@
     <div class="tbar">
       <h2>Registros <span style="font-size:14px;color:var(--t3);font-family:inherit" id="reg-count">&#8212; 0 registros</span></h2>
       <div class="t-tools">
-        <input class="sb" id="reg-srch" placeholder="Buscar cliente, a&#231;&#227;o...">
+        <input class="sb" id="reg-srch" placeholder="Buscar...">
         <select class="fsel" id="reg-ff-mes"><option value="">Todos os meses</option></select>
         <select class="fsel" id="reg-ff-adv"><option value="">Todos os adv.</option></select>
         <select class="fsel" id="reg-ff-etapa">
@@ -104,7 +94,6 @@
         <button class="btn sm" id="reg-export-btn">&#128196; Exportar HTML</button>
       </div>
     </div>
-    <div class="kpi-row" id="reg-kpi-row"></div>
     <div id="reg-list" class="reg-list"></div>
     <div class="pag">
       <div class="pag-info" id="reg-pag-info"></div>
@@ -130,6 +119,16 @@
       <div class="cfg-card"><div class="cfg-hd"><span class="cfg-icon">&#128203;</span><div><div class="cfg-title">Tipos de Contrato</div><div class="cfg-sub" id="cnt-tipos"></div></div></div><div class="cfg-items" id="lst-tipos"></div><div class="cfg-add-row"><input class="cfg-inp" id="ni-tipos" placeholder="Novo tipo..." maxlength="40"><button class="btn primary sm" data-cfg-add-key="tipos">+</button></div></div>
       <div class="cfg-card"><div class="cfg-hd"><span class="cfg-icon">&#128225;</span><div><div class="cfg-title">Origens do Lead</div><div class="cfg-sub" id="cnt-origens"></div></div></div><div class="cfg-items" id="lst-origens"></div><div class="cfg-add-row"><input class="cfg-inp" id="ni-origens" placeholder="Nova origem..." maxlength="40"><button class="btn primary sm" data-cfg-add-key="origens">+</button></div></div>
       <div class="cfg-card"><div class="cfg-hd"><span class="cfg-icon">&#128197;</span><div><div class="cfg-title">Meses de Referência</div><div class="cfg-sub" id="cnt-meses"></div></div></div><div class="cfg-items" id="lst-meses"></div><div class="cfg-add-row"><input class="cfg-inp" id="ni-meses" placeholder="Ex: Maio..." maxlength="20"><button class="btn primary sm" data-cfg-add-key="meses">+</button></div></div>
+    </div>
+  </div>
+
+  <!-- SYNC BAR (RODAPÉ) -->
+  <div class="sync-bar" id="sync-bar">
+    <div class="sdot" id="sdot"></div>
+    <span class="slbl" id="slbl"></span>
+    <span id="sdet" style="color:var(--t3)"></span>
+    <div class="sync-acts">
+      <button class="sync-btn" id="sync-now-btn">&#8635; Atualizar</button>
     </div>
   </div>
 </div>
