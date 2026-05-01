@@ -28,6 +28,8 @@ let firebasePermissionWarned=false;
 
 /* .. REG STATE .. */
 let regFilter = {srch:'', mes:'', adv:'', etapa:''};
+let regPg=1;
+const REG_PG=12;
 
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 
@@ -200,6 +202,7 @@ function bindStaticEvents(){
   /* .. REGISTROS .. */
   document.getElementById('reg-srch')?.addEventListener('input',()=>{
     regFilter.srch=document.getElementById('reg-srch').value.trim().toLowerCase();
+    regPg=1;
     renderReg();
   });
   ['reg-ff-mes','reg-ff-adv','reg-ff-etapa'].forEach(id=>{
@@ -207,11 +210,13 @@ function bindStaticEvents(){
       regFilter.mes  = document.getElementById('reg-ff-mes').value;
       regFilter.adv  = document.getElementById('reg-ff-adv').value;
       regFilter.etapa= document.getElementById('reg-ff-etapa').value;
+      regPg=1;
       renderReg();
     });
   });
   document.getElementById('reg-clear-btn')?.addEventListener('click',()=>{
     regFilter={srch:'',mes:'',adv:'',etapa:''};
+    regPg=1;
     document.getElementById('reg-srch').value='';
     document.getElementById('reg-ff-mes').value='';
     document.getElementById('reg-ff-adv').value='';
@@ -235,6 +240,11 @@ function bindStaticEvents(){
     // delete
     const delBtn=event.target.closest('[data-reg-delete]');
     if(delBtn){ askDel(delBtn.dataset.regDelete); }
+  });
+  document.getElementById('reg-pag-btns')?.addEventListener('click',(event)=>{
+    const pageBtn=event.target.closest('button[data-reg-page]');
+    if(!pageBtn || pageBtn.disabled) return;
+    goRegPg(Number(pageBtn.dataset.regPage));
   });
   document.getElementById('month-bar')?.addEventListener('click',(event)=>{
     const btn=event.target.closest('.month-pill[data-month]');
@@ -852,11 +862,43 @@ function buildRegCard(rec){
 
 function renderReg(){
   const el=document.getElementById('reg-list');if(!el)return;
+  const infoEl=document.getElementById('reg-pag-info');
+  const btnsEl=document.getElementById('reg-pag-btns');
   const list=getRegView();
+  const total=list.length;
+  const pages=Math.ceil(total/REG_PG)||1;
+  regPg=Math.min(regPg,pages);
+  const slice=list.slice((regPg-1)*REG_PG,regPg*REG_PG);
+
   document.getElementById('reg-count').textContent=`(${list.length})`;
   renderRegKpis(list);
-  if(!list.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--t3);">Nenhum registro encontrado.</div>';return;}
-  el.innerHTML=list.map(buildRegCard).join('');
+  if(!list.length){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--t3);">Nenhum registro encontrado.</div>';
+    if(infoEl) infoEl.textContent='0 registros';
+    if(btnsEl) btnsEl.innerHTML='';
+    return;
+  }
+
+  el.innerHTML=slice.map(buildRegCard).join('');
+
+  if(infoEl) infoEl.textContent=`${total} registro${total!==1?'s':''} · Página ${regPg} de ${pages}`;
+  if(btnsEl){
+    if(pages<=1){btnsEl.innerHTML='';}
+    else{
+      let h=`<button class="pb2" data-reg-page="${regPg-1}" ${regPg===1?'disabled':''}>&lsaquo;</button>`;
+      for(let i=1;i<=pages;i++){
+        if(i===1||i===pages||Math.abs(i-regPg)<=2)h+=`<button class="pb2 ${i===regPg?'on':''}" data-reg-page="${i}">${i}</button>`;
+        else if(Math.abs(i-regPg)===3)h+=`<span style="color:var(--t3);padding:0 3px">...</span>`;
+      }
+      h+=`<button class="pb2" data-reg-page="${regPg+1}" ${regPg===pages?'disabled':''}>&rsaquo;</button>`;
+      btnsEl.innerHTML=h;
+    }
+  }
+}
+
+function goRegPg(p){
+  regPg=p;
+  renderReg();
 }
 
 function toggleRegCard(uid){
