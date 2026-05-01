@@ -26,6 +26,9 @@ let USE_FIREBASE=false, fbDb=null;
 let fbAuth=null, currentUser=null;
 let firebasePermissionWarned=false;
 
+/* .. REG STATE .. */
+let regFilter = {srch:'', mes:'', adv:'', etapa:''};
+
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 
 function toast(msg,type='ok'){
@@ -134,7 +137,7 @@ async function loadFromFirebase(){
     const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     setSyncStatus('ok','Firebase conectado',`${DB.length} registros · ${now}`);
     firebasePermissionWarned=false;
-    fillSelects();fillFilters();renderDash();renderTbl();
+    fillSelects();fillFilters();renderDash();renderTbl();fillRegFilters();renderReg();
   }catch(e){
     console.error(e);
     const code = (e && (e.code || e.status)) ? String(e.code || e.status) : '';
@@ -193,6 +196,46 @@ function bindStaticEvents(){
   document.getElementById('del-ov')?.addEventListener('click',(event)=>{if(event.target===event.currentTarget)closeDel();});
   document.getElementById('cancel-del-btn')?.addEventListener('click',closeDel);
   document.getElementById('del-btn')?.addEventListener('click',confirmDel);
+
+  /* .. REGISTROS .. */
+  document.getElementById('reg-srch')?.addEventListener('input',()=>{
+    regFilter.srch=document.getElementById('reg-srch').value.trim().toLowerCase();
+    renderReg();
+  });
+  ['reg-ff-mes','reg-ff-adv','reg-ff-etapa'].forEach(id=>{
+    document.getElementById(id)?.addEventListener('change',()=>{
+      regFilter.mes  = document.getElementById('reg-ff-mes').value;
+      regFilter.adv  = document.getElementById('reg-ff-adv').value;
+      regFilter.etapa= document.getElementById('reg-ff-etapa').value;
+      renderReg();
+    });
+  });
+  document.getElementById('reg-clear-btn')?.addEventListener('click',()=>{
+    regFilter={srch:'',mes:'',adv:'',etapa:''};
+    document.getElementById('reg-srch').value='';
+    document.getElementById('reg-ff-mes').value='';
+    document.getElementById('reg-ff-adv').value='';
+    document.getElementById('reg-ff-etapa').value='';
+    renderReg();
+  });
+  document.getElementById('reg-export-btn')?.addEventListener('click',exportRegHTML);
+  document.getElementById('reg-list')?.addEventListener('click',(event)=>{
+    // toggle card open/close
+    const hd=event.target.closest('[data-toggle-card]');
+    if(hd){ toggleRegCard(hd.dataset.toggleCard); return; }
+    // set etapa
+    const et=event.target.closest('[data-set-etapa][data-etapa]');
+    if(et){ setRegEtapa(et.dataset.setEtapa, Number(et.dataset.etapa)); return; }
+    // toggle doc chip
+    const chip=event.target.closest('[data-toggle-doc]');
+    if(chip){ toggleRegDoc(chip.dataset.toggleDoc, chip.dataset.doc); return; }
+    // save
+    const saveBtn=event.target.closest('[data-reg-save]');
+    if(saveBtn){ saveReg(saveBtn.dataset.regSave); return; }
+    // delete
+    const delBtn=event.target.closest('[data-reg-delete]');
+    if(delBtn){ askDel(delBtn.dataset.regDelete); }
+  });
   document.getElementById('month-bar')?.addEventListener('click',(event)=>{
     const btn=event.target.closest('.month-pill[data-month]');
     if(!btn) return;
@@ -266,12 +309,13 @@ function init(){
 
 /* .. VIEWS .. */
 function sw(v){
-  ['dash','ct','cfg'].forEach(k=>{
-    document.getElementById(`view-${k}`).classList.toggle('on',k===v);
-    document.getElementById(`tab-${k}`).classList.toggle('on',k===v);
+  ['dash','ct','reg','cfg'].forEach(k=>{
+    document.getElementById(`view-${k}`)?.classList.toggle('on',k===v);
+    document.getElementById(`tab-${k}`)?.classList.toggle('on',k===v);
   });
   if(v==='dash') renderDash();
   if(v==='ct')  {fillFilters();renderTbl();}
+  if(v==='reg') {fillRegFilters();renderReg();}
   if(v==='cfg')  renderAllCfg();
 }
 
@@ -620,7 +664,7 @@ async function confirmDel(){
   if(!pendingDelUID)return;
   const u=pendingDelUID;DB=DB.filter(x=>x.uid!==u);pendingDelUID=null;
   await serverDelete(u);
-  closeDel();toast('Contrato excluído.','info');renderDash();renderTbl();
+  closeDel();toast('Contrato excluído.','info');renderDash();renderTbl();renderReg();
 }
 function closeDel(){document.getElementById('del-ov').classList.remove('open');pendingDelUID=null;}
 
@@ -679,7 +723,257 @@ document.addEventListener('keydown',e=>{
 });
 window.addEventListener('resize',()=>{if(document.getElementById('view-dash').classList.contains('on'))renderDash();});
 
+/* ═══════════════════════════════════════════════════════
+   MÓDULO REGISTROS
+   ═══════════════════════════════════════════════════════ */
+
+const ETAPA_LABELS = ['1. Primeiro Contato','2. Envio Contrato','3. Assinatura','4. Documentos','5. Entregue'];
+const DOCS_LISTA   = ['Doc. Pessoais','Procuração','Contrato','Comp. Residência','Laudos/Atestados','Doc. Prev.','Outros'];
+
+/* Converte "DD/MM/AAAA" para objeto Date (ou null) */
+function parseDMY(dmy){
+  if(!dmy) return null;
+  const p=dmy.split('/');
+  if(p.length!==3) return null;
+  const d=new Date(+p[2],+p[1]-1,+p[0]);
+  return isNaN(d)?null:d;
+}
+/* Converte "AAAA-MM-DD" para "DD/MM/AAAA" */
+function iso2dmy(iso){if(!iso)return '';const p=iso.split('-');return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:''}
+/* Converte "DD/MM/AAAA" para "AAAA-MM-DD" para input[type=date] */
+function dmy2iso(dmy){if(!dmy)return '';const p=dmy.split('/');return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:''}
+/* Diferença em dias entre duas strings DD/MM/AAAA */
+function diffDays(a,b){const da=parseDMY(a),db=parseDMY(b);if(!da||!db)return null;return Math.round((db-da)/(86400000));}
+
+function calcRegDur(rec){
+  const dCheg=rec.dtChegada||'', dSign=rec.dtAssinatura||'', dEnd=rec.dtEntrega||'';
+  const hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const dRef = dEnd || hoje;
+  const total = diffDays(dCheg, dRef);
+  const ateSign = diffDays(dCheg, dSign);
+  return {total: total!=null?total+'d':'--', ateSign: ateSign!=null?ateSign+'d':'--'};
+}
+
+function fillRegFilters(){
+  const meses=[...new Set(DB.map(r=>r.mes))].sort((a,b)=>MESES_REF.indexOf(a)-MESES_REF.indexOf(b));
+  const advs=[...new Set(DB.map(r=>r.adv).filter(Boolean))].sort();
+  const mesEl=document.getElementById('reg-ff-mes');
+  const advEl=document.getElementById('reg-ff-adv');
+  if(!mesEl||!advEl) return;
+  mesEl.innerHTML='<option value="">Todos os meses</option>'+meses.map(m=>`<option value="${escAttr(m)}" ${regFilter.mes===m?'selected':''}>${escHtml(m)}</option>`).join('');
+  advEl.innerHTML='<option value="">Todos os adv.</option>'+advs.map(a=>`<option value="${escAttr(a)}" ${regFilter.adv===a?'selected':''}>${escHtml(a)}</option>`).join('');
+}
+
+function getRegView(){
+  let list=[...DB];
+  if(regFilter.srch){const q=regFilter.srch;list=list.filter(r=>(r.cliente||'').toLowerCase().includes(q)||(r.acao||'').toLowerCase().includes(q)||(r.area||'').toLowerCase().includes(q));}
+  if(regFilter.mes)  list=list.filter(r=>r.mes===regFilter.mes);
+  if(regFilter.adv)  list=list.filter(r=>r.adv===regFilter.adv);
+  if(regFilter.etapa)list=list.filter(r=>String(r.etapa||1)===regFilter.etapa);
+  return list.sort((a,b)=>(dateToSort(b.data)||'').localeCompare(dateToSort(a.data)||''));
+}
+
+function renderRegKpis(list){
+  const el=document.getElementById('reg-kpi-row');if(!el)return;
+  const emAndamento=list.filter(r=>(r.etapa||1)<5&&(r.status||'Ativo')==='Ativo').length;
+  const concluidos=list.filter(r=>(r.etapa||1)===5||(r.status||'')==='Encerrado').length;
+  const comDocsPend=list.filter(r=>Array.isArray(r.docsPendentes)&&r.docsPendentes.length>0).length;
+  // tempo médio chegada → assinatura
+  const durations=list.filter(r=>r.dtChegada&&r.dtAssinatura).map(r=>diffDays(r.dtChegada,r.dtAssinatura)).filter(d=>d!=null&&d>=0);
+  const tempoMedio=durations.length?Math.round(durations.reduce((s,v)=>s+v,0)/durations.length)+'d':'--';
+  el.innerHTML=`
+    <div class="kpi fu"><div class="kl">Tempo Médio Chegada→Assinatura</div><div class="kv">${escHtml(tempoMedio)}</div><div class="ks">${durations.length} com data</div></div>
+    <div class="kpi fu"><div class="kl">Em Andamento</div><div class="kv">${emAndamento}</div><div class="ks">etapa 1-4, ativo</div></div>
+    <div class="kpi fu"><div class="kl">Concluídos</div><div class="kv">${concluidos}</div><div class="ks">etapa 5 ou encerrado</div></div>
+    <div class="kpi fu"><div class="kl">Docs Pendentes</div><div class="kv">${comDocsPend}</div><div class="ks">com documentos em aberto</div></div>
+  `;
+}
+
+function buildRegCard(rec){
+  const etapa=rec.etapa||1;
+  const statusCls=(rec.status||'Ativo').toLowerCase()==='ativo'?'ativo':'inativo';
+  const dur=calcRegDur(rec);
+  const dateFields=[
+    {key:'dtChegada',label:'Chegada'},
+    {key:'dtContato',label:'Contato'},
+    {key:'dtEnvioContrato',label:'Env. Contrato'},
+    {key:'dtAssinatura',label:'Assinatura'},
+    {key:'dtDocs',label:'Docs Enviados'},
+    {key:'dtDocsRec',label:'Docs Receb.'},
+    {key:'dtEntrega',label:'Entrega'},
+  ];
+  const docsPend=Array.isArray(rec.docsPendentes)?rec.docsPendentes:[];
+
+  const pipeHTML=ETAPA_LABELS.map((lbl,i)=>{
+    const n=i+1;
+    const cls=n<etapa?'done':n===etapa?'active':'';
+    return `<div class="etapa-step ${cls}" data-set-etapa="${escAttr(rec.uid)}" data-etapa="${n}" title="${escAttr(lbl)}">${escHtml(lbl)}</div>`;
+  }).join('');
+
+  const dateHTML=dateFields.map(f=>`
+    <div class="dg-field">
+      <label class="dg-label">${escHtml(f.label)}</label>
+      <input class="dg-input" type="date" data-date-field="${escAttr(f.key)}" data-uid="${escAttr(rec.uid)}" value="${escAttr(dmy2iso(rec[f.key]||''))}">
+    </div>`).join('');
+
+  const chipsHTML=DOCS_LISTA.map(doc=>{
+    const pend=docsPend.includes(doc);
+    return `<span class="doc-chip ${pend?'pendente':''}" data-toggle-doc="${escAttr(rec.uid)}" data-doc="${escAttr(doc)}">${escHtml(doc)}</span>`;
+  }).join('');
+
+  return `<div class="reg-card" id="regcard-${escAttr(rec.uid)}">
+  <div class="reg-card-hd" data-toggle-card="${escAttr(rec.uid)}">
+    <span class="reg-card-date">${escHtml(rec.data||'')}</span>
+    <span class="reg-card-cliente">${escHtml(rec.cliente||'')}</span>
+    <span class="reg-card-area">${escHtml(rec.area||'')}</span>
+    <span class="reg-card-status ${statusCls}">${escHtml(rec.status||'Ativo')}</span>
+    <span class="reg-card-etapa-badge">E${etapa}</span>
+    <span class="reg-card-chevron">&#9660;</span>
+  </div>
+  <div class="reg-card-body">
+    <div class="etapa-bar">${pipeHTML}</div>
+    <div class="date-grid">${dateHTML}</div>
+    <div class="dur-strip" id="dur-${escAttr(rec.uid)}">
+      <div class="dur-item"><div class="dur-label">Chegada → Assinatura</div><div class="dur-val">${escHtml(dur.ateSign)}</div></div>
+      <div class="dur-item"><div class="dur-label">Tempo Total (até entrega)</div><div class="dur-val">${escHtml(dur.total)}</div></div>
+    </div>
+    <div class="docs-section">
+      <div class="docs-label">Documentos Pendentes</div>
+      <div class="docs-chips">${chipsHTML}</div>
+    </div>
+    <textarea class="reg-card-obs" data-uid="${escAttr(rec.uid)}" placeholder="Observações...">${escHtml(rec.obs||'')}</textarea>
+    <div class="reg-card-acts">
+      <button class="btn sm" data-reg-save="${escAttr(rec.uid)}">&#10003; Salvar</button>
+      <button class="btn danger sm" data-reg-delete="${escAttr(rec.uid)}">&#128465; Excluir</button>
+    </div>
+  </div>
+</div>`;
+}
+
+function renderReg(){
+  const el=document.getElementById('reg-list');if(!el)return;
+  const list=getRegView();
+  document.getElementById('reg-count').textContent=`(${list.length})`;
+  renderRegKpis(list);
+  if(!list.length){el.innerHTML='<div style="text-align:center;padding:40px;color:var(--t3);">Nenhum registro encontrado.</div>';return;}
+  el.innerHTML=list.map(buildRegCard).join('');
+}
+
+function toggleRegCard(uid){
+  const card=document.getElementById(`regcard-${uid}`);if(!card)return;
+  card.classList.toggle('open');
+}
+
+async function setRegEtapa(uid,etapa){
+  const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
+  DB[idx]={...DB[idx],etapa};
+  await serverSave(DB[idx]);
+  // Atualiza visualmente sem re-renderizar tudo
+  const card=document.getElementById(`regcard-${uid}`);
+  if(card){
+    // Atualiza badge
+    const badge=card.querySelector('.reg-card-etapa-badge');if(badge)badge.textContent=`E${etapa}`;
+    // Atualiza pipeline
+    card.querySelectorAll('.etapa-step').forEach((el,i)=>{
+      const n=i+1;
+      el.className='etapa-step'+(n<etapa?' done':n===etapa?' active':'');
+    });
+  }
+  toast(`Etapa atualizada para ${ETAPA_LABELS[etapa-1]}.`);
+}
+
+function toggleRegDoc(uid,doc){
+  const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
+  const rec=DB[idx];
+  let docs=Array.isArray(rec.docsPendentes)?[...rec.docsPendentes]:[];
+  if(docs.includes(doc)) docs=docs.filter(d=>d!==doc);
+  else docs.push(doc);
+  DB[idx]={...rec,docsPendentes:docs};
+  // Atualiza chip visualmente
+  const card=document.getElementById(`regcard-${uid}`);
+  if(card){
+    card.querySelectorAll(`[data-toggle-doc="${uid}"]`).forEach(chip=>{
+      chip.classList.toggle('pendente',docs.includes(chip.dataset.doc));
+    });
+  }
+}
+
+async function saveReg(uid){
+  const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
+  const card=document.getElementById(`regcard-${uid}`);if(!card)return;
+  const patch={};
+  // Datas
+  card.querySelectorAll('[data-date-field][data-uid]').forEach(inp=>{
+    if(inp.dataset.uid===uid) patch[inp.dataset.dateField]=iso2dmy(inp.value);
+  });
+  // Obs
+  const obsEl=card.querySelector(`textarea[data-uid="${uid}"]`);
+  if(obsEl) patch.obs=obsEl.value.trim();
+  // Docs pendentes já estão em DB[idx].docsPendentes via toggleRegDoc
+  patch.docsPendentes=DB[idx].docsPendentes||[];
+
+  DB[idx]={...DB[idx],...patch};
+  await serverSave(DB[idx]);
+
+  // Atualiza duração na tela
+  const dur=calcRegDur(DB[idx]);
+  const durEl=document.getElementById(`dur-${uid}`);
+  if(durEl) durEl.innerHTML=`
+    <div class="dur-item"><div class="dur-label">Chegada → Assinatura</div><div class="dur-val">${escHtml(dur.ateSign)}</div></div>
+    <div class="dur-item"><div class="dur-label">Tempo Total (até entrega)</div><div class="dur-val">${escHtml(dur.total)}</div></div>
+  `;
+  toast(`"${escHtml(DB[idx].cliente||uid)}" salvo!`);
+}
+
+function exportRegHTML(){
+  const list=getRegView();
+  const now=new Date().toLocaleString('pt-BR');
+  const rows=list.map(r=>{
+    const etapa=r.etapa||1;
+    const docs=(r.docsPendentes||[]).join(', ')||'—';
+    return `<tr>
+      <td>${escHtml(r.data||'')}</td>
+      <td>${escHtml(r.cliente||'')}</td>
+      <td>${escHtml(r.area||'')}</td>
+      <td>${escHtml(r.acao||'')}</td>
+      <td>${escHtml(r.adv||'')}</td>
+      <td>${escHtml(r.status||'')}</td>
+      <td style="text-align:center">${etapa}</td>
+      <td>${escHtml(r.dtChegada||'')}</td>
+      <td>${escHtml(r.dtAssinatura||'')}</td>
+      <td>${escHtml(r.dtEntrega||'')}</td>
+      <td>${escHtml(docs)}</td>
+    </tr>`;
+  }).join('');
+
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Registros - Oliveira &amp; Benedet</title>
+<style>body{font-family:Arial,sans-serif;padding:24px;font-size:12px;}
+h2{margin-bottom:4px;}p{color:#666;margin-bottom:16px;}
+table{width:100%;border-collapse:collapse;}
+th{background:#1a1a35;color:#fff;padding:7px 8px;text-align:left;font-size:11px;}
+td{padding:6px 8px;border-bottom:1px solid #ddd;}
+tr:nth-child(even) td{background:#f7f7f7;}</style></head>
+<body><h2>Oliveira &amp; Benedet &#8212; Registros</h2>
+<p>Gerado em ${escHtml(now)} &bull; ${list.length} registros</p>
+<table><thead><tr>
+  <th>Data</th><th>Cliente</th><th>Área</th><th>Ação</th><th>Adv.</th>
+  <th>Status</th><th>Etapa</th><th>Chegada</th><th>Assinatura</th><th>Entrega</th><th>Docs Pend.</th>
+</tr></thead><tbody>${rows}</tbody></table></body></html>`;
+
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`registros-ob-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.html`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Relatório exportado!');
+}
+
 /* .. BOOT .. */
 init();
+
+
+
 
 

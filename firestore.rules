@@ -5,9 +5,18 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Campos permitidos no schema de contratos (v2 - adicionados campos de etapa e datas)
+    function validContrato(data) {
+      return data.keys().hasOnly([
+        'uid','data','cliente','mes','area','acao','tipo','origem','adv','status','obs',
+        'etapa','dtChegada','dtContato','dtEnvioContrato','dtAssinatura',
+        'dtDocs','dtDocsRec','dtEntrega','docsPendentes'
+      ]);
+    }
+
     match /contratos/{docId} {
-      allow read: if signedIn();
-      allow create: if signedIn();
+      allow read:   if signedIn();
+      allow create: if signedIn() && validContrato(request.resource.data);
       allow update: if signedIn();
       allow delete: if signedIn();
     }

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Importar Dados → Firestore</title>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #1a1a2e; color: #e0e0e0; }
+    h2 { color: #7ec8e3; }
+    button { padding: 8px 18px; margin: 6px 4px; cursor: pointer; border-radius: 6px; border: none; font-size: 14px; }
+    #btnImport  { background: #27ae60; color: #fff; }
+    #btnImport:disabled { background: #555; }
+    #btnClear   { background: #c0392b; color: #fff; }
+    #btnClear:disabled  { background: #555; }
+    input, select { background: #2a2a4a; color: #e0e0e0; border: 1px solid #444; padding: 6px 10px; border-radius: 4px; margin: 4px; }
+    #log { background: #0d0d1a; border: 1px solid #333; padding: 14px; height: 380px; overflow-y: auto;
+           white-space: pre-wrap; font-size: 12px; border-radius: 6px; margin-top: 12px; }
+    .ok  { color: #2ecc71; }
+    .err { color: #e74c3c; }
+    .inf { color: #3498db; }
+    .warn{ color: #f39c12; }
+    .bar { background: #2a2a4a; border-radius: 8px; height: 18px; margin: 8px 0; overflow: hidden; }
+    .bar-inner { height: 100%; background: #27ae60; transition: width 0.3s; }
+    label { font-size: 13px; }
+  </style>
+</head>
+<body>
+<h2>Importar ob_data_clean.json → Firestore (contratos)</h2>
+
+<div>
+  <label>Email: <input type="email" id="email" placeholder="seu@email.com"></label>
+  <label>Senha: <input type="password" id="senha" placeholder="senha"></label>
+  <button id="btnLogin" onclick="doLogin()">Login</button>
+  <span id="userStatus" style="color:#888; font-size:13px;"></span>
+</div>
+
+<div style="margin-top:12px;">
+  <label>Arquivo JSON:
+    <input type="file" id="fileInput" accept=".json">
+  </label>
+</div>
+
+<div style="margin-top:8px;">
+  <label>
+    <input type="checkbox" id="chkSkipExisting" checked>
+    Pular registros que já existem no Firestore (recomendado)
+  </label>
+</div>
+
+<div style="margin-top:10px;">
+  <button id="btnImport" onclick="startImport()" disabled>▶ Importar</button>
+  <button id="btnClear"  onclick="clearCollection()" disabled>🗑 Limpar coleção (cuidado!)</button>
+</div>
+
+<div class="bar"><div class="bar-inner" id="progress" style="width:0%"></div></div>
+<div id="status" style="font-size:13px; color:#aaa;">—</div>
+<div id="log"></div>
+
+<!-- Firebase compat -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="../firebase-config.public.js"></script>
+
+<script>
+// ── Init Firebase ──────────────────────────────────────────────
+if (!firebase.apps.length) {
+  firebase.initializeApp(window.OB_FIREBASE_CONFIG);
+}
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+// ── Logging ────────────────────────────────────────────────────
+function log(msg, cls) {
+  const el = document.getElementById('log');
+  const line = document.createElement('div');
+  line.className = cls || '';
+  line.textContent = '[' + new Date().toLocaleTimeString('pt-BR') + '] ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Auth ───────────────────────────────────────────────────────
+auth.onAuthStateChanged(user => {
+  const st = document.getElementById('userStatus');
+  if (user) {
+    st.textContent = '✓ ' + user.email;
+    st.style.color = '#2ecc71';
+    document.getElementById('btnImport').disabled = false;
+    document.getElementById('btnClear').disabled  = false;
+  } else {
+    st.textContent = 'Não autenticado';
+    st.style.color = '#e74c3c';
+    document.getElementById('btnImport').disabled = true;
+    document.getElementById('btnClear').disabled  = true;
+  }
+});
+
+async function doLogin() {
+  const email = document.getElementById('email').value.trim();
+  const senha = document.getElementById('senha').value;
+  if (!email || !senha) { log('Preencha email e senha.', 'err'); return; }
+  try {
+    await auth.signInWithEmailAndPassword(email, senha);
+    log('Login OK!', 'ok');
+  } catch(e) {
+    log('Erro login: ' + e.message, 'err');
+  }
+}
+
+// ── Import ─────────────────────────────────────────────────────
+async function startImport() {
+  const fileInput = document.getElementById('fileInput');
+  if (!fileInput.files.length) { log('Selecione o arquivo ob_data_clean.json.', 'warn'); return; }
+
+  const skipExisting = document.getElementById('chkSkipExisting').checked;
+  const raw = await fileInput.files[0].text();
+  let records;
+  try { records = JSON.parse(raw); } catch(e) { log('JSON inválido: ' + e.message, 'err'); return; }
+
+  if (!Array.isArray(records)) { log('O arquivo não é um array JSON.', 'err'); return; }
+  log('Iniciando importação de ' + records.length + ' registros...', 'inf');
+
+  const coll = db.collection('contratos');
+  let ok = 0, skipped = 0, errs = 0;
+
+  for (let i = 0; i < records.length; i++) {
+    const rec = records[i];
+    if (!rec.uid) { log('Registro #' + i + ' sem uid — pulando.', 'warn'); skipped++; continue; }
+
+    // Progresso
+    const pct = Math.round(((i + 1) / records.length) * 100);
+    document.getElementById('progress').style.width = pct + '%';
+    document.getElementById('status').textContent = (i + 1) + ' / ' + records.length + ' (' + pct + '%)';
+
+    try {
+      const docRef = coll.doc(rec.uid);
+
+      if (skipExisting) {
+        const snap = await docRef.get();
+        if (snap.exists) {
+          // Merge apenas novos campos (não sobrescreve dados já preenchidos)
+          const existing = snap.data();
+          const patch = {};
+          const newFields = ['etapa','dtChegada','dtContato','dtEnvioContrato',
+                             'dtAssinatura','dtDocs','dtDocsRec','dtEntrega','docsPendentes'];
+          for (const f of newFields) {
+            if (existing[f] === undefined || existing[f] === null) {
+              patch[f] = rec[f];
+            }
+          }
+          if (Object.keys(patch).length) {
+            await docRef.update(patch);
+            log('Atualizado (novos campos): ' + rec.uid + ' | ' + (rec.cliente || ''), 'inf');
+          } else {
+            log('Já completo: ' + rec.uid + ' | ' + (rec.cliente || ''), 'warn');
+          }
+          skipped++;
+          continue;
+        }
+      }
+
+      // Cria novo documento
+      const payload = { ...rec };
+      // Garante que docsPendentes seja array
+      if (!Array.isArray(payload.docsPendentes)) payload.docsPendentes = [];
+      await docRef.set(payload);
+      log('Criado: ' + rec.uid + ' | ' + (rec.cliente || ''), 'ok');
+      ok++;
+
+    } catch(e) {
+      log('ERRO uid=' + rec.uid + ': ' + e.message, 'err');
+      errs++;
+    }
+
+    // Pequena pausa para não sobrecarregar o Firestore (burst limit)
+    if ((i + 1) % 20 === 0) await sleep(500);
+  }
+
+  log('─────────────────────────', 'inf');
+  log('Concluído! Criados: ' + ok + ' | Pulados/atualizados: ' + skipped + ' | Erros: ' + errs, ok && !errs ? 'ok' : 'warn');
+  document.getElementById('status').textContent = 'Concluído — ' + ok + ' criados, ' + skipped + ' pulados, ' + errs + ' erros.';
+}
+
+// ── Clear Collection ───────────────────────────────────────────
+async function clearCollection() {
+  if (!confirm('⚠️ Isso DELETA TODOS os documentos da coleção "contratos" do Firestore.\n\nTem certeza absoluta?')) return;
+  if (!confirm('Segunda confirmação: realmente quer apagar tudo?')) return;
+
+  log('Iniciando limpeza da coleção contratos...', 'warn');
+  const snap = await db.collection('contratos').get();
+  let deleted = 0;
+  for (const doc of snap.docs) {
+    await doc.ref.delete();
+    deleted++;
+    document.getElementById('status').textContent = 'Deletados: ' + deleted;
+  }
+  log('Coleção limpa! ' + deleted + ' documentos deletados.', 'ok');
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>
