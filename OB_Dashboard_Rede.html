@@ -24,7 +24,7 @@
       </div>
       <span class="auth-user" id="auth-user" title=""></span>
       <button class="btn sm" id="auth-logout-btn">Sair</button>
-      <button class="btn primary" id="open-new-contract-btn">+ Novo Contrato</button>
+      <button class="btn primary" id="open-new-contract-btn">+ Novo Registro</button>
     </div>
   </header>
 
@@ -48,30 +48,7 @@
       <span class="month-bar-info" id="month-bar-info"></span>
     </div>
     <div class="kpi-row" id="kpi-row"></div>
-    <div class="sl"><div class="sl-line"></div><div class="sl-txt">Evolução &amp; Volume</div><div class="sl-line"></div></div>
-    <div class="gw">
-      <div class="card fu" style="animation-delay:.04s"><div class="ct">Contratos por Mês</div><div style="height:210px"><canvas id="evolChart"></canvas></div></div>
-      <div class="card fu" style="animation-delay:.08s"><div class="ct">Detalhamento Mensal</div><div class="mc-wrap" id="mc-wrap" style="min-height:210px"></div></div>
-    </div>
-    <div class="sl"><div class="sl-line"></div><div class="sl-txt">Advogados &amp; Áreas</div><div class="sl-line"></div></div>
-    <div class="gnw">
-      <div class="card fu" style="animation-delay:.1s">
-        <div class="ct">Ranking &#8212; Advogado Respons&#225;vel <span style="font-size:10px;color:var(--t3);font-style:italic">clique na foto para alterar</span></div>
-        <div class="photo-rank" id="photo-rank"></div>
-      </div>
-      <div class="card fu" style="animation-delay:.13s"><div class="ct">Contratos por Area <span class="ct-n" id="area-total">--</span></div><div class="hbar-list" id="hbar-area"></div></div>
-    </div>
-    <div class="sl"><div class="sl-line"></div><div class="sl-txt">Tipo de Contrato · Tipo de Ação · Origem</div><div class="sl-line"></div></div>
-    <div class="g3">
-      <div class="card fu" style="animation-delay:.15s"><div class="ct">Tipo de Contrato <span class="ct-n" id="tipo-total">--</span></div><div class="dw"><div style="height:170px;width:170px;flex-shrink:0"><canvas id="tipoChart"></canvas></div><div class="dleg" id="tipo-leg"></div></div></div>
-      <div class="card fu" style="animation-delay:.18s"><div class="ct">Tipos de A&#231;&#227;o &#8212; Top 10 <span class="ct-n" id="acao-total">--</span></div><div class="hbar-list" id="hbar-acao"></div></div>
-      <div class="card fu" style="animation-delay:.21s"><div class="ct">Origem do Lead <span class="ct-n" id="orig-total">--</span></div><div class="dw"><div style="height:170px;width:170px;flex-shrink:0"><canvas id="origChart"></canvas></div><div class="dleg" id="orig-leg"></div></div></div>
-    </div>
-    <div class="sl"><div class="sl-line"></div><div class="sl-txt">Advogado &#215; M&#234;s · Resumo</div><div class="sl-line"></div></div>
-    <div class="gnw">
-      <div class="card fu" style="animation-delay:.23s"><div class="ct">Contratos por Advogado - por Mes</div><div style="height:240px"><canvas id="advChart"></canvas></div></div>
-      <div class="card fu" style="animation-delay:.26s"><div class="ct">Resumo Executivo</div><table class="stbl" id="sum-tbl"></table></div>
-    </div>
+    <div id="dash-widgets"></div>
   </div>
 
   <!-- CONTRATOS -->
@@ -110,7 +87,7 @@
   <!-- REGISTROS -->
   <div id="view-reg" class="view">
     <div class="tbar">
-      <h2>Registros <span style="font-size:14px;color:var(--t3);font-family:inherit" id="reg-count"></span></h2>
+      <h2>Registros <span style="font-size:14px;color:var(--t3);font-family:inherit" id="reg-count">&#8212; 0 registros</span></h2>
       <div class="t-tools">
         <input class="sb" id="reg-srch" placeholder="Buscar cliente, a&#231;&#227;o...">
         <select class="fsel" id="reg-ff-mes"><option value="">Todos os meses</option></select>
@@ -137,7 +114,15 @@
 
   <!-- SETTINGS -->
   <div id="view-cfg" class="view">
-    <div class="cfg-header"><h2>Configura&#231;&#245;es</h2><p>Gerencie as listas de op&#231;&#245;es. Itens em uso n&#227;o podem ser removidos.</p></div>
+    <div class="cfg-header"><h2>Configura&#231;&#245;es</h2><p>Gerencie as listas de op&#231;&#245;es e a ordem dos pain&#233;is do dashboard.</p></div>
+    <div class="wo-box">
+      <div class="wo-title">Ordem dos Pain&#233;is do Dashboard</div>
+      <div class="wo-list" id="wo-list"></div>
+      <div style="display:flex;gap:7px;margin-top:10px">
+        <button class="btn sm primary" id="save-wo-btn">Salvar Ordem</button>
+        <button class="btn sm" id="reset-wo-btn">Restaurar Padr&#227;o</button>
+      </div>
+    </div>
     <div class="cfg-grid">
       <div class="cfg-card"><div class="cfg-hd"><span class="cfg-icon">&#127963;</span><div><div class="cfg-title">Áreas Jurídicas</div><div class="cfg-sub" id="cnt-areas"></div></div></div><div class="cfg-items" id="lst-areas"></div><div class="cfg-add-row"><input class="cfg-inp" id="ni-areas" placeholder="Nova área..." maxlength="50"><button class="btn primary sm" data-cfg-add-key="areas">+</button></div></div>
       <div class="cfg-card"><div class="cfg-hd"><span class="cfg-icon">&#9889;</span><div><div class="cfg-title">Tipos de Ação</div><div class="cfg-sub" id="cnt-acoes"></div></div></div><div class="cfg-items" id="lst-acoes"></div><div class="cfg-add-row"><input class="cfg-inp" id="ni-acoes" placeholder="Novo tipo de ação..." maxlength="60"><button class="btn primary sm" data-cfg-add-key="acoes">+</button></div></div>
@@ -152,7 +137,7 @@
 <!-- MODAL -->
 <div class="overlay" id="overlay">
 <div class="mbox">
-  <div class="mhd"><h2 id="m-title">Novo Contrato</h2><button class="mcl" id="close-modal-x-btn">&times;</button></div>
+  <div class="mhd"><h2 id="m-title">Novo Registro</h2><button class="mcl" id="close-modal-x-btn">&times;</button></div>
   <input type="hidden" id="m-uid">
   <div class="form-body">
     <div class="form-section"><div class="form-section-title">Identificação</div>
