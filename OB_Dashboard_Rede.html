@@ -19,9 +19,12 @@
       <span id="ts"></span>
       <div class="nav-tabs">
         <button class="nav-tab on" id="tab-dash" data-view="dash">&#128202; Dashboard</button>
+        <button class="nav-tab" id="tab-ct" data-view="ct">&#128203; Contratos</button>
+        <button class="nav-tab" id="tab-cli" data-view="cli">&#128100; Clientes</button>
         <button class="nav-tab"   id="tab-reg" data-view="reg">&#128193; Registros</button>
         <button class="nav-tab"   id="tab-cfg" data-view="cfg">&#9881; Configura&#231;&#245;es</button>
       </div>
+      <button class="btn sm" id="theme-toggle-btn" title="Alternar tema">&#9728; Claro</button>
       <span class="auth-user" id="auth-user" title=""></span>
       <button class="btn sm" id="auth-logout-btn">Sair</button>
       <button class="btn primary" id="open-new-contract-btn">+ Novo Registro</button>
@@ -66,12 +69,34 @@
           <th data-col="adv">Advogado</th>
           <th data-col="origem">Origem</th>
           <th data-col="status">Status</th>
+          <th data-col="prazo">Prazo</th>
           <th class="no-sort" style="width:76px">Ações</th>
         </tr></thead>
         <tbody id="ctbody"></tbody>
       </table>
     </div>
     <div class="pag"><div class="pag-info" id="pag-info"></div><div class="pag-btns" id="pag-btns"></div></div>
+  </div>
+
+  <!-- CLIENTES -->
+  <div id="view-cli" class="view">
+    <div class="tbar">
+      <h2>Clientes <span style="font-size:14px;color:var(--t3);font-family:inherit" id="cli-count"></span></h2>
+      <div class="t-tools">
+        <input class="sb" id="cli-srch" placeholder="Buscar cliente...">
+        <select class="fsel" id="cli-ff-adv"><option value="">Todos os adv.</option></select>
+        <select class="fsel" id="cli-sort">
+          <option value="nome">Ordenar: Nome</option>
+          <option value="contratos">Ordenar: N&#186; Contratos</option>
+          <option value="atualizado">Ordenar: &#218;ltima Atualiza&#231;&#227;o</option>
+          <option value="prazo">Ordenar: Prazo</option>
+          <option value="vencendo">Ordenar: Vencendo em Breve</option>
+        </select>
+        <button class="btn sm" id="cli-stale-btn">&#8987; +30 dias</button>
+        <button class="btn sm" id="cli-clear-btn">&#10005; Limpar</button>
+      </div>
+    </div>
+    <div id="cli-list" class="cli-list"></div>
   </div>
 
   <!-- REGISTROS -->
@@ -89,6 +114,13 @@
           <option value="3">3 &mdash; Assinatura</option>
           <option value="4">4 &mdash; Documentos</option>
           <option value="5">5 &mdash; Entregue</option>
+        </select>
+        <select class="fsel" id="reg-sort">
+          <option value="data">Ordenar: Data</option>
+          <option value="cliente">Ordenar: Cliente</option>
+          <option value="etapa">Ordenar: Etapa</option>
+          <option value="atualizado">Ordenar: &#218;ltima Atualiza&#231;&#227;o</option>
+          <option value="prazo">Ordenar: Prazo</option>
         </select>
         <button class="btn sm" id="reg-clear-btn">&#10005; Limpar</button>
         <button class="btn sm" id="reg-export-btn">&#128196; Exportar HTML</button>
@@ -148,6 +180,7 @@
     </div>
     <div class="form-section"><div class="form-section-title">Contrato &amp; Captação</div>
       <div class="frow"><div class="field"><label>Tipo de Contrato</label><select id="m-tipo"></select></div><div class="field"><label>Origem do Lead</label><select id="m-orig"></select></div></div>
+      <div class="frow"><div class="field"><label>Prazo</label><input type="date" id="m-prazo"></div><div class="field"></div></div>
     </div>
     <div class="form-section"><div class="form-section-title">Responsável &amp; Status</div>
       <div class="frow"><div class="field"><label>Advogado Responsável</label><select id="m-adv"></select></div><div class="field"><label>Status</label><select id="m-stat"></select></div></div>
@@ -189,6 +222,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script src="scripts/dashboard.js"></script>
 </body>
 </html>

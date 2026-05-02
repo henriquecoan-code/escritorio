@@ -23,12 +23,14 @@ let syncTimer=null;
 const PG=20;
 const FIREBASE_CFG = window.OB_FIREBASE_CONFIG || null;
 let USE_FIREBASE=false, fbDb=null;
-let fbAuth=null, currentUser=null;
+let fbAuth=null, currentUser=null, fbStorage=null;
 let firebasePermissionWarned=false;
+let darkMode = localStorage.getItem('ob_theme') !== 'light';
 
 /* .. REG STATE .. */
-let regFilter = {srch:'', mes:'', adv:'', etapa:''};
+let regFilter = {srch:'', mes:'', adv:'', etapa:'', stale:false};
 let regPg=1;
+let regSortCol='data', regSortDir=-1;
 const REG_PG=12;
 
 const WIDGET_DEFS=[
@@ -59,6 +61,9 @@ function initFirebaseIfConfigured(){
     const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CFG);
     fbDb = firebase.firestore(app);
     fbAuth = firebase.auth(app);
+    if(typeof firebase.storage !== 'undefined'){
+      try{ fbStorage = firebase.storage(app); }catch(e){}
+    }
     USE_FIREBASE = true;
     return true;
   }catch(e){
@@ -360,7 +365,16 @@ function bindStaticEvents(){
     if(saveBtn){ saveReg(saveBtn.dataset.regSave); return; }
     // delete
     const delBtn=event.target.closest('[data-reg-delete]');
-    if(delBtn){ askDel(delBtn.dataset.regDelete); }
+    if(delBtn){ askDel(delBtn.dataset.regDelete); return; }
+    // upload annexo
+    const upBtn=event.target.closest('[data-upload-anx]');
+    if(upBtn){ const anxInp=document.getElementById(`anx-inp-${upBtn.dataset.uploadAnx}`);if(anxInp)anxInp.click();return; }
+    // delete annexo
+    const delAnxBtn=event.target.closest('[data-del-anx]');
+    if(delAnxBtn){ try{const d=JSON.parse(delAnxBtn.dataset.delAnx);deleteAnexo(d.uid,{path:d.path});}catch(e){} return; }
+    // toggle history
+    const histHdr=event.target.closest('[data-hist-toggle]');
+    if(histHdr){ const hb=document.getElementById(`hist-body-${histHdr.dataset.histToggle}`);if(hb){hb.classList.toggle('open');const arr=histHdr.querySelector('.hist-arrow');if(arr)arr.textContent=hb.classList.contains('open')?'▲':'▼';} return; }
   });
   document.getElementById('reg-pag-btns')?.addEventListener('click',(event)=>{
     const pageBtn=event.target.closest('button[data-reg-page]');
@@ -429,6 +443,41 @@ function bindStaticEvents(){
       removeCfg(delBtn.dataset.removeCfgKey, Number(delBtn.dataset.removeCfgIdx));
     }
   });
+  document.getElementById('theme-toggle-btn')?.addEventListener('click',toggleTheme);
+  document.getElementById('cli-srch')?.addEventListener('input',()=>{renderCli();});
+  document.getElementById('cli-ff-adv')?.addEventListener('change',()=>{renderCli();});
+  document.getElementById('cli-sort')?.addEventListener('change',()=>{renderCli();});
+  document.getElementById('cli-stale-btn')?.addEventListener('click',()=>{
+    regFilter.stale=!regFilter.stale;
+    document.getElementById('cli-stale-btn')?.classList.toggle('on',regFilter.stale);
+    renderCli();
+  });
+  document.getElementById('cli-clear-btn')?.addEventListener('click',()=>{
+    regFilter.stale=false;
+    const srch=document.getElementById('cli-srch');if(srch)srch.value='';
+    const adv=document.getElementById('cli-ff-adv');if(adv)adv.value='';
+    const sort=document.getElementById('cli-sort');if(sort)sort.value='nome';
+    document.getElementById('cli-stale-btn')?.classList.remove('on');
+    renderCli();
+  });
+  document.getElementById('reg-sort')?.addEventListener('change',()=>{
+    const v=document.getElementById('reg-sort').value;
+    regSortCol=v; regSortDir=-1; regPg=1; renderReg();
+  });
+  document.getElementById('reg-list')?.addEventListener('change',async(event)=>{
+    const inp=event.target;
+    if(!inp.id||!inp.id.startsWith('anx-inp-')||!inp.files?.length) return;
+    const uid=inp.id.replace('anx-inp-','');
+    const file=inp.files[0];
+    const anx=await uploadAnexo(uid,file);
+    if(!anx) return;
+    const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
+    DB[idx].anexos=[...(DB[idx].anexos||[]),anx];
+    await serverSave(DB[idx]);
+    renderReg();
+    toast(`"${escHtml(file.name)}" anexado!`);
+    inp.value='';
+  });
 }
 
 /* .. INIT .. */
@@ -438,6 +487,7 @@ function init(){
   document.getElementById('hd-logo').src=LOGO_B64;
   document.getElementById('ts').textContent=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
   refreshAuthUI();
+  applyTheme();
 
   if(initFirebaseIfConfigured()){
     fbAuth.onAuthStateChanged((user)=>{
@@ -461,12 +511,13 @@ function init(){
 
 /* .. VIEWS .. */
 function sw(v){
-  ['dash','ct','reg','cfg'].forEach(k=>{
+  ['dash','ct','cli','reg','cfg'].forEach(k=>{
     document.getElementById(`view-${k}`)?.classList.toggle('on',k===v);
     document.getElementById(`tab-${k}`)?.classList.toggle('on',k===v);
   });
   if(v==='dash') renderDash();
   if(v==='ct')  {fillFilters();renderTbl();}
+  if(v==='cli') {fillCliFilters();renderCli();}
   if(v==='reg') {fillRegFilters();renderReg();}
   if(v==='cfg')  {renderWOUI();renderAllCfg();}
 }
@@ -507,6 +558,7 @@ const isDoneRecord=(r)=>(r.etapa||1)===5||(String(r.status||'').toLowerCase()===
 /* .. SAVE TO SERVER .. */
 async function serverSave(record){
   if(!ensureAuthenticated()) return;
+  record.updatedAt = new Date().toISOString();
   try{ await fbDb.collection('contratos').doc(record.uid).set(record); }
   catch(e){ toast('Aviso: erro ao salvar no Firebase.','err'); }
 }
@@ -746,6 +798,7 @@ function renderTbl(){
       <td class="wrap">${aB(r.acao)}</td><td>${tB(r.tipo)}</td>
       <td>${r.adv?escHtml(r.adv):'<span style="color:var(--t3)">--</span>'}</td><td>${oB(r.origem)}</td>
       <td>${sB(r.status)}</td>
+      <td>${r.prazo?prazoTag(r.prazo):'<span style="color:var(--t3);font-size:10px">--</span>'}</td>
       <td><div class="ra">
         <button class="rb" data-action="edit" data-uid="${escAttr(r.uid)}" title="Editar">&#9998;</button>
         <button class="rb del" data-action="delete" data-uid="${escAttr(r.uid)}" title="Excluir">&#128465;</button>
@@ -778,6 +831,7 @@ function openM(editUid){
     document.getElementById('m-tipo').value=r.tipo||'';document.getElementById('m-orig').value=r.origem||'';
     document.getElementById('m-adv').value=r.adv||'';document.getElementById('m-stat').value=r.status||'Ativo';
     document.getElementById('m-obs').value=r.obs||'';
+    document.getElementById('m-prazo').value=isoDate(r.prazo||'');
   }else{
     document.getElementById('m-title').textContent='Novo Registro';
     const meses=[...new Set(DB.map(r=>r.mes))];
@@ -786,6 +840,9 @@ function openM(editUid){
     ['m-cliente','m-obs'].forEach(id=>document.getElementById(id).value='');
     ['m-area','m-acao','m-tipo','m-orig','m-adv'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('m-stat').value='Ativo';
+    const defaultPrazo=new Date();
+    defaultPrazo.setDate(defaultPrazo.getDate()+30);
+    document.getElementById('m-prazo').value=defaultPrazo.toISOString().split('T')[0];
   }
   document.getElementById('overlay').classList.add('open');
   setTimeout(()=>document.getElementById('m-cliente').focus(),120);
@@ -796,15 +853,31 @@ async function saveC(){
   const cli=document.getElementById('m-cliente').value.trim();
   if(!cli){toast('Informe o nome do cliente.','err');document.getElementById('m-cliente').focus();return;}
   const raw=document.getElementById('m-data').value,editUid=document.getElementById('m-uid').value;
+  const oldRec=editUid?DB.find(x=>x.uid===editUid):null;
   const obj={uid:editUid||uid(),data:raw?fmtDate(raw):'',cliente:cli,
     mes:document.getElementById('m-mes').value,area:document.getElementById('m-area').value,
     acao:document.getElementById('m-acao').value,tipo:document.getElementById('m-tipo').value,
     origem:document.getElementById('m-orig').value,adv:document.getElementById('m-adv').value,
-    status:document.getElementById('m-stat').value,obs:document.getElementById('m-obs').value.trim()};
+    status:document.getElementById('m-stat').value,obs:document.getElementById('m-obs').value.trim(),
+    prazo:document.getElementById('m-prazo').value?fmtDate(document.getElementById('m-prazo').value):''};
+  // Preserve fields not managed by this modal
+  if(oldRec){
+    obj.etapa=oldRec.etapa||1;
+    obj.dtChegada=oldRec.dtChegada||'';obj.dtContato=oldRec.dtContato||'';
+    obj.dtEnvioContrato=oldRec.dtEnvioContrato||'';obj.dtAssinatura=oldRec.dtAssinatura||'';
+    obj.dtDocs=oldRec.dtDocs||'';obj.dtDocsRec=oldRec.dtDocsRec||'';obj.dtEntrega=oldRec.dtEntrega||'';
+    obj.docsPendentes=oldRec.docsPendentes||[];obj.anexos=oldRec.anexos||[];
+    obj.historico=[...(oldRec.historico||[])];
+    const entry=buildHistEntry(oldRec,obj);
+    if(entry) obj.historico.push(entry);
+  } else {
+    obj.etapa=1;obj.historico=[];obj.anexos=[];obj.docsPendentes=[];
+  }
   if(editUid){const i=DB.findIndex(x=>x.uid===editUid);if(i>=0)DB[i]=obj;toast(`"${cli}" atualizado.`);}
   else{DB.push(obj);toast(`"${cli}" adicionado.`);}
   await serverSave(obj);
   fillSelects();fillFilters();closeM();renderDash();renderTbl();
+  if(document.getElementById('view-reg').classList.contains('on')) renderReg();
 }
 
 /* .. DELETE .. */
@@ -923,7 +996,19 @@ function getRegView(){
   if(regFilter.mes)  list=list.filter(r=>r.mes===regFilter.mes);
   if(regFilter.adv)  list=list.filter(r=>r.adv===regFilter.adv);
   if(regFilter.etapa)list=list.filter(r=>String(r.etapa||1)===regFilter.etapa);
-  return list.sort((a,b)=>(dateToSort(b.data)||'').localeCompare(dateToSort(a.data)||''));
+  return list.sort((a,b)=>{
+    const dir=regSortDir;
+    if(regSortCol==='data') return dir*(dateToSort(b.data)||'').localeCompare(dateToSort(a.data)||'');
+    if(regSortCol==='cliente') return dir*(a.cliente||'').localeCompare(b.cliente||'');
+    if(regSortCol==='etapa') return dir*((a.etapa||1)-(b.etapa||1));
+    if(regSortCol==='atualizado') return dir*((b.updatedAt||'').localeCompare(a.updatedAt||''));
+    if(regSortCol==='prazo'){
+      const pa=parseDMY(a.prazo||''),pb=parseDMY(b.prazo||'');
+      if(!pa&&!pb)return 0;if(!pa)return dir;if(!pb)return -dir;
+      return dir*(pa-pb);
+    }
+    return 0;
+  });
 }
 
 function regStageBadge(etapa){
@@ -997,6 +1082,7 @@ function buildRegCard(rec){
     <div>${signed?'<span class="bx bgr">✍ Assinado</span>':'<span class="bx bm">Pendente</span>'}</div>
     <div>${docsPend.length>0?`<span class="bx bro">📎 ${docsPend.length}</span>`:'<span style="font-size:10px;color:var(--t3)">docs ok</span>'}</div>
     <div>${regDurBadge(rec)}</div>
+    <div>${rec.prazo?prazoTag(rec.prazo):'<span style="font-size:10px;color:var(--t3)">sem prazo</span>'}</div>
     <button class="reg-btn" id="btn-${escAttr(rec.uid)}">▼ Editar</button>
   </div>
   <div class="reg-panel" id="panel-${escAttr(rec.uid)}">
@@ -1021,6 +1107,16 @@ function buildRegCard(rec){
         <label>Observações</label>
         <textarea class="reg-card-obs" data-uid="${escAttr(rec.uid)}" placeholder="Observações...">${escHtml(rec.obs||'')}</textarea>
       </div>
+    </div>
+    <div class="anx-section">
+      <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);margin-bottom:6px">Anexos</div>
+      <div class="anx-list">${(rec.anexos||[]).map(a=>`<div class="anx-item"><a href="${escAttr(a.url)}" target="_blank" class="anx-link">📎 ${escHtml(a.nome)}</a><span class="anx-meta">${new Date(a.ts).toLocaleDateString('pt-BR')}</span><button class="btn sm danger" data-del-anx="${escAttr(JSON.stringify({uid:rec.uid,path:a.path}))}" title="Remover">&#10005;</button></div>`).join('')||'<span style="color:var(--t3);font-size:11px">Nenhum anexo.</span>'}</div>
+      <button class="btn sm" data-upload-anx="${escAttr(rec.uid)}">&#128206; Adicionar Anexo</button>
+      <input type="file" id="anx-inp-${escAttr(rec.uid)}" style="display:none" accept="*/*">
+    </div>
+    <div class="hist-section">
+      <div class="hist-hdr" data-hist-toggle="${escAttr(rec.uid)}"><span>Histórico de Alterações</span><span class="hist-arrow">▼</span></div>
+      <div class="hist-body" id="hist-body-${escAttr(rec.uid)}">${(rec.historico||[]).slice().reverse().slice(0,10).map(h=>{const dt=new Date(h.ts).toLocaleString('pt-BR');const changes=Object.entries(h.changes||{}).map(([f,{de,para}])=>`${HIST_LABELS[f]||f}: <em>${escHtml(de)||'--'}</em> → <strong>${escHtml(para)||'--'}</strong>`).join('; ');return `<div class="hist-item"><span class="hist-ts">${escHtml(dt)}</span><span class="hist-user">${escHtml(h.user||'')}</span><div class="hist-chg">${changes}</div></div>`;}).join('')||'<div style="color:var(--t3);font-size:11px;padding:8px">Nenhuma alteração registrada.</div>'}</div>
     </div>
     </div>
     <div class="pfooter">
@@ -1114,6 +1210,7 @@ function toggleRegDoc(uid,doc){
 async function saveReg(uid){
   const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
   const card=document.getElementById(`regcard-${uid}`);if(!card)return;
+  const oldRec={...DB[idx]};
   const patch={};
   // Datas
   card.querySelectorAll('[data-date-field][data-uid]').forEach(inp=>{
@@ -1126,6 +1223,9 @@ async function saveReg(uid){
   patch.docsPendentes=DB[idx].docsPendentes||[];
 
   DB[idx]={...DB[idx],...patch};
+  // History
+  const entry=buildHistEntry(oldRec,DB[idx]);
+  if(entry){ DB[idx].historico=[...(oldRec.historico||[]),entry]; }
   await serverSave(DB[idx]);
 
   // Atualiza duração na tela
@@ -1181,6 +1281,146 @@ tr:nth-child(even) td{background:#f7f7f7;}</style></head>
   a.click();
   URL.revokeObjectURL(a.href);
   toast('Relatório exportado!');
+}
+
+/* .. THEME .. */
+function applyTheme(){
+  document.body.classList.toggle('light',!darkMode);
+  const btn=document.getElementById('theme-toggle-btn');
+  if(btn) btn.textContent=darkMode?'☀ Claro':'🌙 Escuro';
+}
+function toggleTheme(){
+  darkMode=!darkMode;
+  localStorage.setItem('ob_theme',darkMode?'dark':'light');
+  applyTheme();
+}
+
+/* .. PRAZO .. */
+function prazoTag(dmy){
+  const d=parseDMY(dmy);
+  if(!d) return '';
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  const diff=Math.round((d-hoje)/86400000);
+  if(diff<0) return `<span class="bx bro">⚠ ${escHtml(dmy)}</span>`;
+  if(diff<=7) return `<span class="bx bam">⏰ ${escHtml(dmy)}</span>`;
+  return `<span class="bx bgr">📅 ${escHtml(dmy)}</span>`;
+}
+
+/* .. CLIENTES .. */
+function fillCliFilters(){
+  const advs=[...new Set(DB.map(r=>r.adv).filter(Boolean))].sort();
+  const el=document.getElementById('cli-ff-adv');if(!el)return;
+  el.innerHTML='<option value="">Todos os adv.</option>'+advs.map(a=>`<option value="${escAttr(a)}">${escHtml(a)}</option>`).join('');
+}
+
+function renderCli(){
+  const el=document.getElementById('cli-list');if(!el)return;
+  const srch=(document.getElementById('cli-srch')?.value||'').toLowerCase().trim();
+  const advF=document.getElementById('cli-ff-adv')?.value||'';
+  const sortV=document.getElementById('cli-sort')?.value||'nome';
+  const stale=regFilter.stale;
+
+  // Group by client
+  const map={};
+  DB.forEach(r=>{
+    const k=r.cliente||'Sem Nome';
+    if(!map[k]) map[k]={nome:k,contratos:[],adv:r.adv||''};
+    map[k].contratos.push(r);
+    if(r.adv) map[k].adv=r.adv;
+  });
+
+  let clients=Object.values(map);
+  // Filter
+  if(srch) clients=clients.filter(c=>c.nome.toLowerCase().includes(srch));
+  if(advF) clients=clients.filter(c=>c.contratos.some(r=>r.adv===advF));
+  if(stale) clients=clients.filter(c=>{
+    const upds=c.contratos.map(r=>r.updatedAt||'').filter(Boolean);
+    if(!upds.length) return true;
+    const last=upds.sort().at(-1);
+    return (Date.now()-new Date(last))/86400000>30;
+  });
+
+  // Sort
+  clients.sort((a,b)=>{
+    if(sortV==='nome') return a.nome.localeCompare(b.nome);
+    if(sortV==='contratos') return b.contratos.length-a.contratos.length;
+    if(sortV==='atualizado'){
+      const ua=a.contratos.map(r=>r.updatedAt||'').filter(Boolean).sort().at(-1)||'';
+      const ub=b.contratos.map(r=>r.updatedAt||'').filter(Boolean).sort().at(-1)||'';
+      return ub.localeCompare(ua);
+    }
+    if(sortV==='prazo'||sortV==='vencendo'){
+      const pa=a.contratos.map(r=>parseDMY(r.prazo||'')).filter(Boolean).sort((x,y)=>x-y)[0];
+      const pb=b.contratos.map(r=>parseDMY(r.prazo||'')).filter(Boolean).sort((x,y)=>x-y)[0];
+      if(!pa&&!pb)return 0;if(!pa)return 1;if(!pb)return -1;
+      return pa-pb;
+    }
+    return 0;
+  });
+
+  document.getElementById('cli-count').textContent=`— ${clients.length} cliente${clients.length!==1?'s':''}`;
+
+  if(!clients.length){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--t3);">Nenhum cliente encontrado.</div>';
+    return;
+  }
+
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  el.innerHTML=clients.map(c=>{
+    const cnt=c.contratos.length;
+    const upds=c.contratos.map(r=>r.updatedAt||'').filter(Boolean).sort();
+    const lastUpd=upds.at(-1)||'';
+    const daysSince=lastUpd?Math.floor((Date.now()-new Date(lastUpd))/86400000):null;
+    const updColor=daysSince==null?'var(--t3)':daysSince<=7?'var(--green)':daysSince<=30?'var(--amber)':'var(--rose)';
+    const updTxt=daysSince==null?'nunca atualizado':`${daysSince}d atrás`;
+    const prazos=c.contratos.map(r=>parseDMY(r.prazo||'')).filter(Boolean).sort((x,y)=>x-y);
+    const nearPrazo=prazos[0];
+    const prazoDmys=nearPrazo?c.contratos.map(r=>r.prazo).filter(Boolean).sort((a2,b2)=>{const da=parseDMY(a2),db=parseDMY(b2);return da&&db?da-db:0;})[0]:'';
+    const ativos=c.contratos.filter(r=>!isDoneRecord(r)).length;
+    return `<div class="cli-card" onclick="sw('reg');regFilter.srch='${escJsSQ(c.nome.toLowerCase())}';document.getElementById('reg-srch').value=${JSON.stringify(c.nome)};renderReg()">
+      <div><div class="cli-name">${escHtml(c.nome)}</div><div class="cli-sub">${escHtml(c.adv||'—')} · ${ativos} ativo${ativos!==1?'s':''}</div></div>
+      <div><span class="bx bb">${cnt} contrato${cnt!==1?'s':''}</span></div>
+      <div style="font-size:10px;color:${updColor}">${updTxt}</div>
+      <div>${prazoDmys?prazoTag(prazoDmys):'<span style="font-size:10px;color:var(--t3)">sem prazo</span>'}</div>
+      <div>${c.contratos.map(r=>`<span class="pdot ${isDoneRecord(r)?'dn':r.etapa===1?'ac':'pd'}" style="display:inline-block;margin:1px"></span>`).slice(0,5).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+/* .. HISTORICO .. */
+const HIST_FIELDS=['cliente','mes','area','acao','tipo','origem','adv','status','obs','prazo','etapa','dtChegada','dtContato','dtEnvioContrato','dtAssinatura','dtDocs','dtDocsRec','dtEntrega'];
+const HIST_LABELS={cliente:'Cliente',mes:'Mês',area:'Área',acao:'Ação',tipo:'Tipo Contrato',origem:'Origem',adv:'Advogado',status:'Status',obs:'Observações',prazo:'Prazo',etapa:'Etapa',dtChegada:'Chegada',dtContato:'Contato',dtEnvioContrato:'Env. Contrato',dtAssinatura:'Assinatura',dtDocs:'Docs Enviados',dtDocsRec:'Docs Receb.',dtEntrega:'Entrega'};
+
+function buildHistEntry(oldRec,newRec){
+  const changes={};
+  HIST_FIELDS.forEach(f=>{
+    const ov=String(oldRec[f]??''),nv=String(newRec[f]??'');
+    if(ov!==nv) changes[f]={de:ov,para:nv};
+  });
+  if(!Object.keys(changes).length) return null;
+  return {ts:new Date().toISOString(),user:currentUser?.email||'sistema',changes};
+}
+
+/* .. ANEXOS .. */
+async function uploadAnexo(uid,file){
+  if(!fbStorage){toast('Storage não configurado.','err');return null;}
+  const path=`contratos/${uid}/${Date.now()}_${file.name}`;
+  const ref=fbStorage.ref(path);
+  try{
+    await ref.put(file);
+    const url=await ref.getDownloadURL();
+    return {nome:file.name,url,tipo:file.type,ts:new Date().toISOString(),path};
+  }catch(e){toast('Erro ao enviar arquivo.','err');return null;}
+}
+
+async function deleteAnexo(uid,anx){
+  if(!fbStorage||!anx.path) return;
+  try{await fbStorage.ref(anx.path).delete();}catch(e){}
+  const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
+  DB[idx].anexos=(DB[idx].anexos||[]).filter(a=>a.path!==anx.path);
+  await serverSave(DB[idx]);
+  renderReg();
+  toast('Anexo removido.','info');
 }
 
 /* .. BOOT .. */
