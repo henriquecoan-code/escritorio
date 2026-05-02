@@ -443,6 +443,17 @@ function bindStaticEvents(){
       removeCfg(delBtn.dataset.removeCfgKey, Number(delBtn.dataset.removeCfgIdx));
     }
   });
+  document.getElementById('cli-list')?.addEventListener('click',(event)=>{
+    const card=event.target.closest('.cli-card[data-cli-nome]');
+    if(card){
+      const nome=card.dataset.cliNome;
+      sw('reg');
+      regFilter.srch=nome.toLowerCase();
+      const srchEl=document.getElementById('reg-srch');
+      if(srchEl) srchEl.value=nome;
+      renderReg();
+    }
+  });
   document.getElementById('theme-toggle-btn')?.addEventListener('click',toggleTheme);
   document.getElementById('cli-srch')?.addEventListener('input',()=>{renderCli();});
   document.getElementById('cli-ff-adv')?.addEventListener('change',()=>{renderCli();});
@@ -1004,7 +1015,7 @@ function getRegView(){
     if(regSortCol==='atualizado') return dir*((b.updatedAt||'').localeCompare(a.updatedAt||''));
     if(regSortCol==='prazo'){
       const pa=parseDMY(a.prazo||''),pb=parseDMY(b.prazo||'');
-      if(!pa&&!pb)return 0;if(!pa)return dir;if(!pb)return -dir;
+      if(!pa&&!pb)return 0;if(!pa)return 1;if(!pb)return -1;
       return dir*(pa-pb);
     }
     return 0;
@@ -1377,7 +1388,7 @@ function renderCli(){
     const nearPrazo=prazos[0];
     const prazoDmys=nearPrazo?c.contratos.map(r=>r.prazo).filter(Boolean).sort((a2,b2)=>{const da=parseDMY(a2),db=parseDMY(b2);return da&&db?da-db:0;})[0]:'';
     const ativos=c.contratos.filter(r=>!isDoneRecord(r)).length;
-    return `<div class="cli-card" onclick="sw('reg');regFilter.srch='${escJsSQ(c.nome.toLowerCase())}';document.getElementById('reg-srch').value=${JSON.stringify(c.nome)};renderReg()">
+    return `<div class="cli-card" data-cli-nome="${escAttr(c.nome)}">
       <div><div class="cli-name">${escHtml(c.nome)}</div><div class="cli-sub">${escHtml(c.adv||'—')} · ${ativos} ativo${ativos!==1?'s':''}</div></div>
       <div><span class="bx bb">${cnt} contrato${cnt!==1?'s':''}</span></div>
       <div style="font-size:10px;color:${updColor}">${updTxt}</div>
@@ -1404,7 +1415,8 @@ function buildHistEntry(oldRec,newRec){
 /* .. ANEXOS .. */
 async function uploadAnexo(uid,file){
   if(!fbStorage){toast('Storage não configurado.','err');return null;}
-  const path=`contratos/${uid}/${Date.now()}_${file.name}`;
+  const safeName=file.name.replace(/[^a-zA-Z0-9.\-_]/g,'_');
+  const path=`contratos/${uid}/${Date.now()}_${safeName}`;
   const ref=fbStorage.ref(path);
   try{
     await ref.put(file);
@@ -1415,7 +1427,7 @@ async function uploadAnexo(uid,file){
 
 async function deleteAnexo(uid,anx){
   if(!fbStorage||!anx.path) return;
-  try{await fbStorage.ref(anx.path).delete();}catch(e){}
+  try{await fbStorage.ref(anx.path).delete();}catch(e){console.warn('Erro ao remover arquivo do Storage:',e);}
   const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
   DB[idx].anexos=(DB[idx].anexos||[]).filter(a=>a.path!==anx.path);
   await serverSave(DB[idx]);
