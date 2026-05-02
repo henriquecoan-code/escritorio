@@ -371,7 +371,7 @@ function bindStaticEvents(){
     if(upBtn){ const anxInp=document.getElementById(`anx-inp-${upBtn.dataset.uploadAnx}`);if(anxInp)anxInp.click();return; }
     // delete annexo
     const delAnxBtn=event.target.closest('[data-del-anx]');
-    if(delAnxBtn){ try{const d=JSON.parse(delAnxBtn.dataset.delAnx);deleteAnexo(d.uid,{path:d.path});}catch(e){} return; }
+    if(delAnxBtn){ try{const d=JSON.parse(delAnxBtn.dataset.delAnx);deleteAnexo(d.uid,{path:d.path});}catch(e){console.error('Failed to parse anexo data:',e);} return; }
     // toggle history
     const histHdr=event.target.closest('[data-hist-toggle]');
     if(histHdr){ const hb=document.getElementById(`hist-body-${histHdr.dataset.histToggle}`);if(hb){hb.classList.toggle('open');const arr=histHdr.querySelector('.hist-arrow');if(arr)arr.textContent=hb.classList.contains('open')?'▲':'▼';} return; }
@@ -1415,7 +1415,7 @@ function buildHistEntry(oldRec,newRec){
 /* .. ANEXOS .. */
 async function uploadAnexo(uid,file){
   if(!fbStorage){toast('Storage não configurado.','err');return null;}
-  const safeName=file.name.replace(/[^a-zA-Z0-9.\-_]/g,'_');
+  const safeName=file.name.replace(/[^a-zA-Z0-9.\-_]/g,'_').replace(/\.{2,}/g,'_');
   const path=`contratos/${uid}/${Date.now()}_${safeName}`;
   const ref=fbStorage.ref(path);
   try{
