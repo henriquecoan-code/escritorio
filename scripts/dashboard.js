@@ -1360,11 +1360,22 @@ function renderCli(){
       const ub=b.contratos.map(r=>r.updatedAt||'').filter(Boolean).sort().at(-1)||'';
       return ub.localeCompare(ua);
     }
-    if(sortV==='prazo'||sortV==='vencendo'){
+    if(sortV==='prazo'){
       const pa=a.contratos.map(r=>parseDMY(r.prazo||'')).filter(Boolean).sort((x,y)=>x-y)[0];
       const pb=b.contratos.map(r=>parseDMY(r.prazo||'')).filter(Boolean).sort((x,y)=>x-y)[0];
       if(!pa&&!pb)return 0;if(!pa)return 1;if(!pb)return -1;
       return pa-pb;
+    }
+    if(sortV==='vencendo'){
+      // Sort by urgency: overdue first, then nearest future deadline
+      const agora=new Date();agora.setHours(0,0,0,0);
+      const urgScore=(contratos)=>{
+        const prazos=contratos.map(r=>parseDMY(r.prazo||'')).filter(Boolean).sort((x,y)=>x-y);
+        if(!prazos.length) return Infinity;
+        const nearest=prazos[0];
+        return (nearest-agora)/86400000; // negative = overdue
+      };
+      return urgScore(a.contratos)-urgScore(b.contratos);
     }
     return 0;
   });
@@ -1415,7 +1426,7 @@ function buildHistEntry(oldRec,newRec){
 /* .. ANEXOS .. */
 async function uploadAnexo(uid,file){
   if(!fbStorage){toast('Storage não configurado.','err');return null;}
-  const safeName=file.name.replace(/[^a-zA-Z0-9.\-_]/g,'_').replace(/\.{2,}/g,'_');
+  const safeName=file.name.replace(/[/\\]/g,'').replace(/[^a-zA-Z0-9.\-_]/g,'_').replace(/\.{2,}/g,'_');
   const path=`contratos/${uid}/${Date.now()}_${safeName}`;
   const ref=fbStorage.ref(path);
   try{
