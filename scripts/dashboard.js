@@ -1123,7 +1123,8 @@ function buildRegCard(rec){
       <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);margin-bottom:6px">Anexos</div>
       <div class="anx-list">${(rec.anexos||[]).map(a=>`<div class="anx-item"><a href="${escAttr(a.url)}" target="_blank" class="anx-link">📎 ${escHtml(a.nome)}</a><span class="anx-meta">${new Date(a.ts).toLocaleDateString('pt-BR')}</span><button class="btn sm danger" data-del-anx="${escAttr(JSON.stringify({uid:rec.uid,path:a.path}))}" title="Remover">&#10005;</button></div>`).join('')||'<span style="color:var(--t3);font-size:11px">Nenhum anexo.</span>'}</div>
       <button class="btn sm" data-upload-anx="${escAttr(rec.uid)}">&#128206; Adicionar Anexo</button>
-      <input type="file" id="anx-inp-${escAttr(rec.uid)}" style="display:none" accept="*/*">
+      <input type="file" id="anx-inp-${escAttr(rec.uid)}" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,.odt,.ods,.txt,.png,.jpg,.jpeg,.gif,.webp,.bmp,.zip"
+        multiple>
     </div>
     <div class="hist-section">
       <div class="hist-hdr" data-hist-toggle="${escAttr(rec.uid)}"><span>Histórico de Alterações</span><span class="hist-arrow">▼</span></div>
@@ -1318,6 +1319,10 @@ function prazoTag(dmy){
 }
 
 /* .. CLIENTES .. */
+function nearestPrazoDmy(contratos){
+  return contratos.map(r=>r.prazo).filter(Boolean).sort((a,b)=>{const da=parseDMY(a),db=parseDMY(b);return da&&db?da-db:0;})[0]||'';
+}
+
 function fillCliFilters(){
   const advs=[...new Set(DB.map(r=>r.adv).filter(Boolean))].sort();
   const el=document.getElementById('cli-ff-adv');if(!el)return;
@@ -1361,8 +1366,8 @@ function renderCli(){
       return ub.localeCompare(ua);
     }
     if(sortV==='prazo'){
-      const pa=a.contratos.map(r=>parseDMY(r.prazo||'')).filter(Boolean).sort((x,y)=>x-y)[0];
-      const pb=b.contratos.map(r=>parseDMY(r.prazo||'')).filter(Boolean).sort((x,y)=>x-y)[0];
+      const pa=parseDMY(nearestPrazoDmy(a.contratos));
+      const pb=parseDMY(nearestPrazoDmy(b.contratos));
       if(!pa&&!pb)return 0;if(!pa)return 1;if(!pb)return -1;
       return pa-pb;
     }
@@ -1370,9 +1375,8 @@ function renderCli(){
       // Sort by urgency: overdue first, then nearest future deadline
       const agora=new Date();agora.setHours(0,0,0,0);
       const urgScore=(contratos)=>{
-        const prazos=contratos.map(r=>parseDMY(r.prazo||'')).filter(Boolean).sort((x,y)=>x-y);
-        if(!prazos.length) return Infinity;
-        const nearest=prazos[0];
+        const nearest=parseDMY(nearestPrazoDmy(contratos));
+        if(!nearest) return Infinity;
         return (nearest-agora)/86400000; // negative = overdue
       };
       return urgScore(a.contratos)-urgScore(b.contratos);
@@ -1395,9 +1399,7 @@ function renderCli(){
     const daysSince=lastUpd?Math.floor((Date.now()-new Date(lastUpd))/86400000):null;
     const updColor=daysSince==null?'var(--t3)':daysSince<=7?'var(--green)':daysSince<=30?'var(--amber)':'var(--rose)';
     const updTxt=daysSince==null?'nunca atualizado':`${daysSince}d atrás`;
-    const prazos=c.contratos.map(r=>parseDMY(r.prazo||'')).filter(Boolean).sort((x,y)=>x-y);
-    const nearPrazo=prazos[0];
-    const prazoDmys=nearPrazo?c.contratos.map(r=>r.prazo).filter(Boolean).sort((a2,b2)=>{const da=parseDMY(a2),db=parseDMY(b2);return da&&db?da-db:0;})[0]:'';
+    const prazoDmys=nearestPrazoDmy(c.contratos);
     const ativos=c.contratos.filter(r=>!isDoneRecord(r)).length;
     return `<div class="cli-card" data-cli-nome="${escAttr(c.nome)}">
       <div><div class="cli-name">${escHtml(c.nome)}</div><div class="cli-sub">${escHtml(c.adv||'—')} · ${ativos} ativo${ativos!==1?'s':''}</div></div>
@@ -1426,13 +1428,19 @@ function buildHistEntry(oldRec,newRec){
 /* .. ANEXOS .. */
 async function uploadAnexo(uid,file){
   if(!fbStorage){toast('Storage não configurado.','err');return null;}
-  const safeName=file.name.replace(/[/\\]/g,'').replace(/[^a-zA-Z0-9.\-_]/g,'_').replace(/\.{2,}/g,'_');
+  const MAX_SIZE=20*1024*1024; // 20 MB
+  if(file.size>MAX_SIZE){toast('Arquivo muito grande. Máximo: 20 MB.','err');return null;}
+  const ALLOWED_EXT=/\.(pdf|doc|docx|xls|xlsx|odt|ods|txt|png|jpg|jpeg|gif|webp|bmp|zip)$/i;
+  const origName=file.name;
+  if(!ALLOWED_EXT.test(origName)){toast('Tipo de arquivo não permitido.','err');return null;}
+  // Sanitize: keep only safe chars, limit to 120 chars, no leading dots
+  let safeName=origName.replace(/[/\\<>:"|?*]/g,'').replace(/[^a-zA-Z0-9.\-_ ]/g,'_').replace(/\.{2,}/g,'_').replace(/^\.+/,'').slice(0,120)||'arquivo';
   const path=`contratos/${uid}/${Date.now()}_${safeName}`;
   const ref=fbStorage.ref(path);
   try{
     await ref.put(file);
     const url=await ref.getDownloadURL();
-    return {nome:file.name,url,tipo:file.type,ts:new Date().toISOString(),path};
+    return {nome:origName.slice(0,200),url,tipo:file.type,ts:new Date().toISOString(),path};
   }catch(e){toast('Erro ao enviar arquivo.','err');return null;}
 }
 
