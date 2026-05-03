@@ -17,7 +17,7 @@ Chart.defaults.color='#6E6A88';Chart.defaults.borderColor='rgba(201,168,76,.07)'
 Chart.defaults.font.family="'Segoe UI',Arial,sans-serif";Chart.defaults.font.size=11;
 
 /* .. STATE .. */
-let DB=[], photos={}, charts={}, pg=1, sortCol='data', sortDir=1, pendingDelUID=null;
+let DB=[], photos={}, charts={}, pg=1, sortCol='numero', sortDir=-1, pendingDelUID=null;
 let activeMonth='all';
 let syncTimer=null;
 const PG=20;
@@ -25,6 +25,9 @@ const FIREBASE_CFG = window.OB_FIREBASE_CONFIG || null;
 let USE_FIREBASE=false, fbDb=null;
 let fbAuth=null, currentUser=null;
 let firebasePermissionWarned=false;
+let isSyncing=false;       // trava contra sync concorrente
+let isEditing=false;       // true quando modal ou painel de edicao esta aberto
+let unsubContratos=null;   // unsubscribe do listener onSnapshot
 
 /* .. REG STATE .. */
 let regFilter = {srch:'', mes:'', adv:'', etapa:''};
@@ -120,19 +123,26 @@ function ensureAuthenticated(){
 
 async function loadFromFirebase(){
   if(!ensureAuthenticated()) return;
+  if(isSyncing) return;
+  isSyncing=true;
   setSyncStatus('loading','Conectando Firebase...','');
   try{
+    // -- contratos: verifica se precisa semear --
     const contractsSnap = await fbDb.collection('contratos').get();
     if(contractsSnap.empty){
       DB = JSON.parse(JSON.stringify(SEED_DATA));
       const batch = fbDb.batch();
-      DB.forEach((r)=>batch.set(fbDb.collection('contratos').doc(r.uid), r));
+      DB.forEach((r)=>{
+        r.updatedAt=Date.now();
+        batch.set(fbDb.collection('contratos').doc(r.uid), r);
+      });
       await batch.commit();
       toast(`Firebase inicializado com ${DB.length} contratos.`);
     } else {
       DB = contractsSnap.docs.map((d)=>d.data());
     }
 
+    // -- meta: listas e fotos --
     const listsDoc = await fbDb.collection('meta').doc('lists').get();
     if(listsDoc.exists){
       const l = listsDoc.data() || {};
@@ -143,12 +153,9 @@ async function loadFromFirebase(){
       if(l.ADVS?.length) ADVS=l.ADVS;
       if(l.MESES_REF?.length) MESES_REF=l.MESES_REF;
     }
-
     const photosDoc = await fbDb.collection('meta').doc('photos').get();
     if(photosDoc.exists) photos = photosDoc.data() || {};
 
-    const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-    setSyncStatus('ok','Firebase conectado',`${DB.length} registros · ${now}`);
     firebasePermissionWarned=false;
     fillSelects();fillFilters();renderDash();renderTbl();fillRegFilters();renderReg();
   }catch(e){
@@ -161,11 +168,13 @@ async function loadFromFirebase(){
         toast('Permissao negada no Firestore para este usuario.','err');
         firebasePermissionWarned=true;
       }
-      clearInterval(syncTimer);
+      isSyncing=false;
       return;
     }
     setSyncStatus('err','Erro no Firebase','Verifique firebase-config.js e as Rules');
     toast('Erro ao carregar dados do Firebase.','err');
+  } finally {
+    isSyncing=false;
   }
 }
 
@@ -181,9 +190,51 @@ async function syncNow(){
   await loadFromFirebase();
 }
 
-function startAutoSync(){
-  clearInterval(syncTimer);
-  syncTimer=setInterval(syncNow, 30000); // every 30s
+/* Item 4 - listener em tempo real para contratos (substitui polling) */
+function startRealtimeSync(){
+  if(unsubContratos){ unsubContratos(); unsubContratos=null; }
+
+  unsubContratos = fbDb.collection('contratos').onSnapshot((snap)=>{
+    // nao sobrescreve durante edicao
+    if(isEditing) return;
+
+    // Item 5 - mescla inteligente usando updatedAt
+    const remoteUids = new Set();
+    snap.docs.forEach((doc)=>{
+      const remote = doc.data();
+      remoteUids.add(remote.uid);
+      const localIdx = DB.findIndex(r=>r.uid===remote.uid);
+      if(localIdx===-1){
+        DB.push(remote);
+      } else {
+        const localTs  = DB[localIdx].updatedAt || 0;
+        const remoteTs = remote.updatedAt || 0;
+        // so sobrescreve se a versao remota for mais recente
+        if(remoteTs >= localTs) DB[localIdx] = remote;
+      }
+    });
+    // remove registros excluidos remotamente
+    DB = DB.filter(r=>remoteUids.has(r.uid));
+
+    const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    setSyncStatus('ok','Tempo real',`${DB.length} registros · ${now}`);
+    firebasePermissionWarned=false;
+    fillSelects();fillFilters();renderDash();renderTbl();fillRegFilters();renderReg();
+  },
+  (err)=>{
+    console.error('onSnapshot erro:', err);
+    const code = String((err&&err.code)||'').toLowerCase();
+    if(code.includes('permission-denied')){
+      setSyncStatus('err','Firestore bloqueou acesso','Verifique Rules para usuario autenticado');
+      if(!firebasePermissionWarned){
+        toast('Permissao negada no Firestore para este usuario.','err');
+        firebasePermissionWarned=true;
+      }
+      if(unsubContratos){ unsubContratos(); unsubContratos=null; }
+      return;
+    }
+    setSyncStatus('err','Erro no Firebase','Verifique a conexao');
+  });
 }
 
 function loadWOStore(){
@@ -446,8 +497,14 @@ function init(){
       clearInterval(syncTimer);
       if(currentUser){
         setAuthOverlay(false);
-        loadFromFirebase().then(()=>startAutoSync());
+        // carrega meta/fotos e dados iniciais, depois ativa listener tempo real
+        loadFromFirebase().then(()=>{
+          startRealtimeSync();
+          setSyncStatus('ok','Tempo real',`${DB.length} registros`);
+        });
       }else{
+        // encerra listener ao fazer logout
+        if(unsubContratos){ unsubContratos(); unsubContratos=null; }
         setSyncStatus('err','Login necessario','Entre com email e senha para carregar os dados');
         setAuthOverlay(true);
       }
@@ -504,16 +561,35 @@ const isoDate=dmy=>{const p=dmy.split('/');return p.length===3?`${p[2]}-${p[1]}-
 const dateToSort=dmy=>{const p=(dmy||'').split('/');return p.length===3?`${p[2]}${p[1]}${p[0]}`:'';};
 const isDoneRecord=(r)=>(r.etapa||1)===5||(String(r.status||'').toLowerCase()==='encerrado');
 
+function firebaseErrLabel(e){
+  const code=String((e&&e.code)||'').toLowerCase();
+  if(code.includes('resource-exhausted')) return 'cota diaria do Firestore atingida';
+  if(code.includes('permission-denied')) return 'permissao negada';
+  if(code.includes('unauthenticated')) return 'sessao expirada';
+  return code || 'erro desconhecido';
+}
+
 /* .. SAVE TO SERVER .. */
 async function serverSave(record){
-  if(!ensureAuthenticated()) return;
-  try{ await fbDb.collection('contratos').doc(record.uid).set(record); }
-  catch(e){ toast('Aviso: erro ao salvar no Firebase.','err'); }
+  if(!ensureAuthenticated()) return false;
+  // Item 5 - garante updatedAt atualizado antes de gravar
+  record.updatedAt = record.updatedAt || Date.now();
+  try{
+    await fbDb.collection('contratos').doc(record.uid).set(record);
+    return true;
+  }catch(e){
+    console.error('Erro ao salvar no Firebase:', e);
+    toast(`Aviso: erro ao salvar (${firebaseErrLabel(e)}).`,'err');
+    return false;
+  }
 }
 async function serverDelete(uid){
   if(!ensureAuthenticated()) return;
   try{ await fbDb.collection('contratos').doc(uid).delete(); }
-  catch(e){ toast('Aviso: erro ao excluir no Firebase.','err'); }
+  catch(e){
+    console.error('Erro ao excluir no Firebase:', e);
+    toast(`Aviso: erro ao excluir (${firebaseErrLabel(e)}).`,'err');
+  }
 }
 async function serverSaveLists(){
   if(!ensureAuthenticated()) return;
@@ -682,7 +758,13 @@ function trigPh(id){document.getElementById(id)?.click();}
 
 /* .. SELECTS & FILTERS .. */
 function fillSelects(){
-  const m=[...new Set([...DB.map(r=>r.mes),...MESES_REF])];
+  const m=[...new Set([...DB.map(r=>r.mes),...MESES_REF])]
+    .sort((a,b)=>{
+      const ai=MESES_REF.indexOf(a),bi=MESES_REF.indexOf(b);
+      if(ai===-1&&bi===-1)return a.localeCompare(b,'pt-BR');
+      if(ai===-1)return 1;if(bi===-1)return -1;
+      return ai-bi;
+    });
   const mk=(id,opts,blank='')=>{
     const el=document.getElementById(id);if(!el)return;
     el.innerHTML=(blank?[`<option value="">${blank}</option>`]:[]).concat(opts.map(o=>`<option value="${o}">${o||'-- Selecionar --'}</option>`)).join('');
@@ -768,11 +850,12 @@ function goPg(p){pg=p;renderTbl();}
 /* .. MODAL .. */
 function openM(editUid){
   if(!ensureAuthenticated()) return;
+  isEditing=true;
   document.getElementById('m-uid').value=editUid||'';
   if(editUid){
     const r=DB.find(x=>x.uid===editUid);if(!r)return;
     document.getElementById('m-title').textContent='Editar Registro';
-    document.getElementById('m-data').value=isoDate(r.data);
+    document.getElementById('m-data').value=isoDate(r.dtChegada||r.data);
     document.getElementById('m-mes').value=r.mes;document.getElementById('m-cliente').value=r.cliente;
     document.getElementById('m-area').value=r.area||'';document.getElementById('m-acao').value=r.acao||'';
     document.getElementById('m-tipo').value=r.tipo||'';document.getElementById('m-orig').value=r.origem||'';
@@ -782,7 +865,8 @@ function openM(editUid){
     document.getElementById('m-title').textContent='Novo Registro';
     const meses=[...new Set(DB.map(r=>r.mes))];
     document.getElementById('m-data').value=new Date().toISOString().split('T')[0];
-    document.getElementById('m-mes').value=activeMonth!=='all'?activeMonth:(meses.at(-1)||'Abril');
+    const mesMoment=MESES_REF[new Date().getMonth()];
+    document.getElementById('m-mes').value=activeMonth!=='all'?activeMonth:mesMoment;
     ['m-cliente','m-obs'].forEach(id=>document.getElementById(id).value='');
     ['m-area','m-acao','m-tipo','m-orig','m-adv'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('m-stat').value='Ativo';
@@ -790,27 +874,42 @@ function openM(editUid){
   document.getElementById('overlay').classList.add('open');
   setTimeout(()=>document.getElementById('m-cliente').focus(),120);
 }
-function closeM(){document.getElementById('overlay').classList.remove('open');}
+function closeM(){isEditing=false;document.getElementById('overlay').classList.remove('open');}
 function overlayBg(e){if(e.target===e.currentTarget)closeM();}
 async function saveC(){
   const cli=document.getElementById('m-cliente').value.trim();
   if(!cli){toast('Informe o nome do cliente.','err');document.getElementById('m-cliente').focus();return;}
+  // Item 6 - desabilita botao para evitar duplo clique
+  const saveBtn=document.getElementById('save-contract-btn');
+  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Salvando...';}
+
   const raw=document.getElementById('m-data').value,editUid=document.getElementById('m-uid').value;
-  const obj={uid:editUid||uid(),data:raw?fmtDate(raw):'',cliente:cli,
+  const dtChegadaVal=raw?fmtDate(raw):'';
+  const obj={uid:editUid||uid(),updatedAt:Date.now(),data:dtChegadaVal,dtChegada:dtChegadaVal,cliente:cli,
     mes:document.getElementById('m-mes').value,area:document.getElementById('m-area').value,
     acao:document.getElementById('m-acao').value,tipo:document.getElementById('m-tipo').value,
     origem:document.getElementById('m-orig').value,adv:document.getElementById('m-adv').value,
     status:document.getElementById('m-stat').value,obs:document.getElementById('m-obs').value.trim()};
+
+  let wasNew=false;
   if(editUid){
     const i=DB.findIndex(x=>x.uid===editUid);
     if(i>=0){obj.numero=DB[i].numero||null;DB[i]=obj;}
-    toast(`"${cli}" atualizado.`);
   }else{
     obj.numero=Math.max(0,...DB.map(r=>r.numero||0))+1;
-    DB.push(obj);toast(`"${cli}" adicionado.`);
+    DB.push(obj);wasNew=true;
   }
-  await serverSave(obj);
-  fillSelects();fillFilters();closeM();renderDash();renderTbl();
+
+  const ok=await serverSave(obj);
+  if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Salvar';}
+
+  if(!ok){
+    // Item 6 - reverte mudanca otimista se save falhou
+    if(wasNew) DB=DB.filter(x=>x.uid!==obj.uid);
+    return;
+  }
+  toast(`"${cli}" ${editUid?'atualizado':'adicionado'}.`);
+  fillSelects();fillFilters();closeM();renderDash();renderTbl();renderReg();
 }
 
 /* .. DELETE .. */
@@ -929,7 +1028,7 @@ function getRegView(){
   if(regFilter.mes)  list=list.filter(r=>r.mes===regFilter.mes);
   if(regFilter.adv)  list=list.filter(r=>r.adv===regFilter.adv);
   if(regFilter.etapa)list=list.filter(r=>String(r.etapa||1)===regFilter.etapa);
-  return list.sort((a,b)=>(dateToSort(b.data)||'').localeCompare(dateToSort(a.data)||''));
+  return list.sort((a,b)=>(b.numero||0)-(a.numero||0));
 }
 
 function regStageBadge(etapa){
@@ -1088,8 +1187,10 @@ function toggleRegCard(uid){
   const isOpen=panel.classList.contains('open');
   panel.classList.toggle('open',!isOpen);
   btn.classList.toggle('open',!isOpen);
-  btn.textContent=isOpen?'▼ Editar':'▲ Fechar';
+  btn.textContent=isOpen?'\u25bc Editar':'\u25b2 Fechar';
   card.classList.toggle('expanded',!isOpen);
+  // pausa autosync quando painel esta aberto
+  isEditing = !isOpen;
 }
 
 async function setRegEtapa(uid,etapa){
@@ -1120,19 +1221,29 @@ function toggleRegDoc(uid,doc){
 async function saveReg(uid){
   const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
   const card=document.getElementById(`regcard-${uid}`);if(!card)return;
+
+  // Item 6 - desabilita botao de salvar durante gravacao
+  const saveBtn=card.querySelector(`[data-reg-save="${uid}"]`);
+  if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Salvando...';}
+
   const patch={};
-  // Datas
   card.querySelectorAll('[data-date-field][data-uid]').forEach(inp=>{
     if(inp.dataset.uid===uid) patch[inp.dataset.dateField]=iso2dmy(inp.value);
   });
-  // Obs
   const obsEl=card.querySelector(`textarea[data-uid="${uid}"]`);
   if(obsEl) patch.obs=obsEl.value.trim();
-  // Docs pendentes já estão em DB[idx].docsPendentes via toggleRegDoc
   patch.docsPendentes=DB[idx].docsPendentes||[];
+  patch.updatedAt=Date.now(); // Item 5 - timestamp de versao
 
-  DB[idx]={...DB[idx],...patch};
-  await serverSave(DB[idx]);
+  const updated={...DB[idx],...patch};
+  const ok=await serverSave(updated);
+
+  if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Salvar';}
+  if(!ok) return; // Item 6 - nao fecha painel nem atualiza UI se falhou
+
+  DB[idx]=updated;
+  isEditing=false; // libera autosync apos salvar confirmado
+  renderDash();renderTbl();renderReg();
 
   // Atualiza duração na tela
   const dur=calcRegDur(DB[idx]);
