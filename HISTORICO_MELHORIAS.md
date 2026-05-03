@@ -406,3 +406,124 @@ Com 498 registros no Firestore, a aba Registros renderizava todos os cards de um
 - Apenas 12 cards renderizados por vez (em vez de 498)
 - Filtros continuam funcionando normalmente, reiniciando na página 1
 - Ações dos cards (salvar, excluir, etapa, docs) preservadas sem alteração
+
+---
+
+## Fase 8 — Sincronização Firebase e Melhorias de UX (03/05/2026)
+
+### 8.1 Substituição do polling por listener em tempo real (onSnapshot)
+
+#### Problema
+A sincronização era feita com `setInterval` a cada 30s, causando re-renders completos da página periodicamente, mesmo sem alterações nos dados.
+
+#### O que foi feito — `scripts/dashboard.js`
+- Removido `startAutoSync()` (que usava `setInterval`)
+- Criada função `startRealtimeSync()` com `fbDb.collection('contratos').onSnapshot(...)`
+- Merge inteligente: para cada doc recebido, compara `updatedAt` local vs. remoto — só sobrescreve se a versão remota for mais recente
+- Registros excluídos remotamente são removidos do array local
+- Listener cancelado automaticamente ao fazer logout (`unsubContratos()`)
+- Status da barra de sync exibe `"Tempo real"` em vez de `"Firebase conectado"`
+- Variável `unsubContratos` armazena a função de cancelamento do listener
+
+---
+
+### 8.2 Versionamento com campo `updatedAt`
+
+#### Problema
+Sem controle de versão, duas abas abertas simultaneamente podiam sobrescrever dados uma da outra.
+
+#### O que foi feito
+- `serverSave(record)` agora define `record.updatedAt = Date.now()` antes de gravar no Firestore
+- `serverSave` passa a retornar `true` (sucesso) ou `false` (falha)
+- `saveC` (modal) e `saveReg` (painel inline) usam o retorno para decidir se fecham ou não
+- Adicionado `updatedAt` à lista de campos permitidos em `firestore.rules` dentro de `validContrato()`
+
+---
+
+### 8.3 Confirmação de save antes de atualizar a UI
+
+#### Problema
+A UI atualizava otimisticamente antes da confirmação do Firebase — se o save falhasse, o dado errado ficava exibido.
+
+#### O que foi feito — `saveC()` e `saveReg()`
+- Botão "Salvar" desabilitado e texto alterado para `"Salvando..."` durante a operação
+- Modal/painel só fecha após retorno `true` de `serverSave`
+- Se o save falhar:
+  - Botão reabilitado
+  - Modal/painel permanece aberto
+  - Mudança otimista no array `DB` é revertida (apenas em `saveC` para novos registros)
+
+---
+
+### 8.4 Guarda de edição durante sync (`isEditing`)
+
+- Variável `isEditing` adicionada: `true` enquanto modal ou painel inline estiver aberto
+- `onSnapshot` ignora atualizações remotas enquanto `isEditing === true`
+- `isEditing` volta para `false` ao fechar modal (`closeM`) ou ao salvar painel (`saveReg`)
+
+---
+
+### 8.5 Trava contra chamadas paralelas (`isSyncing`)
+
+- `loadFromFirebase()` retorna imediatamente se `isSyncing === true`
+- Evita múltiplas requisições simultâneas ao Firestore na inicialização
+
+---
+
+### 8.6 Campo Data = Data de Chegada no modal "Novo Registro"
+
+#### O que foi feito
+- O campo `Data` do modal (id `m-data`) passou a preencher tanto `data` quanto `dtChegada` ao salvar
+- Ao editar um registro existente, o campo exibe `dtChegada` (com fallback para `data` em registros antigos)
+- `saveC()` extrai `dtChegadaVal` e aplica nos dois campos
+
+---
+
+### 8.7 Pré-preenchimento do Mês de Referência
+
+- Ao abrir "Novo Registro", o campo Mês de Referência é pré-preenchido com o mês atual do calendário (`MESES_REF[new Date().getMonth()]`)
+- Se houver um mês ativo selecionado no dashboard, esse é usado em vez do mês atual
+
+---
+
+### 8.8 Ordenação dos meses de Janeiro a Dezembro
+
+- `fillSelects()` agora ordena o campo `m-mes` usando a posição em `MESES_REF` como chave de ordenação
+- Meses não encontrados em `MESES_REF` vão para o final da lista
+
+---
+
+### 8.9 Ordenação padrão dos registros por número/controle
+
+- Aba Registros (`getRegView`): ordenação padrão alterada de `data` decrescente para `numero` decrescente — o registro mais recente (maior número) aparece primeiro
+- Tabela (aba Contratos interna): `sortCol` padrão alterado para `'numero'`, `sortDir` para `-1`
+
+---
+
+### 8.10 Atualização completa do body após salvar/excluir
+
+- `saveC()` agora chama `renderDash(); renderTbl(); renderReg()` após salvar com sucesso
+- `saveReg()` agora chama `renderDash(); renderTbl(); renderReg()` após salvar com sucesso
+- Exclusão já atualizava tudo — mantido sem alteração
+
+---
+
+### 8.11 Correção de erros de JavaScript no console
+
+#### Problema
+`renderTbl()` tentava acessar elementos HTML (`ct-count`, `ctbody`, `pag-info`, `pag-btns`) que não existem na página atual (remanescentes da aba Contratos removida), causando `TypeError: Cannot set properties of null`.
+
+#### O que foi feito
+- Adicionadas verificações nulas (`if(!element) return`) antes de cada acesso a esses elementos
+- `renderTbl()` retorna silenciosamente quando os elementos não estão presentes no DOM
+
+---
+
+### 8.12 CSP — hash de script inline permitido
+
+Aviso de Content-Security-Policy reportado pelo navegador referente a um script inline (provavelmente injetado por extensão ou ferramenta). O hash SHA256 fornecido pelo navegador foi adicionado à diretiva `script-src`:
+
+```html
+script-src 'self' https: 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='
+```
+
