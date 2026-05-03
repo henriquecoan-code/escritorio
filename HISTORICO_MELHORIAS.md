@@ -519,6 +519,76 @@ A UI atualizava otimisticamente antes da confirmação do Firebase — se o save
 
 ---
 
+## Fase 9 — Testes Automatizados e CI/CD (03/05/2026)
+
+### 9.1 Estrutura de testes criada
+
+| Arquivo | Finalidade |
+|---|---|
+| `package.json` | Scripts de teste e dependências de dev |
+| `playwright.config.js` | Configuração do Playwright (serve local, reporter) |
+| `tests/e2e/smoke.spec.js` | Testes E2E com Playwright (7 testes) |
+| `tests/firestore.rules.test.mjs` | Testes das regras do Firestore com emulador (Vitest) |
+| `.github/workflows/ci-tests.yml` | Pipeline CI/CD no GitHub Actions |
+
+### 9.2 Testes E2E — Playwright (7 testes, todos passando)
+
+| Teste | O que valida |
+|---|---|
+| Carrega a página principal | Título e `#app` visíveis |
+| Navega entre abas | Tabs dash/reg/cfg funcionando |
+| Sem erro de runtime | Nenhum `pageerror` no carregamento |
+| Overlay de login aparece | Formulário visível ao abrir o site |
+| Login vazio mostra validação | Exibe "Informe email e senha." sem chamar Firebase |
+| Login com email inválido mostra erro em português | Nenhuma mensagem técnica (`auth/`, `Firebase:`) exposta |
+| Botão de login desabilitado durante autenticação | Feedback visual durante chamada async |
+
+### 9.3 CI/CD — GitHub Actions (3 jobs)
+
+- **E2E Playwright** — roda `npm run test:e2e` em Ubuntu com Chromium
+- **Firestore Rules** — roda testes com emulador Firebase (Java 21 via `actions/setup-java`)
+- **Security ZAP Baseline** — scan OWASP ZAP passivo contra o site servido localmente
+
+#### Correções aplicadas no CI
+- `py` → `python3` no script `serve` do `package.json` (Linux não tem `py`)
+- `--user root` adicionado ao `docker run` do ZAP (permissão para criar `/zap/wrk/zap.yaml`)
+- Flag `-I` adicionada ao ZAP (warnings não quebram o CI — só `FAIL-NEW` quebraria)
+
+#### Resultado do ZAP no CI
+- `FAIL-NEW: 0` — nenhuma falha crítica
+- `WARN-NEW: 11` — warnings esperados de ambiente de desenvolvimento (servidor Python sem headers HTTP)
+- `PASS: 56` — todas as verificações passaram
+
+### 9.4 Melhorias de UX no login
+
+- **`translateAuthError(code)`** — mapeia códigos Firebase para português:
+  - `auth/invalid-credential` → *"Email ou senha incorretos."*
+  - `auth/too-many-requests` → *"Muitas tentativas. Aguarde alguns minutos..."*
+  - `auth/network-request-failed` → *"Falha de rede. Verifique sua conexão."*
+  - etc.
+- Botão "Entrar" fica `disabled` com texto *"Entrando…"* durante a chamada; volta ao normal só em caso de erro
+
+### 9.5 Headers de segurança HTTP
+
+**`OB_Dashboard_Rede.html`** — meta headers adicionados (cobrem browsers modernos no GitHub Pages):
+- `X-Frame-Options: DENY`
+- `X-Content-Type-Options: nosniff`
+
+**`firebase.json`** — headers via Firebase Hosting (ativos após `firebase deploy --only hosting`):
+- `X-Frame-Options: DENY`
+- `X-Content-Type-Options: nosniff`
+- `Referrer-Policy: strict-origin-when-cross-origin`
+- `Permissions-Policy: camera=(), microphone=(), geolocation=()`
+- `Cross-Origin-Opener-Policy: same-origin`
+- `Cache-Control: no-cache, must-revalidate` para JS/CSS/HTML
+
+### 9.6 Pendências futuras
+
+- [ ] Migração para domínio próprio via Firebase Hosting (estrutura já pronta)
+- [ ] Testes de regras Firestore locais (requer Java 21 — já funcionando no CI)
+
+---
+
 ### 8.12 CSP — hash de script inline permitido
 
 Aviso de Content-Security-Policy reportado pelo navegador referente a um script inline (provavelmente injetado por extensão ou ferramenta). O hash SHA256 fornecido pelo navegador foi adicionado à diretiva `script-src`:

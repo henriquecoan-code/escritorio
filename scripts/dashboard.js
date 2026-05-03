@@ -30,7 +30,7 @@ let isEditing=false;       // true quando modal ou painel de edicao esta aberto
 let unsubContratos=null;   // unsubscribe do listener onSnapshot
 
 /* .. REG STATE .. */
-let regFilter = {srch:'', mes:'', adv:'', etapa:''};
+let regFilter = {srch:'', mes:'', adv:'', etapa:'', status:''};
 let regPg=1;
 const REG_PG=12;
 
@@ -395,42 +395,41 @@ function bindStaticEvents(){
     regPg=1;
     renderReg();
   });
-  ['reg-ff-mes','reg-ff-adv','reg-ff-etapa'].forEach(id=>{
+  ['reg-ff-mes','reg-ff-adv','reg-ff-etapa','reg-ff-status'].forEach(id=>{
     document.getElementById(id)?.addEventListener('change',()=>{
-      regFilter.mes  = document.getElementById('reg-ff-mes').value;
-      regFilter.adv  = document.getElementById('reg-ff-adv').value;
-      regFilter.etapa= document.getElementById('reg-ff-etapa').value;
+      regFilter.mes   = document.getElementById('reg-ff-mes').value;
+      regFilter.adv   = document.getElementById('reg-ff-adv').value;
+      regFilter.etapa = document.getElementById('reg-ff-etapa').value;
+      regFilter.status= (document.getElementById('reg-ff-status')?.value)||'';
       regPg=1;
       renderReg();
     });
   });
   document.getElementById('reg-clear-btn')?.addEventListener('click',()=>{
-    regFilter={srch:'',mes:'',adv:'',etapa:''};
+    regFilter={srch:'',mes:'',adv:'',etapa:'',status:''};
     regPg=1;
     document.getElementById('reg-srch').value='';
     document.getElementById('reg-ff-mes').value='';
     document.getElementById('reg-ff-adv').value='';
     document.getElementById('reg-ff-etapa').value='';
+    const ssEl=document.getElementById('reg-ff-status');if(ssEl)ssEl.value='';
     renderReg();
   });
-  document.getElementById('reg-export-btn')?.addEventListener('click',exportRegHTML);
-  document.getElementById('reg-list')?.addEventListener('click',(event)=>{
-    // toggle card open/close
+  document.getElementById('reg-export-btn')?.addEventListener('click',exportRegCSV);
+  function handleCardAreaClick(event){
     const hd=event.target.closest('[data-toggle-card]');
-    if(hd){ toggleRegCard(hd.dataset.toggleCard); return; }
-    // set etapa
+    if(hd){ toggleRegCard(hd.dataset.toggleCard, event.target); return; }
     const et=event.target.closest('[data-set-etapa][data-etapa]');
-    if(et){ setRegEtapa(et.dataset.setEtapa, Number(et.dataset.etapa)); return; }
-    // toggle doc chip
+    if(et){ setRegEtapa(et.dataset.setEtapa, Number(et.dataset.etapa), event.target); return; }
     const chip=event.target.closest('[data-toggle-doc]');
     if(chip){ toggleRegDoc(chip.dataset.toggleDoc, chip.dataset.doc); return; }
-    // save
     const saveBtn=event.target.closest('[data-reg-save]');
-    if(saveBtn){ saveReg(saveBtn.dataset.regSave); return; }
-    // delete
+    if(saveBtn){ saveReg(saveBtn.dataset.regSave, saveBtn.closest('.reg-card')); return; }
     const delBtn=event.target.closest('[data-reg-delete]');
     if(delBtn){ askDel(delBtn.dataset.regDelete); }
-  });
+  }
+  document.getElementById('reg-list')?.addEventListener('click', handleCardAreaClick);
+  document.getElementById('pend-content')?.addEventListener('click', handleCardAreaClick);
   document.getElementById('reg-pag-btns')?.addEventListener('click',(event)=>{
     const pageBtn=event.target.closest('button[data-reg-page]');
     if(!pageBtn || pageBtn.disabled) return;
@@ -536,7 +535,7 @@ function init(){
 
 /* .. VIEWS .. */
 function sw(v){
-  ['dash','ct','reg','cfg'].forEach(k=>{
+  ['dash','ct','reg','cfg','pend'].forEach(k=>{
     document.getElementById(`view-${k}`)?.classList.toggle('on',k===v);
     document.getElementById(`tab-${k}`)?.classList.toggle('on',k===v);
   });
@@ -544,6 +543,7 @@ function sw(v){
   if(v==='ct')  {fillFilters();renderTbl();}
   if(v==='reg') {fillRegFilters();renderReg();}
   if(v==='cfg')  {renderWOUI();renderAllCfg();}
+  if(v==='pend') renderPend();
 }
 
 /* .. MONTH FILTER .. */
@@ -590,8 +590,9 @@ function firebaseErrLabel(e){
 /* .. SAVE TO SERVER .. */
 async function serverSave(record){
   if(!ensureAuthenticated()) return false;
-  // Item 5 - garante updatedAt atualizado antes de gravar
-  record.updatedAt = record.updatedAt || Date.now();
+  record.updatedAt = Date.now();
+  const histEntry = {at: record.updatedAt, by: currentUser?.email || '?'};
+  record.history = [histEntry, ...(Array.isArray(record.history)?record.history:[])].slice(0,10);
   try{
     await fbDb.collection('contratos').doc(record.uid).set(record);
     return true;
@@ -882,6 +883,7 @@ function openM(editUid){
     document.getElementById('m-area').value=r.area||'';document.getElementById('m-acao').value=r.acao||'';
     document.getElementById('m-tipo').value=r.tipo||'';document.getElementById('m-orig').value=r.origem||'';
     document.getElementById('m-adv').value=r.adv||'';document.getElementById('m-stat').value=r.status||'Ativo';
+    document.getElementById('m-prazo').value=r.prazo?isoDate(r.prazo):'';
     document.getElementById('m-obs').value=r.obs||'';
   }else{
     document.getElementById('m-title').textContent='Novo Registro';
@@ -892,6 +894,7 @@ function openM(editUid){
     ['m-cliente','m-obs'].forEach(id=>document.getElementById(id).value='');
     ['m-area','m-acao','m-tipo','m-orig','m-adv'].forEach(id=>document.getElementById(id).value='');
     document.getElementById('m-stat').value='Ativo';
+    document.getElementById('m-prazo').value='';
   }
   document.getElementById('overlay').classList.add('open');
   setTimeout(()=>document.getElementById('m-cliente').focus(),120);
@@ -911,12 +914,13 @@ async function saveC(){
     mes:document.getElementById('m-mes').value,area:document.getElementById('m-area').value,
     acao:document.getElementById('m-acao').value,tipo:document.getElementById('m-tipo').value,
     origem:document.getElementById('m-orig').value,adv:document.getElementById('m-adv').value,
-    status:document.getElementById('m-stat').value,obs:document.getElementById('m-obs').value.trim()};
+    status:document.getElementById('m-stat').value,obs:document.getElementById('m-obs').value.trim(),
+    prazo:document.getElementById('m-prazo').value?fmtDate(document.getElementById('m-prazo').value):''};
 
   let wasNew=false;
   if(editUid){
     const i=DB.findIndex(x=>x.uid===editUid);
-    if(i>=0){obj.numero=DB[i].numero||null;DB[i]=obj;}
+    if(i>=0){obj.numero=DB[i].numero||null;obj.history=DB[i].history||[];DB[i]=obj;}
   }else{
     obj.numero=Math.max(0,...DB.map(r=>r.numero||0))+1;
     DB.push(obj);wasNew=true;
@@ -931,7 +935,7 @@ async function saveC(){
     return;
   }
   toast(`"${cli}" ${editUid?'atualizado':'adicionado'}.`);
-  fillSelects();fillFilters();closeM();renderDash();renderTbl();renderReg();
+  fillSelects();fillFilters();closeM();renderDash();renderTbl();renderReg();renderPend();
 }
 
 /* .. DELETE .. */
@@ -944,7 +948,7 @@ async function confirmDel(){
   if(!pendingDelUID)return;
   const u=pendingDelUID;DB=DB.filter(x=>x.uid!==u);pendingDelUID=null;
   await serverDelete(u);
-  closeDel();toast('Registro excluído.','info');renderDash();renderTbl();renderReg();
+  closeDel();toast('Registro excluído.','info');renderDash();renderTbl();renderReg();renderPend();
 }
 function closeDel(){document.getElementById('del-ov').classList.remove('open');pendingDelUID=null;}
 
@@ -1046,10 +1050,11 @@ function fillRegFilters(){
 
 function getRegView(){
   let list=[...DB];
-  if(regFilter.srch){const q=regFilter.srch;list=list.filter(r=>(r.cliente||'').toLowerCase().includes(q)||(r.acao||'').toLowerCase().includes(q)||(r.area||'').toLowerCase().includes(q));}
-  if(regFilter.mes)  list=list.filter(r=>r.mes===regFilter.mes);
-  if(regFilter.adv)  list=list.filter(r=>r.adv===regFilter.adv);
-  if(regFilter.etapa)list=list.filter(r=>String(r.etapa||1)===regFilter.etapa);
+  if(regFilter.srch){const q=regFilter.srch;list=list.filter(r=>(r.cliente||'').toLowerCase().includes(q)||(r.acao||'').toLowerCase().includes(q)||(r.area||'').toLowerCase().includes(q)||String(r.numero||'').includes(q));}
+  if(regFilter.mes)   list=list.filter(r=>r.mes===regFilter.mes);
+  if(regFilter.adv)   list=list.filter(r=>r.adv===regFilter.adv);
+  if(regFilter.etapa) list=list.filter(r=>String(r.etapa||1)===regFilter.etapa);
+  if(regFilter.status)list=list.filter(r=>(r.status||'')===regFilter.status);
   return list.sort((a,b)=>(b.numero||0)-(a.numero||0));
 }
 
@@ -1066,6 +1071,14 @@ function regStageBadge(etapa){
   return `<span class="ebx ${d.c}">${e}. ${d.l}</span>`;
 }
 
+function prazoBadge(prazo){
+  if(!prazo) return '';
+  const d=parseDMY(prazo);if(!d)return '';
+  const diff=Math.ceil((d-new Date())/(1000*3600*24));
+  if(diff<0) return `<span class="bx bro" title="Prazo vencido h\u00e1 ${Math.abs(diff)} dias">\uD83D\uDDD3 ${Math.abs(diff)}d atraso</span>`;
+  if(diff<=7) return `<span class="bx bam" title="Prazo em ${diff} dias">\uD83D\uDDD3 ${diff}d</span>`;
+  return `<span class="bx bm" title="Prazo: ${escAttr(prazo)}">\uD83D\uDDD3 ${diff}d</span>`;
+}
 function regDurBadge(rec){
   const hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
   const fim=rec.dtEntrega||hoje;
@@ -1079,10 +1092,21 @@ function regDurBadge(rec){
 function buildRegCard(rec){
   const etapa=rec.etapa||1;
   const signed=Boolean(rec.dtAssinatura)||isDoneRecord(rec);
-  const area=rec.area?(rec.area.length>18?`${rec.area.slice(0,17)}…`:rec.area):'';
+  const area=rec.area?(rec.area.length>18?`${rec.area.slice(0,17)}\u2026`:rec.area):'';
   const docsPend=Array.isArray(rec.docsPendentes)?rec.docsPendentes:[];
   const dots=[1,2,3,4,5].map((s,i)=>`<div class="pdot ${s<etapa?'dn':s===etapa?'ac':'pd'}"></div>${i<4?'<div class="pln"></div>':''}`).join('');
   const dur=calcRegDur(rec);
+
+  const STALE_DAYS=14;
+  const isStale=!isDoneRecord(rec)&&rec.updatedAt&&(Date.now()-rec.updatedAt)>(STALE_DAYS*86400000);
+
+  const history=Array.isArray(rec.history)?rec.history.slice(0,3):[];
+  const histHTML=history.length?`
+    <div style="margin-top:10px;border-top:1px solid var(--b);padding-top:8px">
+      <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--t3);margin-bottom:5px">Hist\u00f3rico</div>
+      ${history.map(h=>`<div style="font-size:11px;color:var(--t3);margin-bottom:2px">${new Date(h.at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})} &nbsp;&middot;&nbsp; ${escHtml(h.by||'?')}</div>`).join('')}
+    </div>`:'';
+
   const dateFields=[
     {key:'dtChegada',label:'Chegada'},
     {key:'dtContato',label:'Contato'},
@@ -1091,6 +1115,7 @@ function buildRegCard(rec){
     {key:'dtDocs',label:'Docs Enviados'},
     {key:'dtDocsRec',label:'Docs Receb.'},
     {key:'dtEntrega',label:'Entrega'},
+    {key:'prazo',label:'Prazo \u26f3'},
   ];
 
   const pipeHTML=ETAPA_LABELS.map((lbl,i)=>{
@@ -1116,8 +1141,9 @@ function buildRegCard(rec){
       <div class="reg-cli">${rec.numero?`<span class="reg-num">#${escHtml(String(rec.numero))}</span> `:''}${escHtml(rec.cliente||'')}</div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
         <div class="pdots">${dots}</div>
-        <span class="reg-meta">${escHtml(area||'—')}${rec.adv?` · ${escHtml(rec.adv)}`:''}</span>
+        <span class="reg-meta">${escHtml(area||'\u2014')}${rec.adv?` \u00b7 ${escHtml(rec.adv)}`:''}</span>
       </div>
+      ${(isStale||rec.prazo)?`<div style="display:flex;gap:4px;margin-top:4px">${isStale?'<span class="bx bro">\u26a0 Parado</span>':''}${prazoBadge(rec.prazo)}</div>`:''}
     </div>
     <div style="font-size:11px;color:var(--t3)">${escHtml(rec.data||'—')}</div>
     <div>${regStageBadge(etapa)}</div>
@@ -1149,6 +1175,7 @@ function buildRegCard(rec){
         <textarea class="reg-card-obs" data-uid="${escAttr(rec.uid)}" placeholder="Observações...">${escHtml(rec.obs||'')}</textarea>
       </div>
     </div>
+    ${histHTML}
     </div>
     <div class="pfooter">
       <span class="pstatus">Editando — não salvo</span>
@@ -1201,26 +1228,74 @@ function goRegPg(p){
   renderReg();
 }
 
-function toggleRegCard(uid){
-  const card=document.getElementById(`regcard-${uid}`);
-  const panel=document.getElementById(`panel-${uid}`);
-  const btn=document.getElementById(`btn-${uid}`);
-  if(!card||!panel||!btn)return;
+function renderPend(){
+  const el=document.getElementById('pend-content');if(!el)return;
+  const active=DB.filter(r=>!isDoneRecord(r));
+
+  const withPrazo=active.filter(r=>r.prazo).sort((a,b)=>{
+    const da=parseDMY(a.prazo)||new Date(9e15);
+    const db=parseDMY(b.prazo)||new Date(9e15);
+    return da-db;
+  });
+  const withDocs=active
+    .filter(r=>Array.isArray(r.docsPendentes)&&r.docsPendentes.length>0)
+    .sort((a,b)=>(a.updatedAt||0)-(b.updatedAt||0));
+
+  const total=new Set([...withPrazo.map(r=>r.uid),...withDocs.map(r=>r.uid)]).size;
+  const countEl=document.getElementById('pend-count');
+  if(countEl) countEl.textContent=`\u2014 ${total} pasta${total!==1?'s':''}`;
+
+  if(!withPrazo.length&&!withDocs.length){
+    el.innerHTML='<div style="text-align:center;padding:40px;color:var(--t3);">\u2705 Nenhuma pend\u00eancia.</div>';
+    return;
+  }
+
+  let html='';
+  if(withPrazo.length){
+    html+=`<div class="pend-group-hdr"><span>\uD83D\uDDD3 Prazos pr\u00f3ximos</span><span class="bx bro">${withPrazo.length} pasta${withPrazo.length!==1?'s':''}</span></div>`;
+    html+=withPrazo.map(buildRegCard).join('');
+  }
+  if(withDocs.length){
+    html+=`<div class="pend-group-hdr" style="margin-top:${withPrazo.length?'20px':'0'}""><span>\uD83D\uDCC4 Documentos pendentes</span><span class="bx bro">${withDocs.length} pasta${withDocs.length!==1?'s':''}</span></div>`;
+    html+=withDocs.map(buildRegCard).join('');
+  }
+  el.innerHTML=html;
+}
+
+function toggleRegCard(uid, fromEl){
+  // Se vem de um elemento clicado, usa o card pai como contexto;
+  // caso contrario, acha o card visivel (offsetParent != null)
+  const card = fromEl
+    ? fromEl.closest('.reg-card')
+    : ([...document.querySelectorAll(`[id="regcard-${uid}"]`)].find(c=>c.offsetParent!==null)
+       || document.getElementById(`regcard-${uid}`));
+  if(!card) return;
+  const panel=card.querySelector('.reg-panel');
+  const btn=card.querySelector('.reg-btn');
+  if(!panel||!btn)return;
   const isOpen=panel.classList.contains('open');
   panel.classList.toggle('open',!isOpen);
   btn.classList.toggle('open',!isOpen);
   btn.textContent=isOpen?'\u25bc Editar':'\u25b2 Fechar';
   card.classList.toggle('expanded',!isOpen);
-  // pausa autosync quando painel esta aberto
   isEditing = !isOpen;
 }
 
-async function setRegEtapa(uid,etapa){
+async function setRegEtapa(uid,etapa,fromEl){
   const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
   DB[idx]={...DB[idx],etapa};
   await serverSave(DB[idx]);
-  renderReg();
-  toggleRegCard(uid);
+  renderReg();renderPend();
+  // Reabre o card na aba correta apos re-render
+  const allCards=[...document.querySelectorAll(`[id="regcard-${uid}"]`)];
+  const target = fromEl ? fromEl.closest('.reg-card') : (allCards.find(c=>c.offsetParent!==null)||allCards[0]);
+  if(target){
+    const p=target.querySelector('.reg-panel'),b=target.querySelector('.reg-btn');
+    if(p&&!p.classList.contains('open')){
+      p.classList.add('open');if(b){b.classList.add('open');b.textContent='\u25b2 Fechar';}
+      target.classList.add('expanded');isEditing=true;
+    }
+  }
   toast(`Etapa atualizada para ${ETAPA_LABELS[etapa-1]}.`);
 }
 
@@ -1231,18 +1306,18 @@ function toggleRegDoc(uid,doc){
   if(docs.includes(doc)) docs=docs.filter(d=>d!==doc);
   else docs.push(doc);
   DB[idx]={...rec,docsPendentes:docs};
-  // Atualiza chip visualmente
-  const card=document.getElementById(`regcard-${uid}`);
-  if(card){
+  // Atualiza chips em todos os cards com esse uid (reg + pend)
+  document.querySelectorAll(`[id="regcard-${uid}"]`).forEach(card=>{
     card.querySelectorAll(`[data-toggle-doc="${uid}"]`).forEach(chip=>{
       chip.classList.toggle('sel',docs.includes(chip.dataset.doc));
     });
-  }
+  });
 }
 
-async function saveReg(uid){
+async function saveReg(uid, cardEl){
   const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
-  const card=document.getElementById(`regcard-${uid}`);if(!card)return;
+  const card = cardEl || [...document.querySelectorAll(`[id="regcard-${uid}"]`)].find(c=>c.offsetParent!==null) || document.getElementById(`regcard-${uid}`);
+  if(!card)return;
 
   // Item 6 - desabilita botao de salvar durante gravacao
   const saveBtn=card.querySelector(`[data-reg-save="${uid}"]`);
@@ -1265,7 +1340,7 @@ async function saveReg(uid){
 
   DB[idx]=updated;
   isEditing=false; // libera autosync apos salvar confirmado
-  renderDash();renderTbl();renderReg();
+  renderDash();renderTbl();renderReg();renderPend();
 
   // Atualiza duração na tela
   const dur=calcRegDur(DB[idx]);
@@ -1275,6 +1350,21 @@ async function saveReg(uid){
     <div class="dur-item"><div class="dur-lbl">Chegada→Entrega</div><div class="dur-val">${escHtml(dur.total)}</div></div>
   `;
   toast(`"${escHtml(DB[idx].cliente||uid)}" salvo!`);
+}
+
+function exportRegCSV(){
+  const list=getRegView();
+  const hdrs=['#','Data','Cliente','M\u00eas','\u00c1rea','\u00c7\u00e3o','Tipo','Origem','Adv.','Status','Etapa','Chegada','Assinatura','Entrega','Docs Pendentes','Prazo','Obs'];
+  const rows=list.map(r=>[
+    r.numero||'',r.data||'',r.cliente||'',r.mes||'',r.area||'',r.acao||'',r.tipo||'',
+    r.origem||'',r.adv||'',r.status||'',r.etapa||1,r.dtChegada||'',r.dtAssinatura||'',
+    r.dtEntrega||'',(r.docsPendentes||[]).join('; '),r.prazo||'',(r.obs||'').replace(/\n/g,' ')
+  ].map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';'));
+  const csv=[hdrs.map(h=>`"${h}"`).join(';'),...rows].join('\r\n');
+  const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`registros-ob-${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`;
+  a.click();
 }
 
 function exportRegHTML(){

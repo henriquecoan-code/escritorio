@@ -10,7 +10,7 @@ service cloud.firestore {
       return data.keys().hasOnly([
         'uid','numero','data','cliente','mes','area','acao','tipo','origem','adv','status','obs',
         'etapa','dtChegada','dtContato','dtEnvioContrato','dtAssinatura',
-        'dtDocs','dtDocsRec','dtEntrega','docsPendentes','updatedAt'
+        'dtDocs','dtDocsRec','dtEntrega','docsPendentes','updatedAt','prazo','history'
       ]);
     }
 
