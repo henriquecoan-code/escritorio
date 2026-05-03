@@ -5,6 +5,42 @@
   --b:rgba(201,168,76,.14);--b2:rgba(201,168,76,.06);
   --blue:#4E8FE8;--green:#5EC97A;--rose:#E8735A;--amber:#F0A732;
 }
+
+/* ═══ MODO CLARO ═══ */
+html.light{
+  --g:#A07828;--g2:#C49A30;
+  --d0:#F4F2EC;--d1:#ECEAE2;--d2:#FFFFFF;--d3:#F0EDE4;--d4:#E8E4D8;
+  --t:#1A1814;--t2:#4A4538;--t3:#8A8070;
+  --b:rgba(160,120,40,.15);--b2:rgba(160,120,40,.07);
+  --blue:#2B6CC4;--green:#2D8E4A;--rose:#C0402A;--amber:#C07010;
+}
+html.light body::before{
+  background:radial-gradient(ellipse 80% 60% at 0% 0%,rgba(160,120,40,.06),transparent 55%),
+             radial-gradient(ellipse 60% 40% at 100% 100%,rgba(43,108,196,.04),transparent 55%);
+}
+html.light body::after{
+  background-image:linear-gradient(rgba(160,120,40,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(160,120,40,.025) 1px,transparent 1px);
+  background-size:52px 52px;
+}
+html.light .card,html.light .tcard,html.light .cfg-card,html.light .wo-box,html.light .mbox,html.light .auth-box{
+  background:linear-gradient(145deg,var(--d3),var(--d2));
+}
+html.light .reg-card{background:linear-gradient(145deg,var(--d3),var(--d2));}
+html.light .sync-bar,html.light .month-bar,html.light .nav-tabs{background:var(--d2);}
+html.light .kpi{background:var(--d2);}
+html.light .field input,html.light .field select,html.light .field textarea,
+html.light .cfg-inp,html.light .dg-input,html.light .ifield textarea,
+html.light .auth-input,html.light .sb,html.light .fsel{
+  background:var(--d3);color:var(--t);
+}
+html.light .fsel option{background:var(--d2);}
+html.light .doc-chip{background:var(--d3);color:var(--t2);}
+html.light .reg-panel{background:rgba(240,235,220,.5);}
+html.light .overlay{background:rgba(220,215,200,.82);}
+html.light .del-overlay{background:rgba(220,215,200,.88);}
+html.light #theme-toggle-btn{color:var(--g);border-color:var(--b);}
+
 *{margin:0;padding:0;box-sizing:border-box;}
 html{scroll-behavior:smooth;}
 body{background:var(--d0);font-family:'Inter','Segoe UI',system-ui,Arial,sans-serif;color:var(--t);overflow-x:hidden;}
