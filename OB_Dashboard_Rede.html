@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; img-src 'self' https: data: blob:; style-src 'self' 'unsafe-inline' https:; script-src 'self' https: 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.gstatic.com https://*.firebaseapp.com; font-src 'self' https: data:;">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
 <title>Oliveira &amp; Benedet &#8212; Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -61,6 +63,7 @@
           <option value="4">4 &mdash; Documentos</option>
           <option value="5">5 &mdash; Entregue</option>
         </select>
+
         <button class="btn sm" id="reg-clear-btn">&#10005; Limpar</button>
         <button class="btn sm" id="reg-export-btn">&#128196; Exportar HTML</button>
       </div>
