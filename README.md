@@ -15,23 +15,32 @@ Dashboard interno da Oliveira & Benedet para gestão e visualização de contrat
 escritorio/
 ├── OB_Dashboard_Rede.html
 ├── firebase-config.js
+├── firebase-config.public.js
+├── firebase.json
 ├── firestore.rules
 ├── HISTORICO_MELHORIAS.md
 ├── README.md
 ├── .gitignore
+├── package.json
+├── playwright.config.js
 ├── scripts/
-│   └── dashboard.js
+│   ├── dashboard.js
+│   ├── import-firestore.html
+│   └── theme.js
 ├── styles/
 │   └── dashboard.css
 └── tests/
-    └── regression.test.mjs
+    ├── e2e/
+    │   └── smoke.spec.js
+    └── firestore.rules.test.mjs
 ```
 
 ## Requisitos
 
 - Navegador moderno
 - Projeto Firebase configurado
-- Node.js 22+ para rodar os testes de regressão
+- Node.js 22+
+- Docker Desktop (para OWASP ZAP Baseline)
 
 ## Configuração do Firebase
 
@@ -71,23 +80,96 @@ Para tornar um usuário admin:
 4. Adicione o campo `adminUids` como array.
 5. Inclua o UID dentro do array.
 
-## Testes básicos de regressão
+## Plano de testes (copiar e executar no Windows)
 
-Os testes validam contratos importantes da base atual:
-
-- referências externas do HTML
-- presença da autenticação
-- ausência de handlers inline
-- CSP mínima esperada
-- `SEED_DATA` vazio
-- helpers de escape presentes
-- regras principais do Firestore
-
-Para rodar:
+### 1. Instalar dependências
 
 ```powershell
-node --test tests/regression.test.mjs
+npm install
+npx playwright install
 ```
+
+### 2. Subir o dashboard local
+
+```powershell
+npm run serve
+```
+
+Acesse: `http://localhost:8000/OB_Dashboard_Rede.html`
+
+### 3. Rodar testes E2E (Playwright)
+
+Em outro terminal:
+
+```powershell
+npm run test:e2e
+```
+
+Cobertura inicial atual:
+
+- carregamento da página principal
+- navegação entre abas (Dashboard, Registros e Configurações)
+- validação de erros de runtime no carregamento
+
+### 4. Rodar testes das regras do Firestore
+
+```powershell
+npm run test:rules
+```
+
+Cobertura inicial atual:
+
+- bloqueio de leitura para usuário anônimo
+- leitura permitida para usuário autenticado
+- criação permitida com campos válidos
+- criação bloqueada com campo não permitido
+
+### 5. Rodar OWASP ZAP Baseline
+
+Com Docker Desktop aberto, em outro terminal:
+
+```powershell
+docker pull ghcr.io/zaproxy/zaproxy:stable
+docker run --rm -t -v "${PWD}:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t "http://host.docker.internal:8000/OB_Dashboard_Rede.html" -m 5 -r zap-report.html
+```
+
+Resultado esperado:
+
+- arquivo `zap-report.html` gerado na raiz do projeto
+- prioridade de correção: High primeiro, depois Medium
+
+## Ordem recomendada de execução
+
+1. `npm run serve`
+2. `npm run test:e2e`
+3. `npm run test:rules`
+4. ZAP Baseline
+
+Critério de pronto:
+
+- sem alertas High no ZAP
+- testes E2E passando
+- testes de regras do Firestore passando
+
+## CI no GitHub Actions
+
+O repositório agora inclui pipeline automática em [.github/workflows/ci-tests.yml](.github/workflows/ci-tests.yml).
+
+Execuções automáticas:
+
+- push
+- pull request
+
+Jobs executados:
+
+- E2E Playwright
+- Firestore Rules (com Java 21)
+- Security ZAP Baseline
+
+Relatórios gerados como artefatos da execução:
+
+- playwright-report
+- zap-report
 
 ## Segurança
 

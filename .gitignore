@@ -4,6 +4,8 @@ firebase-config.js
 # Node / tests
 node_modules/
 coverage/
+test-results/
+playwright-report/
 
 # Firebase CLI
 .firebase/
