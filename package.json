@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Testes automatizados do dashboard OB",
   "scripts": {
-    "serve": "py -m http.server 8000",
+    "serve": "python3 -m http.server 8000",
     "test:e2e": "playwright test",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run tests/firestore.rules.test.mjs\"",
     "test:security": "echo Rode o comando do OWASP ZAP descrito no README.md"

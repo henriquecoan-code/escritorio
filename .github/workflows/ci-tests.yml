@@ -81,7 +81,7 @@ jobs:
       - name: Run OWASP ZAP baseline scan
         run: |
           docker pull ghcr.io/zaproxy/zaproxy:stable
-          docker run --rm --network host -v "$PWD:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t "http://127.0.0.1:8000/OB_Dashboard_Rede.html" -m 5 -r zap-report.html
+          docker run --rm --user root --network host -v "$PWD:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t "http://127.0.0.1:8000/OB_Dashboard_Rede.html" -m 5 -r zap-report.html
 
       - name: Upload ZAP report
         if: always()
