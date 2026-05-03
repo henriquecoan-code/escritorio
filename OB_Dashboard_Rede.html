@@ -18,18 +18,27 @@
 <div id="app" style="opacity:1;transition:opacity .5s ease .1s">
 
   <header class="hd">
-    <img id="hd-logo" class="hd-logo" alt="Oliveira &amp; Benedet">
-    <div class="hd-right">
-      <div class="chip" id="period-chip">2026</div>
-      <span id="ts"></span>
+    <div class="hd-top">
+      <img id="hd-logo" class="hd-logo" alt="Oliveira &amp; Benedet">
+      <div class="hd-top-center">
+        <div class="hd-top-left">
+          <div class="chip" id="period-chip">2026</div>
+          <span id="ts"></span>
+        </div>
+        <div class="hd-top-right">
+          <button class="btn sm" id="theme-toggle-btn" title="Modo claro" aria-label="Alternar modo claro/escuro">&#9728;</button>
+          <span class="auth-user" id="auth-user" title=""></span>
+          <button class="btn sm" id="auth-logout-btn">Sair</button>
+        </div>
+      </div>
+    </div>
+    <div class="hd-bottom">
       <div class="nav-tabs">
         <button class="nav-tab on" id="tab-dash" data-view="dash">&#128202; Dashboard</button>
         <button class="nav-tab"   id="tab-reg" data-view="reg">&#128193; Registros</button>
+        <button class="nav-tab"   id="tab-pend" data-view="pend">&#9888; Pend&#234;ncias</button>
         <button class="nav-tab"   id="tab-cfg" data-view="cfg">&#9881; Configura&#231;&#245;es</button>
       </div>
-      <button class="btn sm" id="theme-toggle-btn" title="Modo claro" aria-label="Alternar modo claro/escuro">&#9728;</button>
-      <span class="auth-user" id="auth-user" title=""></span>
-      <button class="btn sm" id="auth-logout-btn">Sair</button>
       <button class="btn primary" id="open-new-contract-btn">+ Novo Registro</button>
     </div>
   </header>
@@ -63,9 +72,14 @@
           <option value="4">4 &mdash; Documentos</option>
           <option value="5">5 &mdash; Entregue</option>
         </select>
-
+        <select class="fsel" id="reg-ff-status">
+          <option value="">Todos os status</option>
+          <option value="Ativo">Ativo</option>
+          <option value="Encerrado">Encerrado</option>
+          <option value="Suspenso">Suspenso</option>
+        </select>
         <button class="btn sm" id="reg-clear-btn">&#10005; Limpar</button>
-        <button class="btn sm" id="reg-export-btn">&#128196; Exportar HTML</button>
+        <button class="btn sm" id="reg-export-btn">&#8595; Exportar CSV</button>
       </div>
     </div>
     <div id="reg-list" class="reg-list"></div>
@@ -73,6 +87,15 @@
       <div class="pag-info" id="reg-pag-info"></div>
       <div class="pag-btns" id="reg-pag-btns"></div>
     </div>
+  </div>
+
+  <!-- PENDÊNCIAS -->
+  <div id="view-pend" class="view">
+    <div class="tbar">
+      <h2>Pend&#234;ncias <span style="font-size:14px;color:var(--t3);font-family:inherit" id="pend-count">&#8212; 0 pastas</span></h2>
+      <div class="t-tools"><span style="font-size:12px;color:var(--t3)">Pastas ativas com documentos pendentes, agrupadas por advogado</span></div>
+    </div>
+    <div id="pend-content"></div>
   </div>
 
   <!-- SETTINGS -->
@@ -124,8 +147,7 @@
       <div class="frow"><div class="field"><label>Tipo de Contrato</label><select id="m-tipo"></select></div><div class="field"><label>Origem do Lead</label><select id="m-orig"></select></div></div>
     </div>
     <div class="form-section"><div class="form-section-title">Responsável &amp; Status</div>
-      <div class="frow"><div class="field"><label>Advogado Responsável</label><select id="m-adv"></select></div><div class="field"><label>Status</label><select id="m-stat"></select></div></div>
-    </div>
+      <div class="frow"><div class="field"><label>Advogado Responsável</label><select id="m-adv"></select></div><div class="field"><label>Status</label><select id="m-stat"></select></div></div>      <div class="frow"><div class="field"><label>Prazo</label><input type="date" id="m-prazo"></div></div>    </div>
     <div class="form-section"><div class="form-section-title">Observações</div>
       <div class="field"><textarea id="m-obs" placeholder="Notas adicionais..."></textarea></div>
     </div>
