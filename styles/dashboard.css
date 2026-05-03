@@ -305,6 +305,7 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 .reg-hdr{display:grid;grid-template-columns:1fr auto auto auto auto auto auto;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;}
 .reg-hdr:hover{background:rgba(201,168,76,.03);}
 .reg-cli{font-size:12px;font-weight:500;color:var(--t);}
+.reg-num{font-size:10px;font-weight:600;color:var(--blue);opacity:.75;letter-spacing:.5px;font-family:'Segoe UI',Arial,sans-serif;}
 .reg-meta{font-size:10px;color:var(--t3);}
 .reg-btn{background:none;border:1px solid var(--b);color:var(--t3);cursor:pointer;padding:2px 7px;font-size:10px;font-family:inherit;}
 .reg-btn.open{border-color:var(--g);color:var(--g);background:var(--b2);}

@@ -801,8 +801,14 @@ async function saveC(){
     acao:document.getElementById('m-acao').value,tipo:document.getElementById('m-tipo').value,
     origem:document.getElementById('m-orig').value,adv:document.getElementById('m-adv').value,
     status:document.getElementById('m-stat').value,obs:document.getElementById('m-obs').value.trim()};
-  if(editUid){const i=DB.findIndex(x=>x.uid===editUid);if(i>=0)DB[i]=obj;toast(`"${cli}" atualizado.`);}
-  else{DB.push(obj);toast(`"${cli}" adicionado.`);}
+  if(editUid){
+    const i=DB.findIndex(x=>x.uid===editUid);
+    if(i>=0){obj.numero=DB[i].numero||null;DB[i]=obj;}
+    toast(`"${cli}" atualizado.`);
+  }else{
+    obj.numero=Math.max(0,...DB.map(r=>r.numero||0))+1;
+    DB.push(obj);toast(`"${cli}" adicionado.`);
+  }
   await serverSave(obj);
   fillSelects();fillFilters();closeM();renderDash();renderTbl();
 }
@@ -986,7 +992,7 @@ function buildRegCard(rec){
   return `<div class="reg-card" id="regcard-${escAttr(rec.uid)}">
   <div class="reg-hdr" data-toggle-card="${escAttr(rec.uid)}">
     <div>
-      <div class="reg-cli">${escHtml(rec.cliente||'')}</div>
+      <div class="reg-cli">${rec.numero?`<span class="reg-num">#${escHtml(String(rec.numero))}</span> `:''}${escHtml(rec.cliente||'')}</div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:3px">
         <div class="pdots">${dots}</div>
         <span class="reg-meta">${escHtml(area||'—')}${rec.adv?` · ${escHtml(rec.adv)}`:''}</span>

@@ -11,6 +11,10 @@
     #btnImport:disabled { background: #555; }
     #btnClear   { background: #c0392b; color: #fff; }
     #btnClear:disabled  { background: #555; }
+    #btnRenum   { background: #2980b9; color: #fff; }
+    #btnRenum:disabled  { background: #555; }
+    #btnExport  { background: #8e44ad; color: #fff; }
+    #btnExport:disabled { background: #555; }
     input, select { background: #2a2a4a; color: #e0e0e0; border: 1px solid #444; padding: 6px 10px; border-radius: 4px; margin: 4px; }
     #log { background: #0d0d1a; border: 1px solid #333; padding: 14px; height: 380px; overflow-y: auto;
            white-space: pre-wrap; font-size: 12px; border-radius: 6px; margin-top: 12px; }
@@ -24,7 +28,7 @@
   </style>
 </head>
 <body>
-<h2>Importar ob_data_clean.json → Firestore (contratos)</h2>
+<h2>Ferramentas Firestore — Oliveira &amp; Benedet</h2>
 
 <div>
   <label>Email: <input type="email" id="email" placeholder="seu@email.com"></label>
@@ -34,8 +38,8 @@
 </div>
 
 <div style="margin-top:12px;">
-  <label>Arquivo JSON:
-    <input type="file" id="fileInput" accept=".json">
+  <label>Arquivo (JSON ou Excel):
+    <input type="file" id="fileInput" accept=".json,.xlsx,.xls">
   </label>
 </div>
 
@@ -47,13 +51,18 @@
 </div>
 
 <div style="margin-top:10px;">
+  <button id="btnExport" onclick="exportarFirestore()" disabled>⬇ Exportar backup (Excel)</button>
   <button id="btnImport" onclick="startImport()" disabled>▶ Importar</button>
+  <button id="btnRenum"  onclick="renumerar()" disabled>🔢 Renumerar registros (1, 2, 3...)</button>
   <button id="btnClear"  onclick="clearCollection()" disabled>🗑 Limpar coleção (cuidado!)</button>
 </div>
 
 <div class="bar"><div class="bar-inner" id="progress" style="width:0%"></div></div>
 <div id="status" style="font-size:13px; color:#aaa;">—</div>
 <div id="log"></div>
+
+<!-- SheetJS para exportação Excel -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 
 <!-- Firebase compat -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -85,13 +94,17 @@ auth.onAuthStateChanged(user => {
   if (user) {
     st.textContent = '✓ ' + user.email;
     st.style.color = '#2ecc71';
+    document.getElementById('btnExport').disabled = false;
     document.getElementById('btnImport').disabled = false;
     document.getElementById('btnClear').disabled  = false;
+    document.getElementById('btnRenum').disabled  = false;
   } else {
     st.textContent = 'Não autenticado';
     st.style.color = '#e74c3c';
+    document.getElementById('btnExport').disabled = true;
     document.getElementById('btnImport').disabled = true;
     document.getElementById('btnClear').disabled  = true;
+    document.getElementById('btnRenum').disabled  = true;
   }
 });
 
@@ -108,17 +121,75 @@ async function doLogin() {
 }
 
 // ── Import ─────────────────────────────────────────────────────
+// Mapeamento cabeçalho Excel (pt) → chave interna
+const EXCEL_MAP = {
+  'Nº':               'numero',
+  'Data':             'data',
+  'Mês':              'mes',
+  'Cliente':          'cliente',
+  'Área':             'area',
+  'Ação':             'acao',
+  'Tipo':             'tipo',
+  'Origem':           'origem',
+  'Advogado':         'adv',
+  'Status':           'status',
+  'Etapa':            'etapa',
+  'Dt. Chegada':      'dtChegada',
+  'Dt. Contato':      'dtContato',
+  'Dt. Envio Contr.': 'dtEnvioContrato',
+  'Dt. Assinatura':   'dtAssinatura',
+  'Dt. Docs':         'dtDocs',
+  'Dt. Docs Rec.':    'dtDocsRec',
+  'Dt. Entrega':      'dtEntrega',
+  'Docs Pendentes':   'docsPendentes',
+  'Obs':              'obs',
+  'UID':              'uid',
+};
+
+async function lerArquivo(file) {
+  const nome = file.name.toLowerCase();
+  if (nome.endsWith('.json')) {
+    const raw = await file.text();
+    let records;
+    try { records = JSON.parse(raw); } catch(e) { throw new Error('JSON inválido: ' + e.message); }
+    if (!Array.isArray(records)) throw new Error('O arquivo não é um array JSON.');
+    return records;
+  }
+  if (nome.endsWith('.xlsx') || nome.endsWith('.xls')) {
+    const buf = await file.arrayBuffer();
+    const wb  = XLSX.read(buf, { type: 'array' });
+    const ws  = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    return rows.map(row => {
+      const rec = {};
+      for (const [col, chave] of Object.entries(EXCEL_MAP)) {
+        if (row[col] !== undefined) {
+          let v = row[col];
+          // docsPendentes: string separada por vírgula → array
+          if (chave === 'docsPendentes') {
+            v = v ? String(v).split(',').map(s => s.trim()).filter(Boolean) : [];
+          }
+          // etapa e numero: garantir número
+          if ((chave === 'etapa' || chave === 'numero') && v !== '') v = Number(v);
+          rec[chave] = v;
+        }
+      }
+      return rec;
+    });
+  }
+  throw new Error('Formato não suportado. Use .json ou .xlsx');
+}
+
 async function startImport() {
   const fileInput = document.getElementById('fileInput');
-  if (!fileInput.files.length) { log('Selecione o arquivo ob_data_clean.json.', 'warn'); return; }
+  if (!fileInput.files.length) { log('Selecione um arquivo .json ou .xlsx.', 'warn'); return; }
 
   const skipExisting = document.getElementById('chkSkipExisting').checked;
-  const raw = await fileInput.files[0].text();
   let records;
-  try { records = JSON.parse(raw); } catch(e) { log('JSON inválido: ' + e.message, 'err'); return; }
+  try { records = await lerArquivo(fileInput.files[0]); } catch(e) { log(e.message, 'err'); return; }
 
-  if (!Array.isArray(records)) { log('O arquivo não é um array JSON.', 'err'); return; }
-  log('Iniciando importação de ' + records.length + ' registros...', 'inf');
+  if (!Array.isArray(records) || !records.length) { log('Nenhum registro encontrado no arquivo.', 'err'); return; }
+  log('Iniciando importação de ' + records.length + ' registros (' + fileInput.files[0].name + ')...', 'inf');
 
   const coll = db.collection('contratos');
   let ok = 0, skipped = 0, errs = 0;
@@ -198,6 +269,125 @@ async function clearCollection() {
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Exportar backup ───────────────────────────────────────────
+async function exportarFirestore() {
+  log('Carregando todos os registros para exportar...', 'inf');
+  document.getElementById('progress').style.width = '0%';
+  document.getElementById('status').textContent = 'Exportando...';
+
+  try {
+    const snap = await db.collection('contratos').get();
+    if (snap.empty) { log('Nenhum registro encontrado.', 'warn'); return; }
+
+    const records = snap.docs.map(d => d.data());
+
+    // Ordena por numero se disponível, senão por data
+    records.sort((a, b) => {
+      if (a.numero && b.numero) return a.numero - b.numero;
+      return (a.data || '').localeCompare(b.data || '');
+    });
+
+    // Monta linhas com colunas legíveis em português
+    const colunas = [
+      { key: 'numero',            label: 'Nº'              },
+      { key: 'data',              label: 'Data'            },
+      { key: 'mes',               label: 'Mês'             },
+      { key: 'cliente',           label: 'Cliente'         },
+      { key: 'area',              label: 'Área'            },
+      { key: 'acao',              label: 'Ação'            },
+      { key: 'tipo',              label: 'Tipo'            },
+      { key: 'origem',            label: 'Origem'          },
+      { key: 'adv',               label: 'Advogado'        },
+      { key: 'status',            label: 'Status'          },
+      { key: 'etapa',             label: 'Etapa'           },
+      { key: 'dtChegada',         label: 'Dt. Chegada'     },
+      { key: 'dtContato',         label: 'Dt. Contato'     },
+      { key: 'dtEnvioContrato',   label: 'Dt. Envio Contr.'},
+      { key: 'dtAssinatura',      label: 'Dt. Assinatura'  },
+      { key: 'dtDocs',            label: 'Dt. Docs'        },
+      { key: 'dtDocsRec',         label: 'Dt. Docs Rec.'   },
+      { key: 'dtEntrega',         label: 'Dt. Entrega'     },
+      { key: 'docsPendentes',     label: 'Docs Pendentes'  },
+      { key: 'obs',               label: 'Obs'             },
+      { key: 'uid',               label: 'UID'             },
+    ];
+
+    const rows = records.map(r => {
+      const row = {};
+      colunas.forEach(c => {
+        let v = r[c.key];
+        if (Array.isArray(v)) v = v.join(', ');
+        row[c.label] = (v === undefined || v === null) ? '' : v;
+      });
+      return row;
+    });
+
+    const ws = XLSX.utils.json_to_sheet(rows, { header: colunas.map(c => c.label) });
+
+    // Largura das colunas
+    ws['!cols'] = colunas.map(c => ({ wch: Math.max(c.label.length + 2, 14) }));
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Contratos');
+
+    const now = new Date().toLocaleDateString('pt-BR').replace(/\//g, '-');
+    XLSX.writeFile(wb, `backup-contratos-${now}.xlsx`);
+
+    document.getElementById('progress').style.width = '100%';
+    document.getElementById('status').textContent = `Exportado — ${records.length} registros.`;
+    log(`Backup gerado com ${records.length} registros → backup-contratos-${now}.xlsx`, 'ok');
+  } catch(e) {
+    log('Erro ao exportar: ' + e.message, 'err');
+  }
+}
+
+// ── Renumerar registros ────────────────────────────────────────
+async function renumerar() {
+  if (!confirm('Isso vai atribuir um número sequencial (campo "numero") a TODOS os registros,\nordenados do mais antigo ao mais recente (campo "data").\n\nContinuar?')) return;
+
+  log('Carregando todos os registros...', 'inf');
+  const snap = await db.collection('contratos').get();
+  if (snap.empty) { log('Nenhum registro encontrado.', 'warn'); return; }
+
+  // Ordena por data (dd/mm/yyyy → yyyy-mm-dd para comparação) e uid como desempate
+  function toISO(dmy) {
+    if (!dmy) return '';
+    const p = dmy.split('/');
+    return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : dmy;
+  }
+
+  const docs = snap.docs.map(d => ({ ref: d.ref, data: d.data() }));
+  docs.sort((a, b) => {
+    const da = toISO(a.data.data), db2 = toISO(b.data.data);
+    if (da < db2) return -1;
+    if (da > db2) return 1;
+    return (a.data.uid || '').localeCompare(b.data.uid || '');
+  });
+
+  log(`${docs.length} registros encontrados. Iniciando renumeração...`, 'inf');
+  document.getElementById('progress').style.width = '0%';
+
+  const BATCH_SIZE = 400; // Firestore batch limit = 500 writes
+  let num = 1;
+  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    const batch = db.batch();
+    const slice = docs.slice(i, i + BATCH_SIZE);
+    for (const item of slice) {
+      batch.update(item.ref, { numero: num++ });
+    }
+    await batch.commit();
+    const pct = Math.round((Math.min(i + BATCH_SIZE, docs.length) / docs.length) * 100);
+    document.getElementById('progress').style.width = pct + '%';
+    document.getElementById('status').textContent = `Renumerados: ${Math.min(i + BATCH_SIZE, docs.length)} / ${docs.length}`;
+    log(`Lote salvo: registros ${i + 1}–${Math.min(i + BATCH_SIZE, docs.length)}`, 'ok');
+    if (i + BATCH_SIZE < docs.length) await sleep(300);
+  }
+
+  log('─────────────────────────', 'inf');
+  log(`Renumeração concluída! ${docs.length} registros numerados de 1 a ${docs.length}.`, 'ok');
+  document.getElementById('status').textContent = `Concluído — ${docs.length} registros renumerados.`;
+}
 </script>
 </body>
 </html>
