@@ -94,6 +94,19 @@ function refreshAuthUI(){
   }
 }
 
+function translateAuthError(code){
+  const map={
+    'auth/invalid-email':          'Email inválido.',
+    'auth/user-not-found':         'Usuário não encontrado.',
+    'auth/wrong-password':         'Senha incorreta.',
+    'auth/invalid-credential':     'Email ou senha incorretos.',
+    'auth/too-many-requests':      'Muitas tentativas. Aguarde alguns minutos e tente novamente.',
+    'auth/user-disabled':          'Esta conta está desativada.',
+    'auth/network-request-failed': 'Falha de rede. Verifique sua conexão.',
+  };
+  return map[code] || 'Falha no login. Tente novamente.';
+}
+
 async function loginFirebase(){
   const email=(document.getElementById('auth-email').value||'').trim();
   const password=document.getElementById('auth-password').value||'';
@@ -101,11 +114,16 @@ async function loginFirebase(){
     setAuthOverlay(true,'Informe email e senha.');
     return;
   }
+  const btn=document.getElementById('auth-login-btn');
+  btn.disabled=true;
+  btn.textContent='Entrando…';
   try{
     await fbAuth.signInWithEmailAndPassword(email,password);
   }catch(e){
-    const msg=(e && e.message)?e.message:'Falha no login.';
+    const msg=translateAuthError(e && e.code);
     setAuthOverlay(true,msg);
+    btn.disabled=false;
+    btn.textContent='Entrar';
   }
 }
 
