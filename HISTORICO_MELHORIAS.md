@@ -190,3 +190,192 @@ escritorio/
 - [x] `.gitignore` para excluir arquivos desnecessários do repositório
 - [ ] Perfis de acesso mais refinados no Firebase Auth (ex.: somente leitura vs. admin)
 - [x] Testes básicos de regressão
+
+---
+
+## Fase 5 — Paridade Visual com Versão Final (03/05/2026)
+
+### Objetivo
+Alinhar `OB_Dashboard_Rede.html` + `dashboard.js` + `dashboard.css` à versão de referência
+`05. DASHBOARD/OB_Dashboard_2026-04-30 versão final.html`, preservando toda a infraestrutura
+Firebase/Auth/CSP/sync já existente.
+
+### Mudanças em `scripts/dashboard.js`
+
+#### Rótulos de seções corrigidos
+| Antes | Depois |
+|---|---|
+| `"Advogado × Mês · Resumo"` | `"Advogado × Mês · Resumo Executivo"` |
+| `"Contratos por Advogado - por Mês"` | `"Contratos Assinados por Advogado — por Mês"` |
+| `"Tempo Médio no Comercial"` | `"Tempo Médio no Comercial — Permanência da Pasta"` |
+
+#### KPIs do dashboard alinhados à versão final
+- Conjunto final: **Total Contratos, Em Andamento, Concluídos, Variação, Tempo Médio**
+- Adicionado helper `isDoneRecord()` para calcular status concluído
+
+#### Typos corrigidos
+- `"Área Líer"` → `"Área Líder"`
+- `"Advogado Líer"` → `"Advogado Líder"`
+
+#### Linguagem "Contrato" → "Registro"
+- Modal: `"Novo/Editar Contrato"` → `"Novo/Editar Registro"`
+- Mensagens de exclusão: `"contrato"` → `"registro"`
+- Contador de registros: `"(n)"` → `"— n registros"`
+
+#### Widgets dinâmicos do dashboard
+- Contêiner de widgets com ordenação configurável pelo usuário
+- Persistência da ordem em `localStorage`
+- Widget de **Tempo Médio no Comercial** adicionado
+
+#### Cards da aba Registros migrados para estrutura final
+- `.reg-hdr` com grid header: `.reg-cli`, `.pdots`, `.reg-meta`, badges, `.reg-btn`
+- `.reg-panel` expansível com `.panel-body`
+- `.etapa-bar` com botões `.eb`
+- `.dg` grade de datas com campos `.ifield`
+- `.dur-strip` / `.dur-grid` para cálculo de duração
+- `.docs-sel` com `.doc-chip.sel` (substituiu `.pendente`)
+- `.pfooter` com `.pstatus` e `.pacts`
+- `toggleRegCard()` atualizado para novos IDs de painel
+- doc-chip toggle: classe `pendente` → `sel`
+
+#### KPI cards superiores da aba Registros removidos
+- Função `renderRegKpis()` removida
+- Chamada de `renderRegKpis()` removida
+
+### Mudanças em `OB_Dashboard_Rede.html`
+
+- `#sync-bar` movido do topo (após o header) para o **rodapé** da página (antes dos modais), dentro de `#app`
+- `<div class="kpi-row" id="reg-kpi-row">` removido da view `#view-reg`
+- Placeholder do campo de busca: `""` → `"Buscar..."`
+- Título padrão do modal: `Novo Registro`
+
+### Mudanças em `styles/dashboard.css`
+
+#### Barra de sync convertida para rodapé
+- `.sync-bar`: `position:relative`, `border-top` (em vez de `border`), sem `margin-bottom`
+- `#app`: `padding-bottom` aumentado para acomodar a barra de rodapé
+
+#### Cards do dashboard compactados
+- `.kpi-val`: font-size `38px` → `30px`; `.kpi`: padding `18px` → `14px`
+- `.card`: padding reduzido; `.ct`: `margin-bottom` reduzido
+- `.mc-n`: font-size `46px` → `36px`, padding ajustado
+- `.pr` (foto rank): gaps menores; `.av` `46px` → `40px`; `.pr-n` font-size `26px` → `21px`
+
+#### Cards da aba Registros ajustados ao tamanho da versão final
+- `.reg-hdr`: padding e gap reduzidos
+- `.reg-cli`: font-size `13px`
+- `.reg-btn`: tamanho reduzido
+- `.panel-body`: padding reduzido
+- `.pfooter`: padding reduzido
+- Regra `#view-reg .kpi-row` removida (grid de 4 colunas que não existe mais)
+
+#### Alturas dos canvas de gráficos ajustadas
+- `evolChart`: `210px`
+- `advChart`: `240px` → `220px`
+- Donuts: `170px`
+
+---
+
+## Fase 6 — Consolidação de Dados e Melhorias de UX (01–03/05/2026)
+
+### 6.1 Consolidação e importação de dados para o Firestore
+
+#### Problema
+O Firestore continha apenas 68 registros (fonte: `ob_data.json`), enquanto 6 arquivos HTML diferentes cada um embutia datasets maiores (até 182 registros), gerados por usuários distintos ao longo do tempo.
+
+#### O que foi feito
+
+**Exportação individual por HTML (PowerShell)**
+- Extraído o array `SEED_DATA` de cada um dos 6 arquivos HTML
+- Gerado um CSV por arquivo na pasta `05. DASHBOARD/exports_csv_por_html/`:
+
+| Arquivo CSV | Registros |
+|---|---|
+| `OB_Dashboard_2026-04-27.csv` | 73 |
+| `OB_Dashboard_2026-04-28_1_somente_dados_mês_março_e_abril.csv` | 104 |
+| `OB_Dashboard_2026-04-30.csv` | 182 |
+| `OB_Dashboard_2026-04-30_versão_final.csv` | 145 |
+| `OB_Dashboard_ATUALIZADO_4.csv` | 181 |
+| `OB_Dashboard_Rede.csv` | 68 |
+
+**Agrupamento**
+- Todos os CSVs concatenados em `00_AGRUPADO_TODOS_CSVS.csv` (734 linhas, coluna `origem_csv` identificando a fonte)
+- Delimitador `;` para compatibilidade com Excel BR
+
+**Merge / deduplicação (`merge_dedup.ps1`)**
+- Agrupamento por `uid + data + cliente`
+- Campos com conflito entre fontes: unidos com ` | `
+- Coluna `origem_csv`: fontes listadas separadas por ` | `
+- Coluna `n_fontes`: quantidade de arquivos que contribuíram para o registro
+- Resultado: **498 registros únicos** em `00_MESCLADO_DEDUP_v2.csv`
+
+> **Lição aprendida (PowerShell encoding):**  
+> `Get-Content` e `Import-Csv -Encoding UTF8` corrompem acentos.  
+> Solução: `[System.IO.File]::ReadAllBytes()` + `[System.Text.Encoding]::UTF8.GetString()`.  
+> Para gravação com BOM (compatibilidade Excel): `New-Object System.Text.UTF8Encoding $true`.
+
+**Conversão CSV → JSON (`csv_para_json.ps1`)**
+- Campos excluídos do JSON: `origem_csv`, `n_fontes` (metadados do merge)
+- Campo `etapa` convertido para inteiro
+- Campo `docsPendentes` inicializado como array vazio `[]`
+- Gerado `importar_firestore.json` (331 KB, 498 registros)
+
+**Importação via `scripts/import-firestore.html`**
+- Login com Firebase Auth
+- Upload do `importar_firestore.json`
+- Opção "Pular registros que já existem" ativada por padrão
+- 498 registros importados para a coleção `contratos` no Firestore
+
+---
+
+### 6.2 Remoção da aba Contratos da navegação
+
+#### Motivo
+A aba **Contratos** (tabela paginada) e a aba **Registros** (cards com pipeline) exibiam essencialmente os mesmos dados. Manter as duas causava redundância e confusão.
+
+#### O que foi feito — `OB_Dashboard_Rede.html`
+- Removido o botão `<button id="tab-ct" data-view="ct">Contratos</button>` da barra de navegação
+- A `view-ct` (tabela) permanece no HTML para eventuais usos internos, mas não é mais acessível pelo menu
+
+---
+
+### 6.3 Ícones nas abas de navegação
+
+Adicionados ícones nas abas para melhor identidade visual:
+
+| Aba | Antes | Depois |
+|---|---|---|
+| Dashboard | `Dashboard` | `📊 Dashboard` (`&#128202;`) |
+| Registros | `📁 Registros` | sem mudança |
+| Configurações | `Configurações` | `⚙ Configurações` (`&#9881;`) |
+
+---
+
+### 6.4 Paginação na aba Registros
+
+#### Problema
+Com 498 registros no Firestore, a aba Registros renderizava todos os cards de uma só vez, tornando a página lenta e pesada.
+
+#### O que foi feito
+
+**`OB_Dashboard_Rede.html`**
+- Adicionada barra de paginação abaixo de `#reg-list`:
+  ```html
+  <div class="pag">
+    <div class="pag-info" id="reg-pag-info"></div>
+    <div class="pag-btns" id="reg-pag-btns"></div>
+  </div>
+  ```
+
+**`scripts/dashboard.js`**
+- Estado de página: `let regPg=1`
+- Tamanho de página: `const REG_PG=12`
+- `renderReg()` atualizada para fatiar a lista: `list.slice((regPg-1)*REG_PG, regPg*REG_PG)`
+- Botões de navegação gerados dinamicamente com `data-reg-page`, reutilizando estilos `.pb2` já existentes
+- Reset para página 1 ao aplicar qualquer filtro (busca, mês, advogado, etapa) ou limpar filtros
+- Função `goRegPg(p)` para navegar entre páginas via event delegation em `#reg-pag-btns`
+
+#### Resultado
+- Apenas 12 cards renderizados por vez (em vez de 498)
+- Filtros continuam funcionando normalmente, reiniciando na página 1
+- Ações dos cards (salvar, excluir, etapa, docs) preservadas sem alteração
