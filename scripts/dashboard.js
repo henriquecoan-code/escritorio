@@ -998,8 +998,8 @@ function buildRegCard(rec){
         <span class="reg-meta">${escHtml(area||'—')}${rec.adv?` · ${escHtml(rec.adv)}`:''}</span>
       </div>
     </div>
+    <div style="font-size:11px;color:var(--t3)">${escHtml(rec.data||'—')}</div>
     <div>${regStageBadge(etapa)}</div>
-    <div style="font-size:11px;color:var(--t3)">${escHtml(rec.mes||'—')}</div>
     <div>${signed?'<span class="bx bgr">✍ Assinado</span>':'<span class="bx bm">Pendente</span>'}</div>
     <div>${docsPend.length>0?`<span class="bx bro">📎 ${docsPend.length}</span>`:'<span style="font-size:10px;color:var(--t3)">docs ok</span>'}</div>
     <div>${regDurBadge(rec)}</div>
