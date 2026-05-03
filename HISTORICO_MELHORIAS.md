@@ -173,13 +173,17 @@ Para adicionar mais admins no futuro, basta adicionar mais UIDs ao mesmo array.
 
 ```
 escritorio/
+├── index.html               # Redirect para OB_Dashboard_Rede.html
 ├── OB_Dashboard_Rede.html   # Shell HTML + CSP
-├── firebase-config.js       # Configuração Firebase (público por design)
+├── firebase-config.js       # Configuração Firebase local (no .gitignore)
+├── firebase-config.public.js# Configuração Firebase pública
+├── firebase.json            # Configuração de hospedagem Firebase
 ├── firestore.rules          # Regras de segurança Firestore
 ├── styles/
 │   └── dashboard.css        # Todo o CSS
 └── scripts/
-    └── dashboard.js         # Toda a lógica da aplicação
+    ├── dashboard.js         # Toda a lógica da aplicação
+    └── import-firestore.html# Utilitário de importação de dados (uso pontual)
 ```
 
 ---
@@ -190,6 +194,29 @@ escritorio/
 - [x] `.gitignore` para excluir arquivos desnecessários do repositório
 - [ ] Perfis de acesso mais refinados no Firebase Auth (ex.: somente leitura vs. admin)
 - [x] Testes básicos de regressão
+
+---
+
+## Fase 7 — Limpeza do Repositório (03/05/2026)
+
+### Objetivo
+Remover do repositório todos os arquivos que não são utilizados pelo site publicado no GitHub Pages / Firebase Hosting.
+
+### O que foi removido
+
+| Arquivo/Pasta | Motivo |
+|---|---|
+| `05. DASHBOARD/` *(pasta inteira)* | Versões antigas do dashboard, dados CSV/JSON locais, servidor Python (`OB_Server.py`) — arquivos de trabalho/histórico sem uso no site |
+| `tests/regression.test.mjs` | Arquivo de testes unitários — não faz parte da build publicada |
+| `tests/` *(pasta vazia)* | Removida após exclusão do arquivo de testes |
+
+### Mantidos intencionalmente
+
+| Arquivo | Motivo |
+|---|---|
+| `scripts/import-firestore.html` | Utilitário de importação de dados ainda em uso pontual |
+| `firebase-config.js` | Configuração local (já ignorada pelo `.gitignore` e pelo `firebase.json`) |
+| `HISTORICO_MELHORIAS.md` e `README.md` | Documentação — ignoradas pelo `firebase.json` na hospedagem |
 
 ---
 
