@@ -812,7 +812,8 @@ function renderTbl(){
   });
   const total=rows.length,pages=Math.ceil(total/PG)||1;
   pg=Math.min(pg,pages);const slice=rows.slice((pg-1)*PG,pg*PG);
-  document.getElementById('ct-count').textContent=`- ${total} registro${total!==1?'s':''}`;
+  const ctCountEl=document.getElementById('ct-count');
+  if(ctCountEl) ctCountEl.textContent=`- ${total} registro${total!==1?'s':''}`;
   document.querySelectorAll('.ctbl th[data-col]').forEach(th=>{
     const c=th.dataset.col;th.classList.toggle('sorted',c===sortCol);
     th.textContent=th.textContent.replace(/ (\u2191|\u2193|\u2195)$/,'')+(c===sortCol?(sortDir===1?' ↑':' ↓'):' ↕');
@@ -821,7 +822,9 @@ function renderTbl(){
   const oB=o=>o?`<span class="bx bb">${escHtml(o)}</span>`:`<span class="bx bm">--</span>`;
   const sB=s=>{const c=s==='Ativo'?'bgreen':s==='Encerrado'?'brose':'bamber';return`<span class="bx ${c}">${escHtml(s||'Ativo')}</span>`;};
   const aB=a=>a?`<span class="bx bb" style="max-width:140px;display:inline-block;overflow:hidden;text-overflow:ellipsis" title="${escAttr(a)}">${escHtml(a)}</span>`:`<span class="bx bm">--</span>`;
-  document.getElementById('ctbody').innerHTML=slice.map(r=>`
+  const ctbodyEl=document.getElementById('ctbody');
+  if(!ctbodyEl) return;
+  ctbodyEl.innerHTML=slice.map(r=>`
     <tr data-open-uid="${escAttr(r.uid)}">
       <td>${escHtml(r.data||'--')}</td><td class="cl" style="max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${escAttr(r.cliente||'')}">${escHtml(r.cliente||'')}</td>
       <td>${escHtml(r.mes||'')}</td><td>${r.area?escHtml(r.area):'<span style="color:var(--t3)">--</span>'}</td>
@@ -833,16 +836,17 @@ function renderTbl(){
         <button class="rb del" data-action="delete" data-uid="${escAttr(r.uid)}" title="Excluir">&#128465;</button>
       </div></td>
     </tr>`).join('');
-  document.getElementById('pag-info').textContent=`${total} contrato${total!==1?'s':''} · Página ${pg} de ${pages}`;
+  const pagInfoEl=document.getElementById('pag-info');
+  if(pagInfoEl) pagInfoEl.textContent=`${total} contrato${total!==1?'s':''} · Página ${pg} de ${pages}`;
   const pb=document.getElementById('pag-btns');
-  if(pages<=1){pb.innerHTML='';return;}
+  if(!pb||pages<=1){if(pb) pb.innerHTML='';return;}
   let h=`<button class="pb2" data-page="${pg-1}" ${pg===1?'disabled':''}>&lsaquo;</button>`;
   for(let i=1;i<=pages;i++){
     if(i===1||i===pages||Math.abs(i-pg)<=2)h+=`<button class="pb2 ${i===pg?'on':''}" data-page="${i}">${i}</button>`;
     else if(Math.abs(i-pg)===3)h+=`<span style="color:var(--t3);padding:0 3px">...</span>`;
   }
   h+=`<button class="pb2" data-page="${pg+1}" ${pg===pages?'disabled':''}>&rsaquo;</button>`;
-  pb.innerHTML=h;
+  if(pb) pb.innerHTML=h;
 }
 function sortBy(c){sortCol===c?sortDir*=-1:(sortCol=c,sortDir=1);pg=1;renderTbl();}
 function goPg(p){pg=p;renderTbl();}
