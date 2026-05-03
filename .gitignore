@@ -1,5 +1,6 @@
 # Firebase local config
 firebase-config.js
+firebase-config.public.js
 
 # Node / tests
 node_modules/
