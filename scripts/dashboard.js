@@ -901,6 +901,10 @@ function overlayBg(e){if(e.target===e.currentTarget)closeM();}
 async function saveC(){
   const cli=document.getElementById('m-cliente').value.trim();
   if(!cli){toast('Informe o nome do cliente.','err');document.getElementById('m-cliente').focus();return;}
+  const dataVal=document.getElementById('m-data').value.trim();
+  if(!dataVal){toast('Informe a data do registro.','err');document.getElementById('m-data').focus();return;}
+  const advVal=document.getElementById('m-adv').value;
+  if(!advVal){toast('Selecione o advogado responsável.','err');document.getElementById('m-adv').focus();return;}
   // Item 6 - desabilita botao para evitar duplo clique
   const saveBtn=document.getElementById('save-contract-btn');
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Salvando...';}
