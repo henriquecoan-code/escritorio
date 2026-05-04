@@ -197,6 +197,60 @@ escritorio/
 
 ---
 
+## Recomendações Futuras (04/05/2026)
+
+As itens abaixo foram identificados na análise técnica do projeto e registrados para implementação futura, quando o controle de acesso for formalizado.
+
+### Gestão de Usuários (contexto atual)
+
+Por enquanto, usuários são adicionados manualmente no Firestore via painel Firebase Console. O grupo de acesso é isolado e controlado diretamente pelo array `adminUids` em `meta/security`. Firebase Auth foi configurado mas não há diferenciação de perfis dentro do app — todos os usuários autenticados têm o mesmo nível de acesso na interface.
+
+### Firestore Rules — Restrições de update/delete para admins
+
+Atualmente `update` e `delete` da coleção `contratos` permitem qualquer usuário autenticado. Quando o controle de perfis for necessário, as regras devem evoluir para:
+
+```javascript
+function isAdmin() {
+  return signedIn() &&
+    request.auth.uid in get(/databases/$(database)/documents/meta/security).data.adminUids;
+}
+
+match /contratos/{docId} {
+  allow read:   if signedIn();
+  allow create: if signedIn() && validContrato(request.resource.data);
+  allow update: if isAdmin();
+  allow delete: if isAdmin();
+}
+```
+
+Obs: leitura do documento `meta/security` dentro da regra tem custo de 1 leitura adicional por operação — aceitável para operações de escrita, mas deve ser avaliado se for aplicado a leituras também.
+
+### Testes Firestore Rules — Cobertura de admin
+
+Quando as regras acima forem implementadas, adicionar os seguintes casos de teste em `tests/firestore.rules.test.mjs`:
+
+- Deve **negar** `delete` para usuário autenticado sem permissão de admin
+- Deve **permitir** `delete` para usuário com UID em `adminUids`
+- Deve **negar** `update` para não-admin
+- Deve **permitir** `update` para admin
+- Validação de tipo do campo `etapa` (deve ser inteiro 1–5)
+- Validação de tamanho de campos string (ex: `cliente` max 200 chars)
+- Campo `uid` imutável após criação (`request.resource.data.uid == resource.data.uid`)
+
+### Testes E2E — Fluxos adicionais
+
+Quando o fluxo de autenticação for estabilizado, adicionar em `tests/e2e/smoke.spec.js`:
+
+- Login e logout com credenciais de teste
+- Criar novo registro via modal e verificar aparição no painel
+- Editar um registro existente e confirmar a persistência
+- Excluir um registro com confirmação
+- Filtrar por advogado e verificar resultado
+- Busca textual retorna resultados esperados
+- Paginação avança e retrocede corretamente
+
+---
+
 ## Fase 7 — Limpeza do Repositório (03/05/2026)
 
 ### Objetivo

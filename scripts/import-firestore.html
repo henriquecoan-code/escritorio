@@ -89,15 +89,37 @@ function log(msg, cls) {
 }
 
 // ── Auth ───────────────────────────────────────────────────────
-auth.onAuthStateChanged(user => {
+auth.onAuthStateChanged(async user => {
   const st = document.getElementById('userStatus');
   if (user) {
-    st.textContent = '✓ ' + user.email;
-    st.style.color = '#2ecc71';
+    // Habilita ações básicas para qualquer autenticado
     document.getElementById('btnExport').disabled = false;
     document.getElementById('btnImport').disabled = false;
-    document.getElementById('btnClear').disabled  = false;
-    document.getElementById('btnRenum').disabled  = false;
+
+    // Verifica se é admin (UID em meta/security.adminUids)
+    let isAdmin = false;
+    try {
+      const metaSnap = await db.collection('meta').doc('security').get();
+      if (metaSnap.exists) {
+        const adminUids = metaSnap.data().adminUids || [];
+        isAdmin = adminUids.includes(user.uid);
+      }
+    } catch(e) {
+      log('Aviso: não foi possível verificar permissões de admin — ' + e.message, 'warn');
+    }
+
+    if (isAdmin) {
+      st.textContent = '✓ ' + user.email + ' (admin)';
+      st.style.color = '#2ecc71';
+      document.getElementById('btnClear').disabled = false;
+      document.getElementById('btnRenum').disabled = false;
+    } else {
+      st.textContent = '✓ ' + user.email;
+      st.style.color = '#f39c12';
+      document.getElementById('btnClear').disabled = true;
+      document.getElementById('btnRenum').disabled = true;
+      log('Acesso limitado: Renumerar e Limpar coleção exigem permissão de admin.', 'warn');
+    }
   } else {
     st.textContent = 'Não autenticado';
     st.style.color = '#e74c3c';
