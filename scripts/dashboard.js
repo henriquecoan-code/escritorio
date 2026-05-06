@@ -665,9 +665,24 @@ function renderDash(){
   const totMes=allMeses.map(m=>DB.filter(r=>r.mes===m).length);
   document.getElementById('period-chip').textContent=isF?activeMonth:allMeses.join(' · ')||'2026';
   document.getElementById('month-bar-info').textContent=isF?`${total} contrato${total!==1?'s':''} em ${activeMonth}`:`${total} contratos no total`;
-  const prevIdx=isF?allMeses.indexOf(activeMonth)-1:allMeses.length-2;
-  const prevTot=prevIdx>=0?DB.filter(r=>r.mes===allMeses[prevIdx]).length:null;
-  const delta=prevTot!=null&&prevTot>0?((total-prevTot)/prevTot*100).toFixed(0):null;
+  
+  // Calcula variação corretamente
+  let delta=null;
+  if(isF){
+    // Se está filtrando por um mês específico, compara com o mês anterior
+    const prevIdx=allMeses.indexOf(activeMonth)-1;
+    const prevTot=prevIdx>=0?DB.filter(r=>r.mes===allMeses[prevIdx]).length:null;
+    delta=prevTot!=null&&prevTot>0?((total-prevTot)/prevTot*100).toFixed(0):null;
+  }else{
+    // Se está vendo todos os meses, compara o último mês com o penúltimo
+    if(allMeses.length>=2){
+      const currIdx=allMeses.length-1;
+      const prevIdx=currIdx-1;
+      const currMesVal=DB.filter(r=>r.mes===allMeses[currIdx]).length;
+      const prevMesVal=DB.filter(r=>r.mes===allMeses[prevIdx]).length;
+      delta=prevMesVal>0?((currMesVal-prevMesVal)/prevMesVal*100).toFixed(0):null;
+    }
+  }
   const emAndamento=view.filter(r=>!isDoneRecord(r)).length;
   const concluidos=view.filter(r=>isDoneRecord(r)).length;
   const durEntrega=view.map(r=>diffDays(r.dtChegada,r.dtEntrega)).filter(v=>v!=null&&v>=0);
