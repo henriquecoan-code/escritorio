@@ -6,6 +6,7 @@
   "scripts": {
     "serve": "python3 -m http.server 8000",
     "test:e2e": "playwright test",
+    "test:e2e:real": "playwright test tests/e2e/real-flow.spec.js",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run tests/firestore.rules.test.mjs\"",
     "test:security": "echo Rode o comando do OWASP ZAP descrito no README.md"
   },
