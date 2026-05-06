@@ -331,15 +331,17 @@ function renderTempoWidget(){
   const detail=document.getElementById('tempo-detail-grid');
   if(!grid || !detail) return;
 
+  const src=getView(); // respeita filtro de mês ativo
+
   const defs=[
     {l:'Chegada → Assinatura',icon:'✍',f1:'dtChegada',f2:'dtAssinatura',ref:10,d:'Da entrada até assinar'},
-    {l:'Chegada → Docs Solic.',icon:'📋',f1:'dtChegada',f2:'dtDocs',ref:7,d:'Da entrada até solicitar docs'},
-    {l:'Chegada → Docs Rec.',icon:'📦',f1:'dtChegada',f2:'dtDocsRec',ref:15,d:'Até receber documentos'},
-    {l:'Chegada → Entrega',icon:'🏁',f1:'dtChegada',f2:'dtEntrega',ref:20,d:'Processo comercial completo'},
+    {l:'Chegada → Docs Solic.',icon:'📋',f1:'dtChegada',f2:'dtDocs',ref:14,d:'Da assinatura até solicitar docs'},
+    {l:'Chegada → Docs Rec.',icon:'📦',f1:'dtChegada',f2:'dtDocsRec',ref:21,d:'Até receber documentos'},
+    {l:'Chegada → Entrega',icon:'🏁',f1:'dtChegada',f2:'dtEntrega',ref:30,d:'Processo comercial completo'},
   ];
 
   grid.innerHTML=defs.map((tm)=>{
-    const vals=DB.map(r=>diffDays(r[tm.f1],r[tm.f2])).filter(v=>v!=null&&v>=0);
+    const vals=src.map(r=>diffDays(r[tm.f1],r[tm.f2])).filter(v=>v!=null&&v>=0);
     const a=avgArr(vals);
     const col=a==null?'var(--t3)':a<=tm.ref*.7?'var(--green)':a<=tm.ref?'var(--amber)':'var(--rose)';
     const barCol=a==null?'rgba(110,106,136,.3)':a<=tm.ref*.7?'#5EC97A':a<=tm.ref?'#F0A732':'#E8735A';
@@ -349,19 +351,19 @@ function renderTempoWidget(){
   }).join('');
 
   const extras=[
-    {l:'Assinatura → Docs',f1:'dtAssinatura',f2:'dtDocsRec',ref:10},
-    {l:'Docs → Entrega',f1:'dtDocsRec',f2:'dtEntrega',ref:5},
-    {l:'Chegada → 1º Cont.',f1:'dtChegada',f2:'dtContato',ref:3},
+    {l:'Assinatura → Solic. Docs',f1:'dtAssinatura',f2:'dtDocs',ref:7},
+    {l:'Solic. → Docs Rec.',f1:'dtDocs',f2:'dtDocsRec',ref:14},
+    {l:'Docs Rec. → Entrega',f1:'dtDocsRec',f2:'dtEntrega',ref:7},
     {l:'Envio → Assinatura',f1:'dtEnvioContrato',f2:'dtAssinatura',ref:7},
   ];
   const extraHtml=extras.map((tm)=>{
-    const vals=DB.map(r=>diffDays(r[tm.f1],r[tm.f2])).filter(v=>v!=null&&v>=0);
+    const vals=src.map(r=>diffDays(r[tm.f1],r[tm.f2])).filter(v=>v!=null&&v>=0);
     const a=avgArr(vals);
     const col=a==null?'var(--t3)':a<=tm.ref*.7?'var(--green)':a<=tm.ref?'var(--amber)':'var(--rose)';
     return `<div style="padding:9px;border:1px solid var(--b);background:var(--b2)"><div style="font-size:9px;color:var(--t3);margin-bottom:3px">${tm.l}</div><div style="font-family:Georgia,serif;font-size:20px;font-weight:300;color:${col}">${a==null?'--':a+'d'}</div><div style="font-size:9px;color:var(--t3);margin-top:2px">${vals.length} reg. · meta ≤${tm.ref}d</div></div>`;
   }).join('');
-  const concluidos=DB.filter(r=>(r.etapa||1)===5||(r.status||'').toLowerCase()==='encerrado').length;
-  detail.innerHTML=extraHtml+`<div style="padding:9px;border:1px solid var(--b);background:var(--b2)"><div style="font-size:9px;color:var(--t3);margin-bottom:3px">Pastas Concluídas</div><div style="font-family:Georgia,serif;font-size:20px;color:var(--green)">${concluidos}<span style="font-size:12px;color:var(--t3)">/${DB.length}</span></div><div style="font-size:9px;color:var(--t3);margin-top:2px">taxa ${DB.length?Math.round(concluidos/DB.length*100):0}%</div></div>`;
+  const concluidos=src.filter(r=>Number(r.etapa||0)===5||(r.status||'').toLowerCase()==='encerrado').length;
+  detail.innerHTML=extraHtml+`<div style="padding:9px;border:1px solid var(--b);background:var(--b2)"><div style="font-size:9px;color:var(--t3);margin-bottom:3px">Pastas Concluídas</div><div style="font-family:Georgia,serif;font-size:20px;color:var(--green)">${concluidos}<span style="font-size:12px;color:var(--t3)">/${src.length}</span></div><div style="font-size:9px;color:var(--t3);margin-top:2px">taxa ${src.length?Math.round(concluidos/src.length*100):0}%</div></div>`;
 }
 
 function bindStaticEvents(){
@@ -612,7 +614,7 @@ const cntM=(d,m,f,v)=>d.filter(r=>r.mes===m&&r[f]===v).length;
 const fmtDate=iso=>iso?iso.split('-').reverse().join('/'):'';
 const isoDate=dmy=>{const p=dmy.split('/');return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:'';};
 const dateToSort=dmy=>{const p=(dmy||'').split('/');return p.length===3?`${p[2]}${p[1]}${p[0]}`:'';};
-const isDoneRecord=(r)=>(r.etapa||1)===5||(String(r.status||'').toLowerCase()==='encerrado');
+const isDoneRecord=(r)=>Number(r.etapa||0)===5||(String(r.status||'').toLowerCase()==='encerrado');
 
 function firebaseErrLabel(e){
   const code=String((e&&e.code)||'').toLowerCase();
@@ -685,29 +687,41 @@ function renderDash(){
   }
   const emAndamento=view.filter(r=>!isDoneRecord(r)).length;
   const concluidos=view.filter(r=>isDoneRecord(r)).length;
+  const assinados=view.filter(r=>r.dtAssinatura).length;
   const durEntrega=view.map(r=>diffDays(r.dtChegada,r.dtEntrega)).filter(v=>v!=null&&v>=0);
   const tempoMedio=avgArr(durEntrega);
   const topArea=AREAS.reduce((a,b)=>cnt(view,'area',a)>=cnt(view,'area',b)?a:b,AREAS[0]);
+  const pctAssin=total?Math.round(assinados/total*100):0;
+  const pctAnd=total?Math.round(emAndamento/total*100):0;
+  const pctConc=total?Math.round(concluidos/total*100):0;
   const kpis=[
-    {l:isF?activeMonth:'Total Contratos',v:total,s:isF?`de ${DB.length} total`:'todos os meses'},
-    {l:'Em Andamento',v:emAndamento,s:'pastas em aberto'},
-    {l:'Concluídos',v:concluidos,s:'entregues ao advogado'},
-    {l:'Variação',v:delta!=null?(+delta>0?'+':'')+delta+'%':'--',s:'vs mês anterior',sm:true},
-    {l:'Tempo Médio',v:tempoMedio!=null?`${tempoMedio}d`:'--',s:'chegada → entrega',sm:true},
+    {l:'Contratos Assinados',v:assinados,pct:pctAssin+'%',s:'com assinatura'},
+    {l:'Em Andamento',v:emAndamento,pct:pctAnd+'%',s:'pastas em aberto'},
+    {l:'Concluídos',v:concluidos,pct:pctConc+'%',s:'entregues ao advogado'},
+    {l:'Variação',v:delta!=null?(+delta>0?'+':'')+delta+'%':'\u2014',s:'vs mês anterior',sm:true},
+    {l:'Tempo Médio',v:tempoMedio!=null?`${tempoMedio}d`:'--',s:'chegada \u2192 entrega',sm:true,bl:true},
   ];
-  document.getElementById('kpi-row').innerHTML=kpis.map((k,i)=>`
-    <div class="kpi fu" style="animation-delay:${i*.05}s">
-      <div class="kpi-lbl">${k.l}</div><div class="kpi-val ${k.sm?'sm':''}">${k.v}</div><div class="kpi-sub">${k.s}</div>
+  document.getElementById('kpi-row').innerHTML=kpis.map(k=>`
+    <div class="kpi">
+      <div class="kpi-l">${k.l}</div>
+      <div class="kpi-top"><div class="kpi-v${k.sm?' sm':''}${k.bl?' bl':''}">${k.v}</div>${k.pct?`<div class="kpi-pct">${k.pct}</div>`:''}</div>
+      <div class="kpi-s">${k.s}</div>
     </div>`).join('');
   // Month compare
   const mc=document.getElementById('mc-wrap');mc.innerHTML='';
   allMeses.forEach((m,i)=>{
-    const v=DB.filter(r=>r.mes===m).length,prev=i>0?DB.filter(r=>r.mes===allMeses[i-1]).length:null;
-    const d=prev!=null?((v-prev)/(prev||1)*100).toFixed(0):null;
-    const tag=d!=null?`<div class="mc-d ${+d>=0?'up':'dn'}">${+d>=0?'+':'-'} ${Math.abs(d)}%</div>`:'';
-    mc.innerHTML+=`<div class="mc ${activeMonth===m?'active-month':''}" data-month="${escAttr(m)}">
-      <div class="mc-m">${m}</div><div class="mc-n">${v}</div>
-      <div class="mc-s">${activeMonth===m?'<strong style="color:var(--g)">selecionado</strong>':'contratos'}</div>${tag}</div>`;
+    const receb=DB.filter(r=>r.mes===m).length;
+    const assinM=DB.filter(r=>r.mes===m&&r.dtAssinatura).length;
+    const pctM=receb?Math.round(assinM/receb*100):0;
+    const prev=i>0?DB.filter(r=>r.mes===allMeses[i-1]).length:null;
+    const d=prev!=null?((receb-prev)/(prev||1)*100).toFixed(0):null;
+    const tag=d!=null?`<div class="mc-d ${+d>=0?'up':'dn'}">${+d>=0?'▲':'▼'} ${Math.abs(d)}%</div>`:'';
+    mc.innerHTML+=`<div class="mc ${activeMonth===m?'am':''}" data-month="${escAttr(m)}">
+      <div class="mc-m">${m}</div>
+      <div class="mc-row"><div class="mc-n">${assinM}</div><div class="mc-pct">${pctM}%</div></div>
+      <div class="mc-s">${activeMonth===m?'<strong style="color:var(--g)">selecionado</strong>':'assinados'}</div>
+      <div style="font-size:9px;color:var(--t3);margin-top:2px">${receb} recebidos</div>
+      ${tag}</div>`;
   });
   // Line
   const ec=document.getElementById('evolChart').getContext('2d');
@@ -1149,7 +1163,7 @@ window.addEventListener('resize',()=>{if(document.getElementById('view-dash').cl
    MÓDULO REGISTROS
    ═══════════════════════════════════════════════════════ */
 
-const ETAPA_LABELS = ['Primeiro Contato','Envio Contrato','Assinatura','Documentos','Entregue'];
+const ETAPA_LABELS = ['Recebida','Negociação','Contrato','Documentação','Concluído'];
 const ETAPA_ICONS  = ['📥','📞','✍','📋','✅'];
 const DOCS_LISTA   = [
   'PPP','Atestado','Prontuário','CNIS','Laudo Médico','Receita Médica','Declaração INSS',
@@ -1161,10 +1175,18 @@ const DOCS_LISTA   = [
 /* Converte "DD/MM/AAAA" para objeto Date (ou null) */
 function parseDMY(dmy){
   if(!dmy) return null;
-  const p=dmy.split('/');
-  if(p.length!==3) return null;
-  const d=new Date(+p[2],+p[1]-1,+p[0]);
-  return isNaN(d)?null:d;
+  // aceita DD/MM/AAAA ou AAAA-MM-DD (ISO)
+  let p=dmy.split('/');
+  if(p.length===3){
+    const d=new Date(+p[2],+p[1]-1,+p[0]);
+    return isNaN(d)?null:d;
+  }
+  p=dmy.split('-');
+  if(p.length===3){
+    const d=new Date(+p[0],+p[1]-1,+p[2]);
+    return isNaN(d)?null:d;
+  }
+  return null;
 }
 /* Converte "AAAA-MM-DD" para "DD/MM/AAAA" */
 function iso2dmy(iso){if(!iso)return '';const p=iso.split('-');return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:''}
