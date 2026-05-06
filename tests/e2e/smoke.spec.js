@@ -9,6 +9,14 @@ async function disableAuthOverlay(page) {
   });
 }
 
+async function bypassAuthGuard(page) {
+  await page.evaluate(() => {
+    if (typeof window.ensureAuthenticated === 'function') {
+      window.ensureAuthenticated = () => true;
+    }
+  });
+}
+
 test('carrega a pagina principal', async ({ page, baseURL }) => {
   await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
   await expect(page).toHaveTitle(/Oliveira\s*&\s*Benedet/i);
@@ -41,6 +49,7 @@ test('sem erro de runtime no carregamento', async ({ page, baseURL }) => {
 
 test('alternancia de tema claro/escuro persiste', async ({ page, baseURL }) => {
   await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
+  await disableAuthOverlay(page);
 
   // Tema inicial: escuro (sem classe 'light' no <html>)
   const htmlEl = page.locator('html');
@@ -53,6 +62,7 @@ test('alternancia de tema claro/escuro persiste', async ({ page, baseURL }) => {
 
   // Recarrega e verifica persistência via localStorage
   await page.reload();
+  await disableAuthOverlay(page);
   await expect(htmlEl).toHaveClass(/light/);
 
   // Volta ao escuro
@@ -67,7 +77,7 @@ test('campo de busca esta visivel e aceita entrada', async ({ page, baseURL }) =
 
   await page.click('#tab-reg');
 
-  const searchInput = page.locator('#reg-search');
+  const searchInput = page.locator('#reg-srch');
   await expect(searchInput).toBeVisible();
 
   await searchInput.fill('teste busca');
@@ -84,15 +94,14 @@ test('barra de sincronizacao esta presente no rodape', async ({ page, baseURL })
 test('modal de novo registro abre e fecha', async ({ page, baseURL }) => {
   await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
   await disableAuthOverlay(page);
+  await bypassAuthGuard(page);
 
   // Abre modal
-  await page.click('#tab-reg');
-  await page.click('#btn-new-reg');
-  await expect(page.locator('#modal')).toHaveClass(/open/);
+  await page.click('#open-new-contract-btn');
+  await expect(page.locator('#overlay')).toHaveClass(/open/);
 
   // Fecha modal
-  await page.click('#modal-close');
-  const modalClass = await page.locator('#modal').getAttribute('class');
+  await page.click('#close-modal-x-btn');
+  const modalClass = await page.locator('#overlay').getAttribute('class');
   expect(modalClass ?? '').not.toContain('open');
-});
 });
