@@ -110,25 +110,57 @@
 <!-- MODAL -->
 <div class="overlay" id="overlay">
 <div class="mbox">
-  <div class="mhd"><h2 id="m-title">Novo Registro</h2><button class="mcl" id="close-modal-x-btn">&times;</button></div>
-  <input type="hidden" id="m-uid">
-  <div class="form-body">
-    <div class="form-section"><div class="form-section-title">Identificação</div>
-      <div class="frow"><div class="field"><label>Data</label><input type="date" id="m-data"></div><div class="field"><label>Mês de Referência</label><select id="m-mes"></select></div></div>
-      <div class="field"><label>Nome do Cliente <span class="req">*</span></label><input type="text" id="m-cliente" placeholder="Nome completo"></div>
+  <div class="mhd"><h2 id="m-title">Novo Registro</h2><button class="mcl" id="close-modal-x-btn">x</button></div>
+  <input type="hidden" id="m-uid" value="">
+  <div class="esel" id="m-esel">
+    <button class="esb on" data-e="1" type="button"><span class="esi">📥</span>Recebida</button>
+    <button class="esb" data-e="2" type="button"><span class="esi">📞</span>Negociação</button>
+    <button class="esb" data-e="3" type="button"><span class="esi">✍</span>Contrato</button>
+    <button class="esb" data-e="4" type="button"><span class="esi">📋</span>Documentação</button>
+    <button class="esb" data-e="5" type="button"><span class="esi">✅</span>Concluído</button>
+  </div>
+  <div class="msec">
+    <div class="mst">Identificação</div>
+    <div class="mg2">
+      <div class="field"><label>Cliente <span class="req">*</span></label><input type="text" id="m-cli" placeholder="Nome completo"></div>
+      <div class="field"><label>Advogado</label><select id="m-adv"></select></div>
+      <div class="field"><label>Área Jurídica</label><select id="m-area"></select></div>
+      <div class="field"><label>Tipo de Ação</label><select id="m-acao"></select></div>
     </div>
-    <div class="form-section"><div class="form-section-title">Classificação Jurídica</div>
-      <div class="frow"><div class="field"><label>Área Jurídica</label><select id="m-area"></select></div><div class="field"><label>Tipo de Ação</label><select id="m-acao"></select></div></div>
+  </div>
+  <div class="msec">
+    <div class="mst">Controle de Datas</div>
+    <div class="mg3" style="margin-bottom:8px">
+      <div class="field"><label>Chegada</label><input type="date" id="m-dtCheg"></div>
+      <div class="field"><label>Último Contato</label><input type="date" id="m-dtCont"></div>
+      <div class="field"><label>Envio Contrato</label><input type="date" id="m-dtEnv"></div>
+      <div class="field"><label>Assinatura</label><input type="date" id="m-dtAssin"></div>
+      <div class="field"><label>Solic. Documentos</label><input type="date" id="m-dtDocs"></div>
+      <div class="field"><label>Docs Recebidos</label><input type="date" id="m-dtDocsR"></div>
     </div>
-    <div class="form-section"><div class="form-section-title">Contrato &amp; Captação</div>
-      <div class="frow"><div class="field"><label>Tipo de Contrato</label><select id="m-tipo"></select></div><div class="field"><label>Origem do Lead</label><select id="m-orig"></select></div></div>
+    <div class="field"><label>Entrega ao Advogado</label><input type="date" id="m-dtEnt"></div>
+  </div>
+  <div class="dur-box" id="m-dur-box">
+    <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:6px">Duracoes calculadas</div>
+    <div class="dur-grid" id="m-dur-grid"></div>
+  </div>
+  <div class="ibox" id="m-ibox">
+    <div style="font-size:11px;color:var(--green);font-weight:600">Contrato assinado - preencha dados abaixo para registrar no dashboard</div>
+  </div>
+  <div class="mcsec" id="m-csec">
+    <div class="msec">
+      <div class="mst">Dados do Contrato</div>
+      <div class="mg2">
+        <div class="field"><label>Tipo de Contrato</label><select id="m-tipo"></select></div>
+        <div class="field"><label>Origem do Lead</label><select id="m-orig"></select></div>
+        <div class="field"><label>Mês de Referência</label><select id="m-mes"></select></div>
+        <div class="field"><label>Status</label><select id="m-status"></select></div>
+      </div>
     </div>
-    <div class="form-section"><div class="form-section-title">Responsável &amp; Status</div>
-      <div class="frow"><div class="field"><label>Advogado Responsável</label><select id="m-adv"></select></div><div class="field"><label>Status</label><select id="m-stat"></select></div></div>
-    </div>
-    <div class="form-section"><div class="form-section-title">Observações</div>
-      <div class="field"><textarea id="m-obs" placeholder="Notas adicionais..."></textarea></div>
-    </div>
+  </div>
+  <div class="msec">
+    <div class="mst">Observações</div>
+    <div class="field"><textarea id="m-obs" placeholder="Histórico, pendências..."></textarea></div>
   </div>
   <div class="mfoot"><button class="btn" id="cancel-modal-btn">Cancelar</button><button class="btn primary" id="save-contract-btn">Salvar</button></div>
 </div>

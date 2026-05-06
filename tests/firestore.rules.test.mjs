@@ -149,17 +149,3 @@ describe('Firestore Rules - dashboard', () => {
     await assertFails(getDoc(doc(userDb, 'outra-colecao', 'qualquer')));
   });
 });
-    );
-  });
-
-  it('bloqueia create com campo nao permitido', async () => {
-    const userDb = testEnv.authenticatedContext('user-3').firestore();
-    await assertFails(
-      setDoc(doc(userDb, 'contratos', 'bad-1'), {
-        uid: 'bad-1',
-        cliente: 'Teste',
-        hacker: true,
-      })
-    );
-  });
-});

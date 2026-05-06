@@ -33,6 +33,7 @@ let unsubContratos=null;   // unsubscribe do listener onSnapshot
 let regFilter = {srch:'', mes:'', adv:'', etapa:''};
 let regPg=1;
 const REG_PG=12;
+let mCurE=1;
 
 const WIDGET_DEFS=[
   {id:'evolucao',icon:'📈',name:'Evolução & Volume'},
@@ -385,6 +386,19 @@ function bindStaticEvents(){
   document.getElementById('close-modal-x-btn')?.addEventListener('click',closeM);
   document.getElementById('cancel-modal-btn')?.addEventListener('click',closeM);
   document.getElementById('save-contract-btn')?.addEventListener('click',saveC);
+  document.getElementById('m-esel')?.addEventListener('click',(event)=>{
+    const btn=event.target.closest('.esb[data-e]');
+    if(!btn) return;
+    setME(Number(btn.dataset.e));
+  });
+  document.getElementById('m-dtCheg')?.addEventListener('change',()=>{
+    mSyncMesFromCheg();
+    mCalcDur();
+  });
+  ['m-dtCont','m-dtEnv','m-dtDocs','m-dtDocsR','m-dtEnt'].forEach((id)=>{
+    document.getElementById(id)?.addEventListener('change',mCalcDur);
+  });
+  document.getElementById('m-dtAssin')?.addEventListener('change',mOnAssin);
   document.getElementById('del-ov')?.addEventListener('click',(event)=>{if(event.target===event.currentTarget)closeDel();});
   document.getElementById('cancel-del-btn')?.addEventListener('click',closeDel);
   document.getElementById('del-btn')?.addEventListener('click',confirmDel);
@@ -430,6 +444,27 @@ function bindStaticEvents(){
     // delete
     const delBtn=event.target.closest('[data-reg-delete]');
     if(delBtn){ askDel(delBtn.dataset.regDelete); }
+  });
+  document.getElementById('reg-list')?.addEventListener('change',(event)=>{
+    const d=event.target.closest('[data-date-field][data-uid]');
+    if(d){
+      refreshRegDurFromInputs(d.dataset.uid);
+      const st=document.getElementById(`pstatus-${d.dataset.uid}`);
+      if(st) st.textContent='Datas atualizadas — clique Salvar';
+      return;
+    }
+    const f=event.target.closest('[data-reg-field][data-uid]');
+    if(f){
+      const st=document.getElementById(`pstatus-${f.dataset.uid}`);
+      if(st) st.textContent='Campos alterados — clique Salvar';
+    }
+  });
+  document.getElementById('reg-list')?.addEventListener('input',(event)=>{
+    const t=event.target.closest('[data-reg-field][data-uid], textarea[data-uid]');
+    if(!t) return;
+    const uid=t.dataset.uid;
+    const st=document.getElementById(`pstatus-${uid}`);
+    if(st) st.textContent='Editando — não salvo';
   });
   document.getElementById('reg-pag-btns')?.addEventListener('click',(event)=>{
     const pageBtn=event.target.closest('button[data-reg-page]');
@@ -787,9 +822,14 @@ function fillSelects(){
     const el=document.getElementById(id);if(!el)return;
     el.innerHTML=(blank?[`<option value="">${blank}</option>`]:[]).concat(opts.map(o=>`<option value="${o}">${o||'-- Selecionar --'}</option>`)).join('');
   };
-  mk('m-mes',m);mk('m-area',AREAS,'-- Selecionar --');mk('m-acao',ACOES,'-- Selecionar --');
-  mk('m-tipo',TIPOS,'-- Selecionar --');mk('m-orig',ORIGENS,'-- Selecionar --');
-  mk('m-adv',ADVS,'-- Selecionar --');mk('m-stat',STATUS);
+  mk('m-mes',m);mk('m-area',AREAS,'— Selecionar —');mk('m-acao',ACOES,'— Selecionar —');
+  mk('m-tipo',TIPOS,'— Selecionar —');mk('m-orig',ORIGENS,'— Selecionar —');
+  mk('m-adv',ADVS,'— Selecionar —');
+  const st=document.getElementById('m-status');
+  if(st){
+    const opts=[...new Set(['Em andamento',...STATUS])];
+    st.innerHTML=opts.map(v=>`<option value="${escAttr(v)}">${escHtml(v)}</option>`).join('');
+  }
 }
 function fillFilters(){
   const m=[...new Set(DB.map(r=>r.mes))].sort();
@@ -870,6 +910,59 @@ function sortBy(c){sortCol===c?sortDir*=-1:(sortCol=c,sortDir=1);pg=1;renderTbl(
 function goPg(p){pg=p;renderTbl();}
 
 /* .. MODAL .. */
+function modalDaysBetween(aIso,bIso){
+  if(!aIso||!bIso) return null;
+  const a=new Date(aIso),b=new Date(bIso);
+  if(isNaN(a)||isNaN(b)) return null;
+  return Math.round((b-a)/86400000);
+}
+function setME(e){
+  mCurE=e;
+  document.querySelectorAll('.esb[data-e]').forEach((btn)=>{
+    btn.classList.toggle('on',Number(btn.dataset.e)===e);
+  });
+  document.getElementById('m-csec')?.classList.toggle('show',e>=3);
+  document.getElementById('m-ibox')?.classList.toggle('show',e>=3);
+}
+function mCalcDur(){
+  const g=(id)=>document.getElementById(id)?.value||'';
+  const pairs=[
+    {l:'Chegada→Assin.',d:modalDaysBetween(g('m-dtCheg'),g('m-dtAssin')),ref:10},
+    {l:'Chegada→Docs',d:modalDaysBetween(g('m-dtCheg'),g('m-dtDocsR')),ref:15},
+    {l:'Total',d:modalDaysBetween(g('m-dtCheg'),g('m-dtEnt')||g('m-dtDocsR')),ref:20},
+  ];
+  const valid=pairs.filter((p)=>p.d!=null&&p.d>=0);
+  const box=document.getElementById('m-dur-box');
+  const grid=document.getElementById('m-dur-grid');
+  if(!box||!grid) return;
+  if(!valid.length){
+    box.classList.remove('show');
+    grid.innerHTML='';
+    return;
+  }
+  box.classList.add('show');
+  grid.innerHTML=valid.map((p)=>{
+    const col=p.d<=p.ref*.7?'var(--green)':p.d<=p.ref?'var(--amber)':'var(--rose)';
+    return `<div class="dur-item"><div class="dur-lbl">${p.l}</div><div class="dur-val" style="color:${col}">${p.d}d</div></div>`;
+  }).join('');
+}
+function mSyncMesFromCheg(){
+  const cheg=document.getElementById('m-dtCheg')?.value||'';
+  if(!cheg) return;
+  const m=MESES_REF[new Date(cheg).getMonth()];
+  const sel=document.getElementById('m-mes');
+  if(sel&&m) sel.value=m;
+}
+function mOnAssin(){
+  const assin=document.getElementById('m-dtAssin')?.value||'';
+  if(assin&&mCurE<3) setME(3);
+  if(assin){
+    const m=MESES_REF[new Date(assin).getMonth()];
+    const sel=document.getElementById('m-mes');
+    if(sel&&m) sel.value=m;
+  }
+  mCalcDur();
+}
 function openM(editUid){
   if(!ensureAuthenticated()) return;
   isEditing=true;
@@ -877,41 +970,77 @@ function openM(editUid){
   if(editUid){
     const r=DB.find(x=>x.uid===editUid);if(!r)return;
     document.getElementById('m-title').textContent='Editar Registro';
-    document.getElementById('m-data').value=isoDate(r.dtChegada||r.data);
-    document.getElementById('m-mes').value=r.mes;document.getElementById('m-cliente').value=r.cliente;
-    document.getElementById('m-area').value=r.area||'';document.getElementById('m-acao').value=r.acao||'';
-    document.getElementById('m-tipo').value=r.tipo||'';document.getElementById('m-orig').value=r.origem||'';
-    document.getElementById('m-adv').value=r.adv||'';document.getElementById('m-stat').value=r.status||'Ativo';
+    document.getElementById('m-cli').value=r.cliente||'';
+    document.getElementById('m-adv').value=r.adv||'';
+    document.getElementById('m-area').value=r.area||'';
+    document.getElementById('m-acao').value=r.acao||'';
+    document.getElementById('m-tipo').value=r.tipo||'';
+    document.getElementById('m-orig').value=r.origem||'';
+    document.getElementById('m-mes').value=r.mes||'';
+    document.getElementById('m-status').value=r.status||'Em andamento';
+    document.getElementById('m-dtCheg').value=isoDate(r.dtChegada||r.data||'');
+    document.getElementById('m-dtCont').value=isoDate(r.dtContato||'');
+    document.getElementById('m-dtEnv').value=isoDate(r.dtEnvioContrato||'');
+    document.getElementById('m-dtAssin').value=isoDate(r.dtAssinatura||'');
+    document.getElementById('m-dtDocs').value=isoDate(r.dtDocs||'');
+    document.getElementById('m-dtDocsR').value=isoDate(r.dtDocsRec||'');
+    document.getElementById('m-dtEnt').value=isoDate(r.dtEntrega||'');
     document.getElementById('m-obs').value=r.obs||'';
+    setME(Number(r.etapa)||1);
+    mCalcDur();
   }else{
     document.getElementById('m-title').textContent='Novo Registro';
-    const meses=[...new Set(DB.map(r=>r.mes))];
-    document.getElementById('m-data').value=new Date().toISOString().split('T')[0];
-    const mesMoment=MESES_REF[new Date().getMonth()];
+    const mesMoment=MESES_REF[new Date().getMonth()]||'';
+    ['m-cli','m-obs'].forEach(id=>document.getElementById(id).value='');
+    ['m-adv','m-area','m-acao','m-tipo','m-orig'].forEach(id=>document.getElementById(id).value='');
+    ['m-dtCont','m-dtEnv','m-dtAssin','m-dtDocs','m-dtDocsR','m-dtEnt'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('m-dtCheg').value=new Date().toISOString().split('T')[0];
     document.getElementById('m-mes').value=activeMonth!=='all'?activeMonth:mesMoment;
-    ['m-cliente','m-obs'].forEach(id=>document.getElementById(id).value='');
-    ['m-area','m-acao','m-tipo','m-orig','m-adv'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('m-stat').value='Ativo';
+    document.getElementById('m-status').value='Em andamento';
+    setME(1);
+    mCalcDur();
   }
   document.getElementById('overlay').classList.add('open');
-  setTimeout(()=>document.getElementById('m-cliente').focus(),120);
+  setTimeout(()=>document.getElementById('m-cli').focus(),120);
 }
 function closeM(){isEditing=false;document.getElementById('overlay').classList.remove('open');}
 function overlayBg(e){if(e.target===e.currentTarget)closeM();}
 async function saveC(){
-  const cli=document.getElementById('m-cliente').value.trim();
-  if(!cli){toast('Informe o nome do cliente.','err');document.getElementById('m-cliente').focus();return;}
-  // Item 6 - desabilita botao para evitar duplo clique
+  const cli=document.getElementById('m-cli').value.trim();
+  if(!cli){toast('Informe o nome do cliente.','err');document.getElementById('m-cli').focus();return;}
+  const chegadaRaw=document.getElementById('m-dtCheg').value.trim();
+  if(!chegadaRaw){toast('Informe a data de chegada.','err');document.getElementById('m-dtCheg').focus();return;}
+  const advVal=document.getElementById('m-adv').value;
+  if(!advVal){toast('Selecione o advogado responsável.','err');document.getElementById('m-adv').focus();return;}
   const saveBtn=document.getElementById('save-contract-btn');
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Salvando...';}
 
-  const raw=document.getElementById('m-data').value,editUid=document.getElementById('m-uid').value;
-  const dtChegadaVal=raw?fmtDate(raw):'';
-  const obj={uid:editUid||uid(),updatedAt:Date.now(),data:dtChegadaVal,dtChegada:dtChegadaVal,cliente:cli,
-    mes:document.getElementById('m-mes').value,area:document.getElementById('m-area').value,
-    acao:document.getElementById('m-acao').value,tipo:document.getElementById('m-tipo').value,
-    origem:document.getElementById('m-orig').value,adv:document.getElementById('m-adv').value,
-    status:document.getElementById('m-stat').value,obs:document.getElementById('m-obs').value.trim()};
+  const editUid=document.getElementById('m-uid').value;
+  const dtAssinRaw=document.getElementById('m-dtAssin').value;
+  const toDMY=(id)=>{const v=document.getElementById(id)?.value||'';return v?fmtDate(v):'';};
+  const obj={
+    uid:editUid||uid(),
+    updatedAt:Date.now(),
+    cliente:cli,
+    adv:document.getElementById('m-adv').value,
+    area:document.getElementById('m-area').value,
+    acao:document.getElementById('m-acao').value,
+    tipo:document.getElementById('m-tipo').value,
+    origem:document.getElementById('m-orig').value,
+    mes:document.getElementById('m-mes').value,
+    status:document.getElementById('m-status').value,
+    obs:document.getElementById('m-obs').value.trim(),
+    etapa:String(mCurE),
+    data:fmtDate(dtAssinRaw||chegadaRaw),
+    docsPendentes:[],
+    dtChegada:toDMY('m-dtCheg'),
+    dtContato:toDMY('m-dtCont'),
+    dtEnvioContrato:toDMY('m-dtEnv'),
+    dtAssinatura:toDMY('m-dtAssin'),
+    dtDocs:toDMY('m-dtDocs'),
+    dtDocsRec:toDMY('m-dtDocsR'),
+    dtEntrega:toDMY('m-dtEnt'),
+  };
 
   let wasNew=false;
   if(editUid){
@@ -924,9 +1053,7 @@ async function saveC(){
 
   const ok=await serverSave(obj);
   if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Salvar';}
-
   if(!ok){
-    // Item 6 - reverte mudanca otimista se save falhou
     if(wasNew) DB=DB.filter(x=>x.uid!==obj.uid);
     return;
   }
@@ -1007,8 +1134,14 @@ window.addEventListener('resize',()=>{if(document.getElementById('view-dash').cl
    MÓDULO REGISTROS
    ═══════════════════════════════════════════════════════ */
 
-const ETAPA_LABELS = ['1. Primeiro Contato','2. Envio Contrato','3. Assinatura','4. Documentos','5. Entregue'];
-const DOCS_LISTA   = ['Doc. Pessoais','Procuração','Contrato','Comp. Residência','Laudos/Atestados','Doc. Prev.','Outros'];
+const ETAPA_LABELS = ['Primeiro Contato','Envio Contrato','Assinatura','Documentos','Entregue'];
+const ETAPA_ICONS  = ['📥','📞','✍','📋','✅'];
+const DOCS_LISTA   = [
+  'PPP','Atestado','Prontuário','CNIS','Laudo Médico','Receita Médica','Declaração INSS',
+  'Carteira de Trabalho','RG','CPF','Certidão de Nascimento','Certidão de Casamento',
+  'Comprovante de Residência','Boletim de Ocorrência','Declaração de IR','Holerite',
+  'Exames Complementares','Contrato de Trabalho','Outros'
+];
 
 /* Converte "DD/MM/AAAA" para objeto Date (ou null) */
 function parseDMY(dmy){
@@ -1034,6 +1167,26 @@ function calcRegDur(rec){
   return {total: total!=null?total+'d':'--', ateSign: ateSign!=null?ateSign+'d':'--'};
 }
 
+function getRegDurItems(rec){
+  const defs=[
+    {l:'Chegada→Assin.',f1:'dtChegada',f2:'dtAssinatura',ref:10},
+    {l:'Assin.→Docs',f1:'dtAssinatura',f2:'dtDocsRec',ref:7},
+    {l:'Docs→Entrega',f1:'dtDocsRec',f2:'dtEntrega',ref:5},
+  ];
+  return defs.map((d)=>{
+    const days=diffDays(rec[d.f1],rec[d.f2]);
+    if(days==null||days<0) return null;
+    return {l:d.l,d:days,ref:d.ref};
+  }).filter(Boolean);
+}
+
+function regDurGridHTML(items){
+  return items.map((it)=>{
+    const col=it.d<=it.ref*.7?'var(--green)':it.d<=it.ref?'var(--amber)':'var(--rose)';
+    return `<div class="dur-item"><div class="dur-lbl">${it.l}</div><div class="dur-val" style="color:${col}">${it.d}d</div></div>`;
+  }).join('');
+}
+
 function fillRegFilters(){
   const meses=[...new Set(DB.map(r=>r.mes))].sort((a,b)=>MESES_REF.indexOf(a)-MESES_REF.indexOf(b));
   const advs=[...new Set(DB.map(r=>r.adv).filter(Boolean))].sort();
@@ -1056,14 +1209,14 @@ function getRegView(){
 function regStageBadge(etapa){
   const e=Number(etapa)||1;
   const defs={
-    1:{c:'c1',l:'Primeiro Contato'},
-    2:{c:'c2',l:'Envio Contrato'},
-    3:{c:'c3',l:'Assinatura'},
-    4:{c:'c4',l:'Documentos'},
-    5:{c:'c5',l:'Entregue'}
+    1:{c:'c1',l:'Primeiro Contato',i:'📥'},
+    2:{c:'c2',l:'Envio Contrato',i:'📞'},
+    3:{c:'c3',l:'Assinatura',i:'✍'},
+    4:{c:'c4',l:'Documentos',i:'📋'},
+    5:{c:'c5',l:'Entregue',i:'✅'}
   };
   const d=defs[e]||defs[1];
-  return `<span class="ebx ${d.c}">${e}. ${d.l}</span>`;
+  return `<span class="ebx ${d.c}">${d.i} ${d.l}</span>`;
 }
 
 function regDurBadge(rec){
@@ -1081,22 +1234,26 @@ function buildRegCard(rec){
   const signed=Boolean(rec.dtAssinatura)||isDoneRecord(rec);
   const area=rec.area?(rec.area.length>18?`${rec.area.slice(0,17)}…`:rec.area):'';
   const docsPend=Array.isArray(rec.docsPendentes)?rec.docsPendentes:[];
+  const opt=(v,s)=>`<option value="${escAttr(v)}" ${String(s||'')===String(v)?'selected':''}>${escHtml(v)}</option>`;
+  const statusList=[...new Set(['Em andamento',...STATUS,rec.status||''])].filter(Boolean);
   const dots=[1,2,3,4,5].map((s,i)=>`<div class="pdot ${s<etapa?'dn':s===etapa?'ac':'pd'}"></div>${i<4?'<div class="pln"></div>':''}`).join('');
-  const dur=calcRegDur(rec);
+  const durItems=getRegDurItems(rec);
+  const durCalc=calcRegDur(rec);
   const dateFields=[
-    {key:'dtChegada',label:'Chegada'},
-    {key:'dtContato',label:'Contato'},
-    {key:'dtEnvioContrato',label:'Env. Contrato'},
-    {key:'dtAssinatura',label:'Assinatura'},
-    {key:'dtDocs',label:'Docs Enviados'},
-    {key:'dtDocsRec',label:'Docs Receb.'},
-    {key:'dtEntrega',label:'Entrega'},
+    {key:'dtChegada',label:'📥 Chegada'},
+    {key:'dtContato',label:'📞 Ultimo Contato'},
+    {key:'dtEnvioContrato',label:'📄 Envio Contrato'},
+    {key:'dtAssinatura',label:'✍ Assinatura'},
+    {key:'dtDocs',label:'📋 Solic. Docs'},
+    {key:'dtDocsRec',label:'📦 Docs Recebidos'},
+    {key:'dtEntrega',label:'🏁 Entrega ao Advogado'},
   ];
 
   const pipeHTML=ETAPA_LABELS.map((lbl,i)=>{
     const n=i+1;
     const cls=n===etapa?' on':'';
-    return `<button class="eb${cls}" data-set-etapa="${escAttr(rec.uid)}" data-etapa="${n}" title="${escAttr(lbl)}"><span class="ei">${n}</span>${escHtml(lbl)}</button>`;
+    const icon=ETAPA_ICONS[i]||String(n);
+    return `<button class="eb${cls}" data-set-etapa="${escAttr(rec.uid)}" data-etapa="${n}" title="${escAttr(lbl)}"><span class="ei">${icon}</span>${escHtml(lbl)}</button>`;
   }).join('');
 
   const dateHTML=dateFields.map(f=>`
@@ -1104,6 +1261,61 @@ function buildRegCard(rec){
       <label>${escHtml(f.label)}</label>
       <input class="dg-input" type="date" data-date-field="${escAttr(f.key)}" data-uid="${escAttr(rec.uid)}" value="${escAttr(dmy2iso(rec[f.key]||''))}">
     </div>`).join('');
+
+  const baseFieldsHTML=`
+    <div class="ifield">
+      <label>Cliente</label>
+      <input class="dg-input" type="text" data-reg-field="cliente" data-uid="${escAttr(rec.uid)}" value="${escAttr(rec.cliente||'')}">
+    </div>
+    <div class="ifield">
+      <label>Advogado</label>
+      <select class="dg-input" data-reg-field="adv" data-uid="${escAttr(rec.uid)}">
+        <option value="">-- Selecionar --</option>
+        ${ADVS.map(v=>opt(v,rec.adv)).join('')}
+      </select>
+    </div>
+    <div class="ifield">
+      <label>Area</label>
+      <select class="dg-input" data-reg-field="area" data-uid="${escAttr(rec.uid)}">
+        <option value="">-- Selecionar --</option>
+        ${AREAS.map(v=>opt(v,rec.area)).join('')}
+      </select>
+    </div>
+    <div class="ifield">
+      <label>Acao</label>
+      <select class="dg-input" data-reg-field="acao" data-uid="${escAttr(rec.uid)}">
+        <option value="">-- Selecionar --</option>
+        ${ACOES.map(v=>opt(v,rec.acao)).join('')}
+      </select>
+    </div>`;
+
+  const contractFieldsHTML=`
+    <div class="ifield">
+      <label>Tipo</label>
+      <select class="dg-input" data-reg-field="tipo" data-uid="${escAttr(rec.uid)}">
+        <option value="">-- Selecionar --</option>
+        ${TIPOS.map(v=>opt(v,rec.tipo)).join('')}
+      </select>
+    </div>
+    <div class="ifield">
+      <label>Origem</label>
+      <select class="dg-input" data-reg-field="origem" data-uid="${escAttr(rec.uid)}">
+        <option value="">-- Selecionar --</option>
+        ${ORIGENS.map(v=>opt(v,rec.origem)).join('')}
+      </select>
+    </div>
+    <div class="ifield">
+      <label>Mes Ref.</label>
+      <select class="dg-input" data-reg-field="mes" data-uid="${escAttr(rec.uid)}">
+        ${MESES_REF.map(v=>opt(v,rec.mes)).join('')}
+      </select>
+    </div>
+    <div class="ifield">
+      <label>Status</label>
+      <select class="dg-input" data-reg-field="status" data-uid="${escAttr(rec.uid)}">
+        ${statusList.map(v=>opt(v,rec.status)).join('')}
+      </select>
+    </div>`;
 
   const chipsHTML=DOCS_LISTA.map(doc=>{
     const pend=docsPend.includes(doc);
@@ -1129,19 +1341,22 @@ function buildRegCard(rec){
   <div class="reg-panel" id="panel-${escAttr(rec.uid)}">
     <div class="panel-body">
     <div class="etapa-bar">${pipeHTML}</div>
+    <div class="reg-grid4">${baseFieldsHTML}</div>
     <div class="dg">${dateHTML}</div>
     <div class="dur-strip show" id="dur-strip-${escAttr(rec.uid)}">
-      <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:6px">Durações calculadas</div>
-      <div class="dur-grid" id="dur-${escAttr(rec.uid)}">
-        <div class="dur-item"><div class="dur-lbl">Chegada→Assin.</div><div class="dur-val">${escHtml(dur.ateSign)}</div></div>
-        <div class="dur-item"><div class="dur-lbl">Chegada→Entrega</div><div class="dur-val">${escHtml(dur.total)}</div></div>
-      </div>
+      <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:6px">Durações calculadas</div>  
+      <div class="dur-grid" id="dur-${escAttr(rec.uid)}">${durItems.length?regDurGridHTML(durItems):'<div class="dur-item"><div class="dur-lbl">Aguardando datas</div><div class="dur-val" style="color:var(--t3)">--</div></div>'}</div>
     </div>
     <div style="margin-top:10px">
       <div class="ifield">
-        <label>Documentos Pendentes — clique para marcar</label>
+        <label>📎 Documentos Pendentes — clique para marcar</label>
         <div class="docs-sel">${chipsHTML}</div>
+        <div class="docs-cnt" id="docs-cnt-${escAttr(rec.uid)}">${docsPend.length} pendente${docsPend.length!==1?'s':''}</div>
       </div>
+    </div>
+    <div class="csec show" id="csec-${escAttr(rec.uid)}">
+      <div class="csec-title">Dados do Contrato — Dashboard de Métricas</div>
+      <div class="csec-grid">${contractFieldsHTML}</div>
     </div>
     <div style="margin-top:10px">
       <div class="ifield">
@@ -1151,7 +1366,7 @@ function buildRegCard(rec){
     </div>
     </div>
     <div class="pfooter">
-      <span class="pstatus">Editando — não salvo</span>
+      <span class="pstatus" id="pstatus-${escAttr(rec.uid)}">Editando — não salvo</span>
       <div class="pacts">
         <button class="btn sm danger" data-reg-delete="${escAttr(rec.uid)}">Excluir</button>
         <button class="btn sm primary" data-reg-save="${escAttr(rec.uid)}">Salvar</button>
@@ -1215,13 +1430,51 @@ function toggleRegCard(uid){
   isEditing = !isOpen;
 }
 
-async function setRegEtapa(uid,etapa){
+function setRegEtapa(uid,etapa){
   const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
   DB[idx]={...DB[idx],etapa};
-  await serverSave(DB[idx]);
-  renderReg();
-  toggleRegCard(uid);
-  toast(`Etapa atualizada para ${ETAPA_LABELS[etapa-1]}.`);
+  const card=document.getElementById(`regcard-${uid}`);
+  if(!card) return;
+  card.querySelectorAll(`[data-set-etapa="${uid}"]`).forEach((btn)=>{
+    btn.classList.toggle('on',Number(btn.dataset.etapa)===Number(etapa));
+  });
+  const st=card.querySelector(`#pstatus-${uid}`);
+  if(st) st.textContent='Etapa alterada — clique Salvar';
+}
+
+function refreshRegDurFromInputs(uid){
+  const card=document.getElementById(`regcard-${uid}`);
+  if(!card) return;
+  const getDate=(k)=>{
+    const inp=card.querySelector(`[data-date-field="${k}"][data-uid="${uid}"]`);
+    return inp?.value?iso2dmy(inp.value):'';
+  };
+  const items=[
+    {l:'Chegada→Assin.',d:diffDays(getDate('dtChegada'),getDate('dtAssinatura')),ref:10},
+    {l:'Assin.→Docs',d:diffDays(getDate('dtAssinatura'),getDate('dtDocsRec')),ref:7},
+    {l:'Docs→Entrega',d:diffDays(getDate('dtDocsRec'),getDate('dtEntrega')),ref:5},
+  ].filter((x)=>x.d!=null&&x.d>=0);
+  const grid=card.querySelector(`#dur-${uid}`);
+  if(grid) grid.innerHTML=items.length
+    ?regDurGridHTML(items)
+    :'<div class="dur-item"><div class="dur-lbl">Aguardando datas</div><div class="dur-val" style="color:var(--t3)">--</div></div>';
+
+  const hoje=new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const dtChegada=getDate('dtChegada');
+  const dtAssin=getDate('dtAssinatura');
+  const dtFim=getDate('dtEntrega')||hoje;
+  const total=diffDays(dtChegada,dtFim);
+  const ateSign=diffDays(dtChegada,dtAssin);
+  const totalEl=card.querySelector(`#dur-total-${uid}`);
+  const signEl=card.querySelector(`#dur-sign-${uid}`);
+  if(totalEl) totalEl.textContent=`Total: ${total!=null&&total>=0?`${total}d`:'--'}`;
+  if(signEl) signEl.textContent=`Chegada→Assin.: ${ateSign!=null&&ateSign>=0?`${ateSign}d`:'--'}`;
+
+  if(getDate('dtAssinatura')){
+    const idx=DB.findIndex(r=>r.uid===uid);
+    const etapaAtual=idx>=0?(Number(DB[idx].etapa)||1):1;
+    if(etapaAtual<3) setRegEtapa(uid,3);
+  }
 }
 
 function toggleRegDoc(uid,doc){
@@ -1237,6 +1490,10 @@ function toggleRegDoc(uid,doc){
     card.querySelectorAll(`[data-toggle-doc="${uid}"]`).forEach(chip=>{
       chip.classList.toggle('sel',docs.includes(chip.dataset.doc));
     });
+    const cntEl=card.querySelector(`#docs-cnt-${uid}`);
+    if(cntEl) cntEl.textContent=`${docs.length} pendente${docs.length!==1?'s':''}`;
+    const st=card.querySelector(`#pstatus-${uid}`);
+    if(st) st.textContent='Documentos alterados — clique Salvar';
   }
 }
 
@@ -1249,12 +1506,16 @@ async function saveReg(uid){
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Salvando...';}
 
   const patch={};
+  card.querySelectorAll('[data-reg-field][data-uid]').forEach(inp=>{
+    if(inp.dataset.uid===uid) patch[inp.dataset.regField]=(inp.value||'').trim();
+  });
   card.querySelectorAll('[data-date-field][data-uid]').forEach(inp=>{
     if(inp.dataset.uid===uid) patch[inp.dataset.dateField]=iso2dmy(inp.value);
   });
   const obsEl=card.querySelector(`textarea[data-uid="${uid}"]`);
   if(obsEl) patch.obs=obsEl.value.trim();
   patch.docsPendentes=DB[idx].docsPendentes||[];
+  if(patch.dtAssinatura && !DB[idx].data) patch.data=patch.dtAssinatura;
   patch.updatedAt=Date.now(); // Item 5 - timestamp de versao
 
   const updated={...DB[idx],...patch};
@@ -1268,12 +1529,9 @@ async function saveReg(uid){
   renderDash();renderTbl();renderReg();
 
   // Atualiza duração na tela
-  const dur=calcRegDur(DB[idx]);
+  const durItems=getRegDurItems(DB[idx]);
   const durEl=document.getElementById(`dur-${uid}`);
-  if(durEl) durEl.innerHTML=`
-    <div class="dur-item"><div class="dur-lbl">Chegada→Assin.</div><div class="dur-val">${escHtml(dur.ateSign)}</div></div>
-    <div class="dur-item"><div class="dur-lbl">Chegada→Entrega</div><div class="dur-val">${escHtml(dur.total)}</div></div>
-  `;
+  if(durEl) durEl.innerHTML=regDurGridHTML(durItems);
   toast(`"${escHtml(DB[idx].cliente||uid)}" salvo!`);
 }
 
