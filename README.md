@@ -70,9 +70,10 @@ http://localhost:8000/OB_Dashboard_Rede.html
 
 - O dashboard exige autenticação via Firebase Auth.
 - Leitura é permitida para usuário autenticado.
-- Escrita depende de admin.
+- No estado atual, create, update e delete estão liberados para usuário autenticado.
+- O controle por admin em `meta/security.adminUids` permanece reservado para endurecimento futuro das regras, quando o acesso for ampliado para mais pessoas.
 
-Para tornar um usuário admin:
+Quando o endurecimento for ativado, para tornar um usuário admin:
 
 1. Abra Firebase Console → Authentication → Users.
 2. Copie o UID do usuário.
@@ -176,6 +177,8 @@ Relatórios gerados como artefatos da execução:
 - `firebase-config.js` deve ser tratado como arquivo local do ambiente.
 - O `.gitignore` já foi configurado para evitar novos commits desse arquivo.
 - Se ele já foi commitado antes, o ideal é removê-lo do versionamento e, se necessário, rotacionar as credenciais do projeto.
+- A configuração pública em `firebase-config.public.js` faz parte do frontend e, isoladamente, não protege nem expõe os dados do projeto; a proteção real depende de Auth e `firestore.rules`.
+- No cenário atual, como o app ainda é operado por poucas pessoas da equipe, as regras foram mantidas temporariamente mais simples. Antes de ampliar o acesso, endureça `update`, `delete` e escrita em `meta`.
 
 ## Histórico
 

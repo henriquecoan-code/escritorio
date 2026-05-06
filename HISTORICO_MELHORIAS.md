@@ -201,6 +201,14 @@ escritorio/
 
 As itens abaixo foram identificados na análise técnica do projeto e registrados para implementação futura, quando o controle de acesso for formalizado.
 
+### Status operacional atual (06/05/2026)
+
+No momento, o aplicativo continua restrito a um grupo pequeno de 4 pessoas.
+
+Por decisão operacional, as regras do Firestore permanecem temporariamente mais abertas para usuários autenticados, evitando atrito de uso enquanto o acesso ainda é controlado manualmente.
+
+Isso significa que o endurecimento com diferenciação real entre usuário comum e admin foi adiado de forma consciente para a próxima fase de expansão.
+
 ### Gestão de Usuários (contexto atual)
 
 Por enquanto, usuários são adicionados manualmente no Firestore via painel Firebase Console. O grupo de acesso é isolado e controlado diretamente pelo array `adminUids` em `meta/security`. Firebase Auth foi configurado mas não há diferenciação de perfis dentro do app — todos os usuários autenticados têm o mesmo nível de acesso na interface.
@@ -224,6 +232,8 @@ match /contratos/{docId} {
 ```
 
 Obs: leitura do documento `meta/security` dentro da regra tem custo de 1 leitura adicional por operação — aceitável para operações de escrita, mas deve ser avaliado se for aplicado a leituras também.
+
+Enquanto isso, manter esse modelo só é aceitável porque o acesso ainda é limitado e conhecido. Ao abrir o sistema para mais usuários, essa alteração deixa de ser opcional e passa a ser prioridade imediata.
 
 ### Testes Firestore Rules — Cobertura de admin
 
