@@ -106,11 +106,34 @@ Em outro terminal:
 npm run test:e2e
 ```
 
+Para o fluxo autenticado real (sem bypass), configure credenciais de teste e rode:
+
+```powershell
+$env:E2E_EMAIL="usuario1@dominio.com"
+$env:E2E_PASSWORD="senha_do_usuario1"
+$env:E2E_USER2_EMAIL="usuario2@dominio.com"
+$env:E2E_USER2_PASSWORD="senha_do_usuario2"
+npm run test:e2e:real
+```
+
+Observações:
+
+- O teste exige `E2E_EMAIL` e `E2E_PASSWORD`.
+- A validação de permissão cruzada usa `E2E_USER2_EMAIL` e `E2E_USER2_PASSWORD` (se não informar, esse caso é pulado).
+
 Cobertura inicial atual:
 
 - carregamento da página principal
 - navegação entre abas (Dashboard, Registros e Configurações)
 - validação de erros de runtime no carregamento
+
+Cobertura adicional no fluxo autenticado real (`npm run test:e2e:real`):
+
+- login/logout real com Firebase Auth
+- CRUD ponta a ponta com persistência após reload
+- busca e filtro por advogado em Registros
+- paginação de Registros (quando houver mais de 1 página)
+- importação JSON via `scripts/import-firestore.html` e validação no dashboard
 
 ### 4. Rodar testes das regras do Firestore
 
@@ -139,12 +162,17 @@ Resultado esperado:
 - arquivo `zap-report.html` gerado na raiz do projeto
 - prioridade de correção: High primeiro, depois Medium
 
+### 6. Rodar checklist manual (15 min)
+
+Antes de publicar, execute o roteiro em `TESTE_MANUAL_15MIN.md` para validar os fluxos que ainda dependem de verificacao humana (login real, CRUD ponta a ponta, importador e responsividade).
+
 ## Ordem recomendada de execução
 
 1. `npm run serve`
 2. `npm run test:e2e`
 3. `npm run test:rules`
 4. ZAP Baseline
+5. Checklist manual (15 min)
 
 Critério de pronto:
 
