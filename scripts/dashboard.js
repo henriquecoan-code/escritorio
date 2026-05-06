@@ -33,6 +33,7 @@ let unsubContratos=null;   // unsubscribe do listener onSnapshot
 let regFilter = {srch:'', mes:'', adv:'', etapa:''};
 let regPg=1;
 const REG_PG=12;
+let mCurE=1;
 
 const WIDGET_DEFS=[
   {id:'evolucao',icon:'📈',name:'Evolução & Volume'},
@@ -385,6 +386,19 @@ function bindStaticEvents(){
   document.getElementById('close-modal-x-btn')?.addEventListener('click',closeM);
   document.getElementById('cancel-modal-btn')?.addEventListener('click',closeM);
   document.getElementById('save-contract-btn')?.addEventListener('click',saveC);
+  document.getElementById('m-esel')?.addEventListener('click',(event)=>{
+    const btn=event.target.closest('.esb[data-e]');
+    if(!btn) return;
+    setME(Number(btn.dataset.e));
+  });
+  document.getElementById('m-dtCheg')?.addEventListener('change',()=>{
+    mSyncMesFromCheg();
+    mCalcDur();
+  });
+  ['m-dtCont','m-dtEnv','m-dtDocs','m-dtDocsR','m-dtEnt'].forEach((id)=>{
+    document.getElementById(id)?.addEventListener('change',mCalcDur);
+  });
+  document.getElementById('m-dtAssin')?.addEventListener('change',mOnAssin);
   document.getElementById('del-ov')?.addEventListener('click',(event)=>{if(event.target===event.currentTarget)closeDel();});
   document.getElementById('cancel-del-btn')?.addEventListener('click',closeDel);
   document.getElementById('del-btn')?.addEventListener('click',confirmDel);
@@ -808,9 +822,14 @@ function fillSelects(){
     const el=document.getElementById(id);if(!el)return;
     el.innerHTML=(blank?[`<option value="">${blank}</option>`]:[]).concat(opts.map(o=>`<option value="${o}">${o||'-- Selecionar --'}</option>`)).join('');
   };
-  mk('m-mes',m);mk('m-area',AREAS,'-- Selecionar --');mk('m-acao',ACOES,'-- Selecionar --');
-  mk('m-tipo',TIPOS,'-- Selecionar --');mk('m-orig',ORIGENS,'-- Selecionar --');
-  mk('m-adv',ADVS,'-- Selecionar --');mk('m-stat',STATUS);
+  mk('m-mes',m);mk('m-area',AREAS,'— Selecionar —');mk('m-acao',ACOES,'— Selecionar —');
+  mk('m-tipo',TIPOS,'— Selecionar —');mk('m-orig',ORIGENS,'— Selecionar —');
+  mk('m-adv',ADVS,'— Selecionar —');
+  const st=document.getElementById('m-status');
+  if(st){
+    const opts=[...new Set(['Em andamento',...STATUS])];
+    st.innerHTML=opts.map(v=>`<option value="${escAttr(v)}">${escHtml(v)}</option>`).join('');
+  }
 }
 function fillFilters(){
   const m=[...new Set(DB.map(r=>r.mes))].sort();
@@ -891,6 +910,59 @@ function sortBy(c){sortCol===c?sortDir*=-1:(sortCol=c,sortDir=1);pg=1;renderTbl(
 function goPg(p){pg=p;renderTbl();}
 
 /* .. MODAL .. */
+function modalDaysBetween(aIso,bIso){
+  if(!aIso||!bIso) return null;
+  const a=new Date(aIso),b=new Date(bIso);
+  if(isNaN(a)||isNaN(b)) return null;
+  return Math.round((b-a)/86400000);
+}
+function setME(e){
+  mCurE=e;
+  document.querySelectorAll('.esb[data-e]').forEach((btn)=>{
+    btn.classList.toggle('on',Number(btn.dataset.e)===e);
+  });
+  document.getElementById('m-csec')?.classList.toggle('show',e>=3);
+  document.getElementById('m-ibox')?.classList.toggle('show',e>=3);
+}
+function mCalcDur(){
+  const g=(id)=>document.getElementById(id)?.value||'';
+  const pairs=[
+    {l:'Chegada→Assin.',d:modalDaysBetween(g('m-dtCheg'),g('m-dtAssin')),ref:10},
+    {l:'Chegada→Docs',d:modalDaysBetween(g('m-dtCheg'),g('m-dtDocsR')),ref:15},
+    {l:'Total',d:modalDaysBetween(g('m-dtCheg'),g('m-dtEnt')||g('m-dtDocsR')),ref:20},
+  ];
+  const valid=pairs.filter((p)=>p.d!=null&&p.d>=0);
+  const box=document.getElementById('m-dur-box');
+  const grid=document.getElementById('m-dur-grid');
+  if(!box||!grid) return;
+  if(!valid.length){
+    box.classList.remove('show');
+    grid.innerHTML='';
+    return;
+  }
+  box.classList.add('show');
+  grid.innerHTML=valid.map((p)=>{
+    const col=p.d<=p.ref*.7?'var(--green)':p.d<=p.ref?'var(--amber)':'var(--rose)';
+    return `<div class="dur-item"><div class="dur-lbl">${p.l}</div><div class="dur-val" style="color:${col}">${p.d}d</div></div>`;
+  }).join('');
+}
+function mSyncMesFromCheg(){
+  const cheg=document.getElementById('m-dtCheg')?.value||'';
+  if(!cheg) return;
+  const m=MESES_REF[new Date(cheg).getMonth()];
+  const sel=document.getElementById('m-mes');
+  if(sel&&m) sel.value=m;
+}
+function mOnAssin(){
+  const assin=document.getElementById('m-dtAssin')?.value||'';
+  if(assin&&mCurE<3) setME(3);
+  if(assin){
+    const m=MESES_REF[new Date(assin).getMonth()];
+    const sel=document.getElementById('m-mes');
+    if(sel&&m) sel.value=m;
+  }
+  mCalcDur();
+}
 function openM(editUid){
   if(!ensureAuthenticated()) return;
   isEditing=true;
@@ -898,45 +970,77 @@ function openM(editUid){
   if(editUid){
     const r=DB.find(x=>x.uid===editUid);if(!r)return;
     document.getElementById('m-title').textContent='Editar Registro';
-    document.getElementById('m-data').value=isoDate(r.dtChegada||r.data);
-    document.getElementById('m-mes').value=r.mes;document.getElementById('m-cliente').value=r.cliente;
-    document.getElementById('m-area').value=r.area||'';document.getElementById('m-acao').value=r.acao||'';
-    document.getElementById('m-tipo').value=r.tipo||'';document.getElementById('m-orig').value=r.origem||'';
-    document.getElementById('m-adv').value=r.adv||'';document.getElementById('m-stat').value=r.status||'Ativo';
+    document.getElementById('m-cli').value=r.cliente||'';
+    document.getElementById('m-adv').value=r.adv||'';
+    document.getElementById('m-area').value=r.area||'';
+    document.getElementById('m-acao').value=r.acao||'';
+    document.getElementById('m-tipo').value=r.tipo||'';
+    document.getElementById('m-orig').value=r.origem||'';
+    document.getElementById('m-mes').value=r.mes||'';
+    document.getElementById('m-status').value=r.status||'Em andamento';
+    document.getElementById('m-dtCheg').value=isoDate(r.dtChegada||r.data||'');
+    document.getElementById('m-dtCont').value=isoDate(r.dtContato||'');
+    document.getElementById('m-dtEnv').value=isoDate(r.dtEnvioContrato||'');
+    document.getElementById('m-dtAssin').value=isoDate(r.dtAssinatura||'');
+    document.getElementById('m-dtDocs').value=isoDate(r.dtDocs||'');
+    document.getElementById('m-dtDocsR').value=isoDate(r.dtDocsRec||'');
+    document.getElementById('m-dtEnt').value=isoDate(r.dtEntrega||'');
     document.getElementById('m-obs').value=r.obs||'';
+    setME(Number(r.etapa)||1);
+    mCalcDur();
   }else{
     document.getElementById('m-title').textContent='Novo Registro';
-    const meses=[...new Set(DB.map(r=>r.mes))];
-    document.getElementById('m-data').value=new Date().toISOString().split('T')[0];
-    const mesMoment=MESES_REF[new Date().getMonth()];
+    const mesMoment=MESES_REF[new Date().getMonth()]||'';
+    ['m-cli','m-obs'].forEach(id=>document.getElementById(id).value='');
+    ['m-adv','m-area','m-acao','m-tipo','m-orig'].forEach(id=>document.getElementById(id).value='');
+    ['m-dtCont','m-dtEnv','m-dtAssin','m-dtDocs','m-dtDocsR','m-dtEnt'].forEach(id=>document.getElementById(id).value='');
+    document.getElementById('m-dtCheg').value=new Date().toISOString().split('T')[0];
     document.getElementById('m-mes').value=activeMonth!=='all'?activeMonth:mesMoment;
-    ['m-cliente','m-obs'].forEach(id=>document.getElementById(id).value='');
-    ['m-area','m-acao','m-tipo','m-orig','m-adv'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('m-stat').value='Ativo';
+    document.getElementById('m-status').value='Em andamento';
+    setME(1);
+    mCalcDur();
   }
   document.getElementById('overlay').classList.add('open');
-  setTimeout(()=>document.getElementById('m-cliente').focus(),120);
+  setTimeout(()=>document.getElementById('m-cli').focus(),120);
 }
 function closeM(){isEditing=false;document.getElementById('overlay').classList.remove('open');}
 function overlayBg(e){if(e.target===e.currentTarget)closeM();}
 async function saveC(){
-  const cli=document.getElementById('m-cliente').value.trim();
-  if(!cli){toast('Informe o nome do cliente.','err');document.getElementById('m-cliente').focus();return;}
-  const dataVal=document.getElementById('m-data').value.trim();
-  if(!dataVal){toast('Informe a data do registro.','err');document.getElementById('m-data').focus();return;}
+  const cli=document.getElementById('m-cli').value.trim();
+  if(!cli){toast('Informe o nome do cliente.','err');document.getElementById('m-cli').focus();return;}
+  const chegadaRaw=document.getElementById('m-dtCheg').value.trim();
+  if(!chegadaRaw){toast('Informe a data de chegada.','err');document.getElementById('m-dtCheg').focus();return;}
   const advVal=document.getElementById('m-adv').value;
   if(!advVal){toast('Selecione o advogado responsável.','err');document.getElementById('m-adv').focus();return;}
-  // Item 6 - desabilita botao para evitar duplo clique
   const saveBtn=document.getElementById('save-contract-btn');
   if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Salvando...';}
 
-  const raw=document.getElementById('m-data').value,editUid=document.getElementById('m-uid').value;
-  const dtChegadaVal=raw?fmtDate(raw):'';
-  const obj={uid:editUid||uid(),updatedAt:Date.now(),data:dtChegadaVal,dtChegada:dtChegadaVal,cliente:cli,
-    mes:document.getElementById('m-mes').value,area:document.getElementById('m-area').value,
-    acao:document.getElementById('m-acao').value,tipo:document.getElementById('m-tipo').value,
-    origem:document.getElementById('m-orig').value,adv:document.getElementById('m-adv').value,
-    status:document.getElementById('m-stat').value,obs:document.getElementById('m-obs').value.trim()};
+  const editUid=document.getElementById('m-uid').value;
+  const dtAssinRaw=document.getElementById('m-dtAssin').value;
+  const toDMY=(id)=>{const v=document.getElementById(id)?.value||'';return v?fmtDate(v):'';};
+  const obj={
+    uid:editUid||uid(),
+    updatedAt:Date.now(),
+    cliente:cli,
+    adv:document.getElementById('m-adv').value,
+    area:document.getElementById('m-area').value,
+    acao:document.getElementById('m-acao').value,
+    tipo:document.getElementById('m-tipo').value,
+    origem:document.getElementById('m-orig').value,
+    mes:document.getElementById('m-mes').value,
+    status:document.getElementById('m-status').value,
+    obs:document.getElementById('m-obs').value.trim(),
+    etapa:String(mCurE),
+    data:fmtDate(dtAssinRaw||chegadaRaw),
+    docsPendentes:[],
+    dtChegada:toDMY('m-dtCheg'),
+    dtContato:toDMY('m-dtCont'),
+    dtEnvioContrato:toDMY('m-dtEnv'),
+    dtAssinatura:toDMY('m-dtAssin'),
+    dtDocs:toDMY('m-dtDocs'),
+    dtDocsRec:toDMY('m-dtDocsR'),
+    dtEntrega:toDMY('m-dtEnt'),
+  };
 
   let wasNew=false;
   if(editUid){
@@ -949,9 +1053,7 @@ async function saveC(){
 
   const ok=await serverSave(obj);
   if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Salvar';}
-
   if(!ok){
-    // Item 6 - reverte mudanca otimista se save falhou
     if(wasNew) DB=DB.filter(x=>x.uid!==obj.uid);
     return;
   }
@@ -1242,7 +1344,7 @@ function buildRegCard(rec){
     <div class="reg-grid4">${baseFieldsHTML}</div>
     <div class="dg">${dateHTML}</div>
     <div class="dur-strip show" id="dur-strip-${escAttr(rec.uid)}">
-      <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:6px">Durações calculadas</div>
+      <div style="font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--blue);margin-bottom:6px">Durações calculadas</div>  
       <div class="dur-grid" id="dur-${escAttr(rec.uid)}">${durItems.length?regDurGridHTML(durItems):'<div class="dur-item"><div class="dur-lbl">Aguardando datas</div><div class="dur-val" style="color:var(--t3)">--</div></div>'}</div>
     </div>
     <div style="margin-top:10px">
