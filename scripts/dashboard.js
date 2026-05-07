@@ -30,7 +30,7 @@ let isEditing=false;       // true quando modal ou painel de edicao esta aberto
 let unsubContratos=null;   // unsubscribe do listener onSnapshot
 
 /* .. REG STATE .. */
-let regFilter = {srch:'', mes:'', adv:'', etapa:''};
+let regFilter = {srch:'', mes:'', adv:'', etapa:'', area:''};
 let regPg=1;
 const REG_PG=12;
 let mCurE=1;
@@ -411,22 +411,24 @@ function bindStaticEvents(){
     regPg=1;
     renderReg();
   });
-  ['reg-ff-mes','reg-ff-adv','reg-ff-etapa'].forEach(id=>{
+  ['reg-ff-mes','reg-ff-adv','reg-ff-etapa','reg-ff-area'].forEach(id=>{
     document.getElementById(id)?.addEventListener('change',()=>{
       regFilter.mes  = document.getElementById('reg-ff-mes').value;
       regFilter.adv  = document.getElementById('reg-ff-adv').value;
       regFilter.etapa= document.getElementById('reg-ff-etapa').value;
+      regFilter.area = document.getElementById('reg-ff-area').value;
       regPg=1;
       renderReg();
     });
   });
   document.getElementById('reg-clear-btn')?.addEventListener('click',()=>{
-    regFilter={srch:'',mes:'',adv:'',etapa:''};
+    regFilter={srch:'',mes:'',adv:'',etapa:'',area:''};
     regPg=1;
     document.getElementById('reg-srch').value='';
     document.getElementById('reg-ff-mes').value='';
     document.getElementById('reg-ff-adv').value='';
     document.getElementById('reg-ff-etapa').value='';
+    document.getElementById('reg-ff-area').value='';
     renderReg();
   });
   document.getElementById('reg-export-btn')?.addEventListener('click',exportRegHTML);
@@ -434,9 +436,9 @@ function bindStaticEvents(){
     // toggle card open/close
     const hd=event.target.closest('[data-toggle-card]');
     if(hd){ toggleRegCard(hd.dataset.toggleCard); return; }
-    // set etapa
+    // set etapa (clique no botão já selecionado desliga)
     const et=event.target.closest('[data-set-etapa][data-etapa]');
-    if(et){ setRegEtapa(et.dataset.setEtapa, Number(et.dataset.etapa)); return; }
+    if(et){ const newE=et.classList.contains('on')?0:Number(et.dataset.etapa); setRegEtapa(et.dataset.setEtapa, newE); return; }
     // toggle doc chip
     const chip=event.target.closest('[data-toggle-doc]');
     if(chip){ toggleRegDoc(chip.dataset.toggleDoc, chip.dataset.doc); return; }
@@ -740,10 +742,14 @@ function renderDash(){
   const arA=AREAS.map(a=>cnt(DB,'area',a)),arV=AREAS.map(a=>cnt(view,'area',a)),arMax=Math.max(...arA,1);
   document.getElementById('area-total').textContent=total;
   const hArea=document.getElementById('hbar-area');hArea.innerHTML='';
+  const arTotalAll=arA.reduce((s,v)=>s+v,0)||1;
+  const arTotalView=arV.reduce((s,v)=>s+v,0)||1;
   AREAS.map((a,i)=>({a,vAll:arA[i],vView:arV[i]})).sort((x,y)=>y.vAll-x.vAll).slice(0,10).forEach(({a,vAll,vView})=>{
+    const pctAll=Math.round(vAll/arTotalAll*100);
+    const pctView=Math.round(vView/arTotalView*100);
     hArea.innerHTML+=`<div class="hbr"><div class="hbr-name">${a}</div>
-      <div class="hbr-row"><div class="hbr-lbl total">Total</div><div class="hbb"><div class="hbf total" style="width:0" data-w="${Math.round(vAll/arMax*100)}%"></div></div><div class="hbn total">${vAll}</div></div>
-      ${isF?`<div class="hbr-row"><div class="hbr-lbl month">${activeMonth.slice(0,3)}</div><div class="hbb"><div class="hbf month" style="width:0" data-w="${Math.round(vView/arMax*100)}%"></div></div><div class="hbn month">${vView}</div></div>`:''}
+      <div class="hbr-row"><div class="hbr-lbl total">Total</div><div class="hbb"><div class="hbf total" style="width:0" data-w="${Math.round(vAll/arMax*100)}%"></div></div><div class="hbn total">${vAll} <span class="pr-n-pct">${pctAll}%</span></div></div>
+      ${isF?`<div class="hbr-row"><div class="hbr-lbl month">${activeMonth.slice(0,3)}</div><div class="hbb"><div class="hbf month" style="width:0" data-w="${Math.round(vView/arMax*100)}%"></div></div><div class="hbn month">${vView} <span class="pr-n-pct">${pctView}%</span></div></div>`:''}
     </div>`;
   });
   // Acao
@@ -751,11 +757,15 @@ function renderDash(){
   document.getElementById('acao-total').textContent=total;
   const hAcao=document.getElementById('hbar-acao');hAcao.innerHTML='';
   const acS=ACOES.map((a,i)=>({a,vAll:acA[i],vView:acV[i]})).filter(x=>x.vAll>0).sort((x,y)=>y.vAll-x.vAll).slice(0,10);
+  const acTotalAll=acS.reduce((s,x)=>s+x.vAll,0)||1;
+  const acTotalView=acS.reduce((s,x)=>s+x.vView,0)||1;
   if(!acS.length)hAcao.innerHTML=`<div style="color:var(--t3);font-size:11px;text-align:center;padding:16px;font-style:italic">Nenhuma ação registrada</div>`;
   else acS.forEach(({a,vAll,vView})=>{
+    const pctAll=Math.round(vAll/acTotalAll*100);
+    const pctView=Math.round(vView/acTotalView*100);
     hAcao.innerHTML+=`<div class="hbr"><div class="hbr-name" style="font-size:10px">${a}</div>
-      <div class="hbr-row"><div class="hbr-lbl total" style="width:36px;font-size:9px">Total</div><div class="hbb"><div class="hbf total" style="width:0;background:linear-gradient(90deg,#5B8CDB,#7AADEE)" data-w="${Math.round(vAll/acMax*100)}%"></div></div><div class="hbn total" style="color:var(--blue)">${vAll}</div></div>
-      ${isF?`<div class="hbr-row"><div class="hbr-lbl month" style="width:36px;font-size:9px">${activeMonth.slice(0,3)}</div><div class="hbb"><div class="hbf month" style="width:0" data-w="${Math.round(vView/acMax*100)}%"></div></div><div class="hbn month">${vView}</div></div>`:''}
+      <div class="hbr-row"><div class="hbr-lbl total" style="width:36px;font-size:9px">Total</div><div class="hbb"><div class="hbf total" style="width:0;background:linear-gradient(90deg,#5B8CDB,#7AADEE)" data-w="${Math.round(vAll/acMax*100)}%"></div></div><div class="hbn total" style="color:var(--blue)">${vAll} <span class="pr-n-pct">${pctAll}%</span></div></div>
+      ${isF?`<div class="hbr-row"><div class="hbr-lbl month" style="width:36px;font-size:9px">${activeMonth.slice(0,3)}</div><div class="hbb"><div class="hbf month" style="width:0" data-w="${Math.round(vView/acMax*100)}%"></div></div><div class="hbn month">${vView} <span class="pr-n-pct">${pctView}%</span></div></div>`:''}
     </div>`;
   });
   // Tipo donut
@@ -809,8 +819,10 @@ function renderDash(){
 function buildPhotoRank(sorted,max,isF){
   const wrap=document.getElementById('photo-rank'),pinp=document.getElementById('photo-inputs');
   wrap.innerHTML='';pinp.innerHTML='';
+  const totalAll=sorted.reduce((s,x)=>s+x.vAll,0)||1;
   sorted.forEach(({n,vAll,vView},i)=>{
     const pA=Math.round(vAll/max*100),pV=Math.round(vView/max*100);
+    const pct=Math.round(vAll/totalAll*100);
     const iid='pi_'+n.replace(/[^\w-]/g,'_');
     const nEsc=escHtml(n);
     const nAttr=escAttr(n);
@@ -824,7 +836,7 @@ function buildPhotoRank(sorted,max,isF){
           ${isF?`<div class="pr-bar-row"><div class="pr-bar-lbl" style="color:var(--blue)">${activeMonth.slice(0,3)}</div><div class="pb-bg"><div class="pb month" style="width:0" data-w="${pV}%"></div></div></div>`:''}
         </div>
       </div>
-      <div class="pr-right"><div class="pr-n">${vAll}</div>
+      <div class="pr-right"><div class="pr-n">${vAll} <span class="pr-n-pct">${pct}%</span></div>
         ${isF?`<div class="pr-n-lbl">total</div><div class="pr-n-month">${vView} <span class="pr-n-lbl">este mês</span></div>`:''}
         <div style="font-size:13px">${MEDALS[i]||''}</div>
       </div>
@@ -1230,8 +1242,11 @@ function fillRegFilters(){
   const mesEl=document.getElementById('reg-ff-mes');
   const advEl=document.getElementById('reg-ff-adv');
   if(!mesEl||!advEl) return;
+  const areaEl=document.getElementById('reg-ff-area');
+  const areas=[...new Set(DB.map(r=>r.area).filter(Boolean))].sort();
   mesEl.innerHTML='<option value="">Todos os meses</option>'+meses.map(m=>`<option value="${escAttr(m)}" ${regFilter.mes===m?'selected':''}>${escHtml(m)}</option>`).join('');
-  advEl.innerHTML='<option value="">Todos os adv.</option>'+advs.map(a=>`<option value="${escAttr(a)}" ${regFilter.adv===a?'selected':''}>${escHtml(a)}</option>`).join('');
+  advEl.innerHTML='<option value="">Todos os advogados</option>'+advs.map(a=>`<option value="${escAttr(a)}" ${regFilter.adv===a?'selected':''}>${escHtml(a)}</option>`).join('');
+  if(areaEl) areaEl.innerHTML='<option value="">Todas as áreas</option>'+areas.map(a=>`<option value="${escAttr(a)}" ${regFilter.area===a?'selected':''}>${escHtml(a)}</option>`).join('');
 }
 
 function getRegView(){
@@ -1240,6 +1255,7 @@ function getRegView(){
   if(regFilter.mes)  list=list.filter(r=>r.mes===regFilter.mes);
   if(regFilter.adv)  list=list.filter(r=>r.adv===regFilter.adv);
   if(regFilter.etapa)list=list.filter(r=>String(r.etapa||1)===regFilter.etapa);
+  if(regFilter.area) list=list.filter(r=>r.area===regFilter.area);
   return list.sort((a,b)=>(b.numero||0)-(a.numero||0));
 }
 
@@ -1469,14 +1485,14 @@ function toggleRegCard(uid){
 
 function setRegEtapa(uid,etapa){
   const idx=DB.findIndex(r=>r.uid===uid);if(idx<0)return;
-  DB[idx]={...DB[idx],etapa};
+  DB[idx]={...DB[idx],etapa:etapa||null};
   const card=document.getElementById(`regcard-${uid}`);
   if(!card) return;
   card.querySelectorAll(`[data-set-etapa="${uid}"]`).forEach((btn)=>{
-    btn.classList.toggle('on',Number(btn.dataset.etapa)===Number(etapa));
+    btn.classList.toggle('on',!!etapa&&Number(btn.dataset.etapa)===Number(etapa));
   });
   const st=card.querySelector(`#pstatus-${uid}`);
-  if(st) st.textContent='Etapa alterada — clique Salvar';
+  if(st) st.textContent=etapa?'Etapa alterada — clique Salvar':'Etapa removida — clique Salvar';
 }
 
 function refreshRegDurFromInputs(uid){
