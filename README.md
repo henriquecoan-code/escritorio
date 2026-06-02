@@ -200,6 +200,45 @@ Relatórios gerados como artefatos da execução:
 - playwright-report
 - zap-report
 
+## Backup automatico do Firestore (GitHub Actions)
+
+Foi adicionada uma rotina automatica em [.github/workflows/firestore-backup.yml](.github/workflows/firestore-backup.yml) que:
+
+- executa diariamente (03:15 UTC) e tambem por acionamento manual
+- exporta os dados do Firestore para JSON
+- comprime e criptografa o arquivo de backup com AES-256
+- publica o backup como artefato do GitHub Actions com retencao de 7 dias
+
+Script utilizado:
+
+- [scripts/firestore-backup.mjs](scripts/firestore-backup.mjs)
+
+### Segredos necessarios
+
+Configure em Settings -> Secrets and variables -> Actions:
+
+- `FIREBASE_SERVICE_ACCOUNT_JSON`: JSON completo da conta de servico do Firebase (ou em base64)
+- `BACKUP_ENCRYPTION_PASSPHRASE`: frase secreta para criptografar o backup
+
+### Visibilidade dos dados
+
+- Se o repositorio for privado: somente colaboradores com acesso conseguem baixar os artefatos.
+- Se o repositorio for publico: o fluxo pode ficar visivel para terceiros. Nesse caso, recomenda-se mover o backup para um repositorio privado dedicado.
+
+### Politica de retencao
+
+- A retencao esta configurada em 7 dias (`retention-days: 7`).
+- Na pratica, backups acima desse periodo sao removidos automaticamente pelo GitHub.
+
+### Restauracao local (quando precisar)
+
+Exemplo de descriptografia no Windows (PowerShell):
+
+```powershell
+openssl enc -d -aes-256-cbc -pbkdf2 -in .\firestore-AAAAmmdd-HHMMSS.json.gz.enc -out .\firestore-backup.json.gz -pass pass:SUA_SENHA
+gzip -d .\firestore-backup.json.gz
+```
+
 ## Segurança
 
 - `firebase-config.js` deve ser tratado como arquivo local do ambiente.
