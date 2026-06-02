@@ -615,6 +615,20 @@ const cnt=(d,f,v)=>d.filter(r=>r[f]===v).length;
 const cntM=(d,m,f,v)=>d.filter(r=>r.mes===m&&r[f]===v).length;
 const fmtDate=iso=>iso?iso.split('-').reverse().join('/'):'';
 const isoDate=dmy=>{const p=dmy.split('/');return p.length===3?`${p[2]}-${p[1]}-${p[0]}`:'';};
+const isoMonthIndex=(iso)=>{
+  if(!iso) return null;
+  const p=String(iso).split('-');
+  if(p.length!==3) return null;
+  const month=Number(p[1]);
+  return Number.isInteger(month)&&month>=1&&month<=12 ? month-1 : null;
+};
+const localIsoToday=()=>{
+  const now=new Date();
+  const y=now.getFullYear();
+  const m=String(now.getMonth()+1).padStart(2,'0');
+  const d=String(now.getDate()).padStart(2,'0');
+  return `${y}-${m}-${d}`;
+};
 const dateToSort=dmy=>{const p=(dmy||'').split('/');return p.length===3?`${p[2]}${p[1]}${p[0]}`:'';};
 const isDoneRecord=(r)=>Number(r.etapa||0)===5||(String(r.status||'').toLowerCase()==='encerrado');
 
@@ -990,7 +1004,8 @@ function mCalcDur(){
 function mSyncMesFromCheg(){
   const cheg=document.getElementById('m-dtCheg')?.value||'';
   if(!cheg) return;
-  const m=MESES_REF[new Date(cheg).getMonth()];
+  const idx=isoMonthIndex(cheg);
+  const m=idx!=null ? MESES_REF[idx] : '';
   const sel=document.getElementById('m-mes');
   if(sel&&m) sel.value=m;
 }
@@ -998,7 +1013,8 @@ function mOnAssin(){
   const assin=document.getElementById('m-dtAssin')?.value||'';
   if(assin&&mCurE<3) setME(3);
   if(assin){
-    const m=MESES_REF[new Date(assin).getMonth()];
+    const idx=isoMonthIndex(assin);
+    const m=idx!=null ? MESES_REF[idx] : '';
     const sel=document.getElementById('m-mes');
     if(sel&&m) sel.value=m;
   }
@@ -1035,7 +1051,7 @@ function openM(editUid){
     ['m-cli','m-obs'].forEach(id=>document.getElementById(id).value='');
     ['m-adv','m-area','m-acao','m-tipo','m-orig'].forEach(id=>document.getElementById(id).value='');
     ['m-dtCont','m-dtEnv','m-dtAssin','m-dtDocs','m-dtDocsR','m-dtEnt'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('m-dtCheg').value=new Date().toISOString().split('T')[0];
+    document.getElementById('m-dtCheg').value=localIsoToday();
     document.getElementById('m-mes').value=activeMonth!=='all'?activeMonth:mesMoment;
     document.getElementById('m-status').value='Em andamento';
     setME(1);

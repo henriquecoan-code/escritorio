@@ -9,8 +9,6 @@
     button { padding: 8px 18px; margin: 6px 4px; cursor: pointer; border-radius: 6px; border: none; font-size: 14px; }
     #btnImport  { background: #27ae60; color: #fff; }
     #btnImport:disabled { background: #555; }
-    #btnClear   { background: #c0392b; color: #fff; }
-    #btnClear:disabled  { background: #555; }
     #btnRenum   { background: #2980b9; color: #fff; }
     #btnRenum:disabled  { background: #555; }
     #btnExport  { background: #8e44ad; color: #fff; }
@@ -54,7 +52,6 @@
   <button id="btnExport" onclick="exportarFirestore()" disabled>⬇ Exportar backup (Excel)</button>
   <button id="btnImport" onclick="startImport()" disabled>▶ Importar</button>
   <button id="btnRenum"  onclick="renumerar()" disabled>🔢 Renumerar registros (1, 2, 3...)</button>
-  <button id="btnClear"  onclick="clearCollection()" disabled>🗑 Limpar coleção (cuidado!)</button>
 </div>
 
 <div class="bar"><div class="bar-inner" id="progress" style="width:0%"></div></div>
@@ -111,21 +108,18 @@ auth.onAuthStateChanged(async user => {
     if (isAdmin) {
       st.textContent = '✓ ' + user.email + ' (admin)';
       st.style.color = '#2ecc71';
-      document.getElementById('btnClear').disabled = false;
       document.getElementById('btnRenum').disabled = false;
     } else {
       st.textContent = '✓ ' + user.email;
       st.style.color = '#f39c12';
-      document.getElementById('btnClear').disabled = true;
       document.getElementById('btnRenum').disabled = true;
-      log('Acesso limitado: Renumerar e Limpar coleção exigem permissão de admin.', 'warn');
+      log('Acesso limitado: Renumerar exige permissão de admin.', 'warn');
     }
   } else {
     st.textContent = 'Não autenticado';
     st.style.color = '#e74c3c';
     document.getElementById('btnExport').disabled = true;
     document.getElementById('btnImport').disabled = true;
-    document.getElementById('btnClear').disabled  = true;
     document.getElementById('btnRenum').disabled  = true;
   }
 });
@@ -272,22 +266,6 @@ async function startImport() {
   log('─────────────────────────', 'inf');
   log('Concluído! Criados: ' + ok + ' | Pulados/atualizados: ' + skipped + ' | Erros: ' + errs, ok && !errs ? 'ok' : 'warn');
   document.getElementById('status').textContent = 'Concluído — ' + ok + ' criados, ' + skipped + ' pulados, ' + errs + ' erros.';
-}
-
-// ── Clear Collection ───────────────────────────────────────────
-async function clearCollection() {
-  if (!confirm('⚠️ Isso DELETA TODOS os documentos da coleção "contratos" do Firestore.\n\nTem certeza absoluta?')) return;
-  if (!confirm('Segunda confirmação: realmente quer apagar tudo?')) return;
-
-  log('Iniciando limpeza da coleção contratos...', 'warn');
-  const snap = await db.collection('contratos').get();
-  let deleted = 0;
-  for (const doc of snap.docs) {
-    await doc.ref.delete();
-    deleted++;
-    document.getElementById('status').textContent = 'Deletados: ' + deleted;
-  }
-  log('Coleção limpa! ' + deleted + ' documentos deletados.', 'ok');
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
