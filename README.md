@@ -239,6 +239,41 @@ openssl enc -d -aes-256-cbc -pbkdf2 -in .\firestore-AAAAmmdd-HHMMSS.json.gz.enc 
 gzip -d .\firestore-backup.json.gz
 ```
 
+## Importador Firestore (seguranca e auditoria)
+
+O utilitario [scripts/import-firestore.html](scripts/import-firestore.html) foi atualizado com controles adicionais.
+
+### Reautenticacao obrigatoria
+
+Antes de executar as acoes abaixo, a tela pede confirmacao de usuario e senha novamente:
+
+- Importar
+- Exportar backup (Excel)
+- Renumerar registros
+
+### Modos para registros existentes
+
+- Completar apenas campos faltantes (padrao)
+- Atualizar todos os campos presentes no arquivo (seguro)
+- Substituir documento pelos dados do arquivo
+
+No modo seguro, somente os campos presentes no JSON/Excel sao atualizados. Campos ausentes no arquivo nao sao sobrescritos.
+
+### Historico de auditoria
+
+As operacoes de importacao, exportacao e renumeracao gravam historico em `meta/importAudit` no Firestore com:
+
+- quem executou (`uid` e `email`)
+- o que foi feito (`action`)
+- quando foi feito (`at`)
+- detalhes da operacao (`details`)
+
+Para controle de tamanho, o historico mantem os 300 eventos mais recentes.
+
+### Sugestao futura
+
+- Adicionar botao "Ver historico" no proprio importador para consultar a auditoria sem abrir o Firebase Console.
+
 ## Segurança
 
 - `firebase-config.js` deve ser tratado como arquivo local do ambiente.

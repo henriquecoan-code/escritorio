@@ -48,6 +48,16 @@
   </label>
 </div>
 
+<div style="margin-top:6px;">
+  <label>Registros existentes:
+    <select id="existingMode">
+      <option value="fillMissing" selected>Completar apenas campos faltantes (padrão)</option>
+      <option value="mergeProvided">Atualizar todos os campos presentes no arquivo (seguro)</option>
+      <option value="replaceAll">Substituir documento pelos dados do arquivo</option>
+    </select>
+  </label>
+</div>
+
 <div style="margin-top:10px;">
   <button id="btnExport" onclick="exportarFirestore()" disabled>⬇ Exportar backup (Excel)</button>
   <button id="btnImport" onclick="startImport()" disabled>▶ Importar</button>
@@ -83,6 +93,60 @@ function log(msg, cls) {
   line.textContent = '[' + new Date().toLocaleTimeString('pt-BR') + '] ' + msg;
   el.appendChild(line);
   el.scrollTop = el.scrollHeight;
+}
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+async function requireReauth(actionLabel) {
+  const user = auth.currentUser;
+  if (!user || !user.email) {
+    log('Sessão inválida. Faça login novamente.', 'err');
+    return false;
+  }
+
+  const email = prompt('Confirme o usuário para ' + actionLabel + ':', user.email);
+  if (!email) {
+    log('Ação cancelada: usuário não informado.', 'warn');
+    return false;
+  }
+
+  const senha = prompt('Confirme a senha para ' + actionLabel + ':');
+  if (!senha) {
+    log('Ação cancelada: senha não informada.', 'warn');
+    return false;
+  }
+
+  try {
+    const cred = firebase.auth.EmailAuthProvider.credential(email.trim(), senha);
+    await user.reauthenticateWithCredential(cred);
+    return true;
+  } catch (e) {
+    log('Falha na reautenticação para ' + actionLabel + ': ' + e.message, 'err');
+    return false;
+  }
+}
+
+async function appendAuditEvent(action, details) {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const ref = db.collection('meta').doc('importAudit');
+  const event = {
+    at: nowIso(),
+    action,
+    uid: user.uid,
+    email: user.email || '',
+    details: details || {}
+  };
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    const current = snap.exists && Array.isArray(snap.data().events) ? snap.data().events : [];
+    const next = current.concat([event]).slice(-300);
+    tx.set(ref, { events: next, updatedAt: nowIso() }, { merge: true });
+  });
 }
 
 // ── Auth ───────────────────────────────────────────────────────
@@ -196,15 +260,33 @@ async function lerArquivo(file) {
   throw new Error('Formato não suportado. Use .json ou .xlsx');
 }
 
+function buildPatchFromRecord(rec) {
+  const patch = {};
+  for (const [k, v] of Object.entries(rec)) {
+    if (k === 'uid' || v === undefined) continue;
+    patch[k] = v;
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'docsPendentes') && !Array.isArray(patch.docsPendentes)) {
+    patch.docsPendentes = [];
+  }
+  return patch;
+}
+
 async function startImport() {
   const fileInput = document.getElementById('fileInput');
   if (!fileInput.files.length) { log('Selecione um arquivo .json ou .xlsx.', 'warn'); return; }
 
+  if (!(await requireReauth('importação'))) return;
+
   const skipExisting = document.getElementById('chkSkipExisting').checked;
+  const existingMode = document.getElementById('existingMode').value;
   let records;
   try { records = await lerArquivo(fileInput.files[0]); } catch(e) { log(e.message, 'err'); return; }
 
   if (!Array.isArray(records) || !records.length) { log('Nenhum registro encontrado no arquivo.', 'err'); return; }
+  if (skipExisting && existingMode !== 'fillMissing') {
+    log('A opção "Pular registros" está marcada; modo para existentes ignorado.', 'warn');
+  }
   log('Iniciando importação de ' + records.length + ' registros (' + fileInput.files[0].name + ')...', 'inf');
 
   const coll = db.collection('contratos');
@@ -221,26 +303,47 @@ async function startImport() {
 
     try {
       const docRef = coll.doc(rec.uid);
+      const snap = await docRef.get();
 
-      if (skipExisting) {
-        const snap = await docRef.get();
-        if (snap.exists) {
+      if (snap.exists) {
+        if (skipExisting) {
           // Merge apenas novos campos (não sobrescreve dados já preenchidos)
           const existing = snap.data();
           const patch = {};
           const newFields = ['etapa','dtChegada','dtContato','dtEnvioContrato',
                              'dtAssinatura','dtDocs','dtDocsRec','dtEntrega','docsPendentes'];
           for (const f of newFields) {
-            if (existing[f] === undefined || existing[f] === null) {
+            if ((existing[f] === undefined || existing[f] === null) && rec[f] !== undefined) {
               patch[f] = rec[f];
             }
           }
           if (Object.keys(patch).length) {
             await docRef.update(patch);
-            log('Atualizado (novos campos): ' + rec.uid + ' | ' + (rec.cliente || ''), 'inf');
+            log('Atualizado (campos faltantes): ' + rec.uid + ' | ' + (rec.cliente || ''), 'inf');
           } else {
-            log('Já completo: ' + rec.uid + ' | ' + (rec.cliente || ''), 'warn');
+            log('Sem mudanças: ' + rec.uid + ' | ' + (rec.cliente || ''), 'warn');
           }
+          skipped++;
+          continue;
+        }
+
+        if (existingMode === 'mergeProvided') {
+          const patch = buildPatchFromRecord(rec);
+          if (Object.keys(patch).length) {
+            await docRef.update(patch);
+            log('Atualizado (modo seguro): ' + rec.uid + ' | ' + (rec.cliente || ''), 'inf');
+          } else {
+            log('Sem campos para atualizar: ' + rec.uid + ' | ' + (rec.cliente || ''), 'warn');
+          }
+          skipped++;
+          continue;
+        }
+
+        if (existingMode === 'replaceAll') {
+          const payload = { ...rec };
+          if (!Array.isArray(payload.docsPendentes)) payload.docsPendentes = [];
+          await docRef.set(payload);
+          log('Substituído: ' + rec.uid + ' | ' + (rec.cliente || ''), 'warn');
           skipped++;
           continue;
         }
@@ -266,12 +369,28 @@ async function startImport() {
   log('─────────────────────────', 'inf');
   log('Concluído! Criados: ' + ok + ' | Pulados/atualizados: ' + skipped + ' | Erros: ' + errs, ok && !errs ? 'ok' : 'warn');
   document.getElementById('status').textContent = 'Concluído — ' + ok + ' criados, ' + skipped + ' pulados, ' + errs + ' erros.';
+
+  try {
+    await appendAuditEvent('import', {
+      file: fileInput.files[0]?.name || '',
+      existingMode,
+      skipExisting,
+      created: ok,
+      touched: skipped,
+      errors: errs,
+      total: records.length
+    });
+  } catch (e) {
+    log('Aviso: falha ao gravar histórico da importação: ' + e.message, 'warn');
+  }
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // ── Exportar backup ───────────────────────────────────────────
 async function exportarFirestore() {
+  if (!(await requireReauth('exportação'))) return;
+
   log('Carregando todos os registros para exportar...', 'inf');
   document.getElementById('progress').style.width = '0%';
   document.getElementById('status').textContent = 'Exportando...';
@@ -337,6 +456,15 @@ async function exportarFirestore() {
     document.getElementById('progress').style.width = '100%';
     document.getElementById('status').textContent = `Exportado — ${records.length} registros.`;
     log(`Backup gerado com ${records.length} registros → backup-contratos-${now}.xlsx`, 'ok');
+
+    try {
+      await appendAuditEvent('export', {
+        file: `backup-contratos-${now}.xlsx`,
+        total: records.length
+      });
+    } catch (e) {
+      log('Aviso: falha ao gravar histórico da exportação: ' + e.message, 'warn');
+    }
   } catch(e) {
     log('Erro ao exportar: ' + e.message, 'err');
   }
@@ -344,6 +472,8 @@ async function exportarFirestore() {
 
 // ── Renumerar registros ────────────────────────────────────────
 async function renumerar() {
+  if (!(await requireReauth('renumeração'))) return;
+
   if (!confirm('Isso vai atribuir um número sequencial (campo "numero") a TODOS os registros,\nordenados do mais antigo ao mais recente (campo "data").\n\nContinuar?')) return;
 
   log('Carregando todos os registros...', 'inf');
@@ -387,6 +517,14 @@ async function renumerar() {
   log('─────────────────────────', 'inf');
   log(`Renumeração concluída! ${docs.length} registros numerados de 1 a ${docs.length}.`, 'ok');
   document.getElementById('status').textContent = `Concluído — ${docs.length} registros renumerados.`;
+
+  try {
+    await appendAuditEvent('renumber', {
+      total: docs.length
+    });
+  } catch (e) {
+    log('Aviso: falha ao gravar histórico da renumeração: ' + e.message, 'warn');
+  }
 }
 </script>
 </body>

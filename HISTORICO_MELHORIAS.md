@@ -4,6 +4,36 @@
 **Data:** Abril 2026  
 **Stack:** HTML + CSS + JS (vanilla) + Firebase Firestore + Firebase Auth
 
+## Atualizacao complementar (Junho 2026)
+
+### Backup automatico (GitHub Actions)
+
+- Workflow dedicado para backup diario/manual do Firestore
+- Arquivo exportado, comprimido e criptografado (AES-256)
+- Retencao automatica de 7 dias para artefatos
+- Atualizacao das actions para versoes compativeis com Node 24
+
+### Endurecimento do importador
+
+- Remocao da acao destrutiva de "limpar colecao"
+- Reautenticacao obrigatoria (usuario e senha) para:
+  - Importar
+  - Exportar backup
+  - Renumerar
+
+### Auditoria de operacoes
+
+- Registro de historico em `meta/importAudit` contendo:
+  - quem executou (`uid` e `email`)
+  - o que executou (`action`)
+  - quando executou (`at`)
+  - detalhes da operacao (`details`)
+- Politica de limite: manter os ultimos 300 eventos
+
+### Sugestao registrada
+
+- Adicionar botao "Ver historico" no `import-firestore.html` para consulta da auditoria diretamente na interface.
+
 ---
 
 ## Migração para Firebase (Ontem)
