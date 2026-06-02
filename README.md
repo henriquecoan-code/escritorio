@@ -232,12 +232,19 @@ Configure em Settings -> Secrets and variables -> Actions:
 
 ### Restauracao local (quando precisar)
 
-Exemplo de descriptografia no Windows (PowerShell):
+Exemplo de descriptografia no Windows (PowerShell), sem depender do OpenSSL:
 
 ```powershell
-openssl enc -d -aes-256-cbc -pbkdf2 -in .\firestore-AAAAmmdd-HHMMSS.json.gz.enc -out .\firestore-backup.json.gz -pass pass:SUA_SENHA
-gzip -d .\firestore-backup.json.gz
+.\scripts\restore-firestore-backup.ps1 -EncryptedFile "C:\Users\henri\Downloads\firestore-backup-26795378218.zip"
 ```
+
+Ou, usando o miniscript pronto do projeto:
+
+```powershell
+.\scripts\restore-firestore-backup.ps1 -EncryptedFile "C:\Users\henri\Downloads\firestore-backup-26795378218.zip"
+```
+
+Se o arquivo vier do GitHub Actions como `.zip`, basta passar o caminho completo no parâmetro `-EncryptedFile`; o script encontra o `.enc` dentro do ZIP automaticamente, faz a descriptografia e grava o JSON final na mesma pasta do arquivo de entrada, a menos que você informe `-OutputFile`.
 
 ## Importador Firestore (seguranca e auditoria)
 
