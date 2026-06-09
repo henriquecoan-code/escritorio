@@ -200,6 +200,16 @@ Relatórios gerados como artefatos da execução:
 - playwright-report
 - zap-report
 
+## Notebook e GitHub
+
+Para sincronizar um notebook novo com o GitHub neste repositório:
+
+- salve o arquivo com extensao `.ipynb` dentro deste workspace, de preferência em uma pasta como `notebooks/`
+- faça as alteracoes no notebook e salve normalmente no VS Code
+- use o painel Source Control para criar o commit e enviar para `origin/main`
+
+O arquivo [.gitattributes](.gitattributes) ja normaliza notebooks para evitar diferenças desnecessarias no Windows e no GitHub.
+
 ## Backup automatico do Firestore (GitHub Actions)
 
 Foi adicionada uma rotina automatica em [.github/workflows/firestore-backup.yml](.github/workflows/firestore-backup.yml) que:
