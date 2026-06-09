@@ -28,6 +28,7 @@ let firebasePermissionWarned=false;
 let isSyncing=false;       // trava contra sync concorrente
 let isEditing=false;       // true quando modal ou painel de edicao esta aberto
 let unsubContratos=null;   // unsubscribe do listener onSnapshot
+let createdAtBackfillRunning=false;
 
 /* .. REG STATE .. */
 let regFilter = {srch:'', mes:'', adv:'', etapa:'', area:''};
@@ -152,6 +153,7 @@ async function loadFromFirebase(){
       DB = JSON.parse(JSON.stringify(SEED_DATA));
       const batch = fbDb.batch();
       DB.forEach((r)=>{
+        r.createdAt = r.createdAt || Date.now();
         r.updatedAt=Date.now();
         batch.set(fbDb.collection('contratos').doc(r.uid), r);
       });
@@ -160,6 +162,17 @@ async function loadFromFirebase(){
     } else {
       DB = contractsSnap.docs.map((d)=>d.data());
     }
+
+    let missingCreatedAt=0;
+    const missingCreatedAtRecords=[];
+    DB.forEach((r)=>{
+      if(!r.createdAt){
+        r.createdAt=estimateRecordCreatedAtMs(r);
+        missingCreatedAt++;
+        missingCreatedAtRecords.push(r);
+      }
+      if(!r.updatedAt) r.updatedAt=r.createdAt;
+    });
 
     // -- meta: listas e fotos --
     const listsDoc = await fbDb.collection('meta').doc('lists').get();
@@ -177,6 +190,10 @@ async function loadFromFirebase(){
 
     firebasePermissionWarned=false;
     fillSelects();fillFilters();renderDash();renderTbl();fillRegFilters();renderReg();
+
+    if(missingCreatedAt>0){
+      backfillCreatedAtInFirebase(missingCreatedAtRecords).catch((err)=>console.warn('Backfill createdAt falhou:', err));
+    }
   }catch(e){
     console.error(e);
     const code = (e && (e.code || e.status)) ? String(e.code || e.status) : '';
@@ -194,6 +211,35 @@ async function loadFromFirebase(){
     toast('Erro ao carregar dados do Firebase.','err');
   } finally {
     isSyncing=false;
+  }
+}
+
+async function backfillCreatedAtInFirebase(records){
+  if(!USE_FIREBASE || !fbDb || !currentUser) return;
+  if(createdAtBackfillRunning) return;
+
+  const source=Array.isArray(records)&&records.length?records:DB;
+  const missing=source.filter((r)=>r && r.uid && r.createdAt);
+  if(!missing.length) return;
+
+  createdAtBackfillRunning=true;
+  try{
+    const CHUNK=350;
+    for(let i=0;i<missing.length;i+=CHUNK){
+      const slice=missing.slice(i,i+CHUNK);
+      const batch=fbDb.batch();
+      slice.forEach((r)=>{
+        const createdAt=estimateRecordCreatedAtMs(r);
+        r.createdAt=createdAt;
+        batch.set(fbDb.collection('contratos').doc(r.uid),{createdAt},{merge:true});
+      });
+      await batch.commit();
+    }
+    toast(`Backfill de criacao concluido: ${missing.length} registro(s).`,'info');
+  }catch(e){
+    console.error('Erro no backfill de createdAt:',e);
+  }finally{
+    createdAtBackfillRunning=false;
   }
 }
 
@@ -326,6 +372,87 @@ function avgArr(arr){
   return Math.round(arr.reduce((s,v)=>s+v,0)/arr.length);
 }
 
+function topValue(data, field, allowed=[]){
+  const values=(allowed&&allowed.length?allowed:[...new Set(data.map(r=>r[field]).filter(Boolean))]).filter(Boolean);
+  let best=null;
+  let bestCount=0;
+  values.forEach((v)=>{
+    const c=cnt(data,field,v);
+    if(c>bestCount){
+      best=v;
+      bestCount=c;
+    }
+  });
+  return bestCount>0?best:null;
+}
+
+function brasiliaTodayISO(){
+  const fmt=new Intl.DateTimeFormat('en-CA',{
+    timeZone:'America/Sao_Paulo',
+    year:'numeric',
+    month:'2-digit',
+    day:'2-digit',
+  });
+  return fmt.format(new Date());
+}
+
+function metricDaysWithOpenFallback(rec, startField, endField){
+  const start=parseDMY(rec?.[startField]) || getRecordCreatedDate(rec);
+  if(!start) return null;
+
+  const end=parseDMY(rec?.[endField]);
+  if(end) return Math.round((end-start)/86400000);
+
+  // Se a tarefa ainda estiver aberta, mede até hoje (Brasília)
+  if(!isDoneRecord(rec)){
+    const today=parseDMY(brasiliaTodayISO());
+    if(!today) return null;
+    return Math.max(0,Math.round((today-start)/86400000));
+  }
+
+  return null;
+}
+
+function getRecordCreatedDate(rec){
+  const candidates=[
+    rec?.createdAt,
+    rec?.created_at,
+    rec?.dataCriacao,
+    rec?.criadoEm,
+  ];
+
+  for(const c of candidates){
+    const d=parseDMY(c);
+    if(d) return d;
+  }
+
+  // Fallback para IDs gerados por uid(): <Date.now().toString(36)> + 4 chars aleatorios
+  const id=String(rec?.uid||'');
+  if(id.length>8){
+    const base=id.slice(0,-4);
+    if(/^[0-9a-z]+$/.test(base)){
+      const ms=Number.parseInt(base,36);
+      const d=parseDMY(ms);
+      if(d) return d;
+    }
+  }
+
+  return null;
+}
+
+function estimateRecordCreatedAtMs(rec){
+  const d=getRecordCreatedDate(rec)
+    || parseDMY(rec?.dtChegada)
+    || parseDMY(rec?.data)
+    || parseDMY(rec?.dtAssinatura)
+    || parseDMY(rec?.dtEnvioContrato)
+    || parseDMY(rec?.dtContato)
+    || parseDMY(rec?.dtDocs)
+    || parseDMY(rec?.dtDocsRec)
+    || parseDMY(rec?.dtEntrega);
+  return d ? d.getTime() : Date.now();
+}
+
 function renderTempoWidget(){
   const grid=document.getElementById('tempo-grid');
   const detail=document.getElementById('tempo-detail-grid');
@@ -335,13 +462,13 @@ function renderTempoWidget(){
 
   const defs=[
     {l:'Chegada → Assinatura',icon:'✍',f1:'dtChegada',f2:'dtAssinatura',ref:10,d:'Da entrada até assinar'},
-    {l:'Chegada → Docs Solic.',icon:'📋',f1:'dtChegada',f2:'dtDocs',ref:14,d:'Da assinatura até solicitar docs'},
+    {l:'Chegada → Docs Solic.',icon:'📋',f1:'dtChegada',f2:'dtDocs',ref:14,d:'Da entrada até solicitar docs'},
     {l:'Chegada → Docs Rec.',icon:'📦',f1:'dtChegada',f2:'dtDocsRec',ref:21,d:'Até receber documentos'},
     {l:'Chegada → Entrega',icon:'🏁',f1:'dtChegada',f2:'dtEntrega',ref:30,d:'Processo comercial completo'},
   ];
 
   grid.innerHTML=defs.map((tm)=>{
-    const vals=src.map(r=>diffDays(r[tm.f1],r[tm.f2])).filter(v=>v!=null&&v>=0);
+    const vals=src.map(r=>metricDaysWithOpenFallback(r,tm.f1,tm.f2)).filter(v=>v!=null&&v>=0);
     const a=avgArr(vals);
     const col=a==null?'var(--t3)':a<=tm.ref*.7?'var(--green)':a<=tm.ref?'var(--amber)':'var(--rose)';
     const barCol=a==null?'rgba(110,106,136,.3)':a<=tm.ref*.7?'#5EC97A':a<=tm.ref?'#F0A732':'#E8735A';
@@ -357,7 +484,7 @@ function renderTempoWidget(){
     {l:'Envio → Assinatura',f1:'dtEnvioContrato',f2:'dtAssinatura',ref:7},
   ];
   const extraHtml=extras.map((tm)=>{
-    const vals=src.map(r=>diffDays(r[tm.f1],r[tm.f2])).filter(v=>v!=null&&v>=0);
+    const vals=src.map(r=>metricDaysWithOpenFallback(r,tm.f1,tm.f2)).filter(v=>v!=null&&v>=0);
     const a=avgArr(vals);
     const col=a==null?'var(--t3)':a<=tm.ref*.7?'var(--green)':a<=tm.ref?'var(--amber)':'var(--rose)';
     return `<div style="padding:9px;border:1px solid var(--b);background:var(--b2)"><div style="font-size:9px;color:var(--t3);margin-bottom:3px">${tm.l}</div><div style="font-family:Georgia,serif;font-size:20px;font-weight:300;color:${col}">${a==null?'--':a+'d'}</div><div style="font-size:9px;color:var(--t3);margin-top:2px">${vals.length} reg. · meta ≤${tm.ref}d</div></div>`;
@@ -643,6 +770,7 @@ function firebaseErrLabel(e){
 /* .. SAVE TO SERVER .. */
 async function serverSave(record){
   if(!ensureAuthenticated()) return false;
+  record.createdAt = record.createdAt || estimateRecordCreatedAtMs(record);
   // Item 5 - garante updatedAt atualizado antes de gravar
   record.updatedAt = record.updatedAt || Date.now();
   try{
@@ -704,9 +832,8 @@ function renderDash(){
   const emAndamento=view.filter(r=>!isDoneRecord(r)).length;
   const concluidos=view.filter(r=>isDoneRecord(r)).length;
   const assinados=view.filter(r=>r.dtAssinatura).length;
-  const durEntrega=view.map(r=>diffDays(r.dtChegada,r.dtEntrega)).filter(v=>v!=null&&v>=0);
+  const durEntrega=view.map(r=>metricDaysWithOpenFallback(r,'dtChegada','dtEntrega')).filter(v=>v!=null&&v>=0);
   const tempoMedio=avgArr(durEntrega);
-  const topArea=AREAS.reduce((a,b)=>cnt(view,'area',a)>=cnt(view,'area',b)?a:b,AREAS[0]);
   const pctAssin=total?Math.round(assinados/total*100):0;
   const pctAnd=total?Math.round(emAndamento/total*100):0;
   const pctConc=total?Math.round(concluidos/total*100):0;
@@ -811,17 +938,17 @@ function renderDash(){
       plugins:{legend:{labels:{color:'#6E6A88',boxWidth:9,padding:12}},tooltip:TT},
       scales:{x:{grid:{display:false},ticks:{color:'#6E6A88'}},y:{grid:{color:'rgba(201,168,76,.04)'},ticks:{color:'#6E6A88'}}}}});
   // Summary
-  const topAdv=ADVS.reduce((a,b)=>cnt(view,'adv',a)>=cnt(view,'adv',b)?a:b,ADVS[0]);
-  const topTipo=TIPOS.reduce((a,b)=>cnt(view,'tipo',a)>=cnt(view,'tipo',b)?a:b,TIPOS[0]);
-  const topAcao=ACOES.reduce((a,b)=>cnt(view,'acao',a)>=cnt(view,'acao',b)?a:b,ACOES[0]);
-  const topOrig=ORIGENS.reduce((a,b)=>cnt(view,'origem',a)>=cnt(view,'origem',b)?a:b,ORIGENS[0]);
+  const topArea=topValue(view,'area',AREAS);
+  const topAdv=topValue(view,'adv',ADVS);
+  const topTipo=topValue(view,'tipo',TIPOS);
+  const topAcao=topValue(view,'acao',ACOES);
   document.getElementById('sum-tbl').innerHTML=`
     <thead><tr><th>Indicador</th><th>${isF?activeMonth:'Total'}</th>${isF?'<th>Total</th>':''}</tr></thead>
     <tbody>${[
-      ['Contratos',total,DB.length],['Área Líder',cnt(view,'area',topArea)?topArea:'--',cnt(DB,'area',topArea)],
-      ['Ação Mais Comum',cnt(view,'acao',topAcao)?topAcao:'--',cnt(DB,'acao',topAcao)],
-      ['Tipo Predominante',cnt(view,'tipo',topTipo)?topTipo:'--',cnt(DB,'tipo',topTipo)],
-      ['Advogado Líder',cnt(view,'adv',topAdv)?topAdv:'--',cnt(DB,'adv',topAdv)],
+      ['Contratos',total,DB.length],['Área Líder',topArea||'--',topArea?cnt(DB,'area',topArea):'--'],
+      ['Ação Mais Comum',topAcao||'--',topAcao?cnt(DB,'acao',topAcao):'--'],
+      ['Tipo Predominante',topTipo||'--',topTipo?cnt(DB,'tipo',topTipo):'--'],
+      ['Advogado Líder',topAdv||'--',topAdv?cnt(DB,'adv',topAdv):'--'],
       ['Sem Adv. Vinc.',view.filter(r=>!r.adv).length,DB.filter(r=>!r.adv).length],
     ].map(([k,v,t])=>`<tr><td style="color:var(--t3)">${k}</td><td><span class="tag">${v}</span></td>${isF?`<td><span class="tag blue">${t}</span></td>`:''}</tr>`).join('')}
     </tbody>`;
@@ -1077,6 +1204,7 @@ async function saveC(){
   const toDMY=(id)=>{const v=document.getElementById(id)?.value||'';return v?fmtDate(v):'';};
   const obj={
     uid:editUid||uid(),
+    createdAt:Date.now(),
     updatedAt:Date.now(),
     cliente:cli,
     adv:document.getElementById('m-adv').value,
@@ -1102,7 +1230,11 @@ async function saveC(){
   let wasNew=false;
   if(editUid){
     const i=DB.findIndex(x=>x.uid===editUid);
-    if(i>=0){obj.numero=DB[i].numero||null;DB[i]=obj;}
+    if(i>=0){
+      obj.numero=DB[i].numero||null;
+      obj.createdAt=DB[i].createdAt||estimateRecordCreatedAtMs(DB[i]);
+      DB[i]=obj;
+    }
   }else{
     obj.numero=Math.max(0,...DB.map(r=>r.numero||0))+1;
     DB.push(obj);wasNew=true;
@@ -1203,17 +1335,66 @@ const DOCS_LISTA   = [
 /* Converte "DD/MM/AAAA" para objeto Date (ou null) */
 function parseDMY(dmy){
   if(!dmy) return null;
-  // aceita DD/MM/AAAA ou AAAA-MM-DD (ISO)
-  let p=dmy.split('/');
-  if(p.length===3){
-    const d=new Date(+p[2],+p[1]-1,+p[0]);
-    return isNaN(d)?null:d;
+
+  const MIN_YEAR = 2000;
+  const MAX_YEAR = 2100;
+  const buildValidDate = (y,m,d)=>{
+    if(!Number.isInteger(y)||!Number.isInteger(m)||!Number.isInteger(d)) return null;
+    if(y<MIN_YEAR || y>MAX_YEAR) return null;
+    if(m<1 || m>12) return null;
+    if(d<1 || d>31) return null;
+    const dt = new Date(y,m-1,d);
+    if(isNaN(dt)) return null;
+    // Evita autocorreção silenciosa do Date (ex.: 31/02 vira março)
+    if(dt.getFullYear()!==y || dt.getMonth()!==m-1 || dt.getDate()!==d) return null;
+    return dt;
+  };
+
+  // Firestore Timestamp (compat) ou objeto Date
+  if(typeof dmy==='object'){
+    if(typeof dmy.toDate==='function'){
+      const dt=dmy.toDate();
+      return buildValidDate(dt.getFullYear(),dt.getMonth()+1,dt.getDate());
+    }
+    if(dmy instanceof Date){
+      return buildValidDate(dmy.getFullYear(),dmy.getMonth()+1,dmy.getDate());
+    }
+    if(Number.isFinite(dmy.seconds)){
+      const dt=new Date(Number(dmy.seconds)*1000);
+      return buildValidDate(dt.getFullYear(),dt.getMonth()+1,dt.getDate());
+    }
+    return null;
   }
-  p=dmy.split('-');
-  if(p.length===3){
-    const d=new Date(+p[0],+p[1]-1,+p[2]);
-    return isNaN(d)?null:d;
+
+  if(typeof dmy==='number' && Number.isFinite(dmy)){
+    const ms = dmy > 1e11 ? dmy : dmy * 1000;
+    const dt = new Date(ms);
+    return buildValidDate(dt.getFullYear(),dt.getMonth()+1,dt.getDate());
   }
+
+  const raw=String(dmy).trim();
+  if(!raw) return null;
+
+  // Epoch em string (segundos ou milissegundos)
+  if(/^\d{10,13}$/.test(raw)){
+    const n=Number(raw);
+    const ms = raw.length===13 ? n : n*1000;
+    const dt = new Date(ms);
+    return buildValidDate(dt.getFullYear(),dt.getMonth()+1,dt.getDate());
+  }
+
+  // DD/MM/AAAA
+  let m = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(m){
+    return buildValidDate(Number(m[3]),Number(m[2]),Number(m[1]));
+  }
+
+  // AAAA-MM-DD (com ou sem hora)
+  m = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+  if(m){
+    return buildValidDate(Number(m[1]),Number(m[2]),Number(m[3]));
+  }
+
   return null;
 }
 /* Converte "AAAA-MM-DD" para "DD/MM/AAAA" */
