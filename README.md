@@ -302,3 +302,32 @@ Para controle de tamanho, o historico mantem os 300 eventos mais recentes.
 ## Histórico
 
 O resumo das etapas de migração, segurança e refatoração está em `HISTORICO_MELHORIAS.md`.
+
+## Recomendações técnicas (análise de 2026-06-10)
+
+Prioridade alta:
+
+- Endurecer `firestore.rules` para impedir que qualquer usuário autenticado edite ou exclua qualquer contrato.
+- Restringir escrita em `meta/*` para admin.
+- Restringir ou remover o importador administrativo da publicação padrão (`scripts/import-firestore.html`).
+
+Prioridade média:
+
+- Escapar valores dinâmicos antes de montar `<option>` com `innerHTML` em `scripts/dashboard.js`.
+- Restringir CSP de `script-src` para origens explícitas e evitar `https:` genérico.
+- Ajustar testes para validar cenário seguro (negação de edição cruzada e escrita de `meta` por não admin).
+
+## Troubleshooting: erro "permissão negada" ao salvar registro
+
+Causa mais provável no estado atual:
+
+- O frontend envia `createdAt` ao salvar novo registro.
+- A regra de create validava `hasOnly(...)` sem incluir `createdAt`.
+- Resultado: o Firestore rejeita o `set(...)` com `permission-denied`.
+
+Checklist rápido:
+
+1. Confirme login ativo no overlay de autenticação.
+2. Verifique se as regras publicadas no Firebase já incluem `createdAt` em `validContrato(...)`.
+3. Após alterar regras, publique com `firebase deploy --only firestore:rules`.
+4. Teste criar um novo registro (não apenas editar um existente).

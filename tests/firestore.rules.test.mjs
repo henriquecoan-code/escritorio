@@ -51,6 +51,19 @@ describe('Firestore Rules - dashboard', () => {
     );
   });
 
+  it('permite create com createdAt e updatedAt', async () => {
+    const userDb = testEnv.authenticatedContext('user-2b').firestore();
+    const now = Date.now();
+    await assertSucceeds(
+      setDoc(doc(userDb, 'contratos', 'ok-1b'), {
+        uid: 'ok-1b',
+        cliente: 'Teste com createdAt',
+        createdAt: now,
+        updatedAt: now,
+      })
+    );
+  });
+
   it('nega create com campo nao permitido', async () => {
     const userDb = testEnv.authenticatedContext('user-2').firestore();
     await assertFails(
