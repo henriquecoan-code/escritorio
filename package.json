@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Testes automatizados do dashboard OB",
   "scripts": {
-    "serve": "python3 -m http.server 8000",
+    "serve": "node scripts/serve.mjs",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.js",
     "test:e2e:real": "playwright test tests/e2e/real-flow.spec.js",

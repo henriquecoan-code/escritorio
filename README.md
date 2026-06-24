@@ -13,6 +13,7 @@ Dashboard interno da Oliveira & Benedet para gestão e visualização de contrat
 
 ```text
 escritorio/
+├── index.html
 ├── OB_Dashboard_Rede.html
 ├── firebase-config.js
 ├── firebase-config.public.js
@@ -52,18 +53,18 @@ escritorio/
 
 ## Como abrir o dashboard
 
-Como o projeto é estático, basta abrir `OB_Dashboard_Rede.html` no navegador ou servir a pasta com qualquer servidor estático.
+Como o projeto é estático, basta abrir `index.html` no navegador ou servir a pasta com qualquer servidor estático.
 
-Se quiser usar um servidor local simples no Windows com Python:
+Se quiser usar um servidor local simples no Windows:
 
 ```powershell
-python -m http.server 8000
+npm run serve
 ```
 
 Depois acesse:
 
 ```text
-http://localhost:8000/OB_Dashboard_Rede.html
+http://localhost:8000/index.html
 ```
 
 ## Login e permissões
@@ -96,7 +97,7 @@ npx playwright install
 npm run serve
 ```
 
-Acesse: `http://localhost:8000/OB_Dashboard_Rede.html`
+Acesse: `http://localhost:8000/index.html`
 
 ### 3. Rodar testes E2E (Playwright)
 
@@ -154,7 +155,7 @@ Com Docker Desktop aberto, em outro terminal:
 
 ```powershell
 docker pull ghcr.io/zaproxy/zaproxy:stable
-docker run --rm -t -v "${PWD}:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t "http://host.docker.internal:8000/OB_Dashboard_Rede.html" -m 5 -r zap-report.html
+docker run --rm -t -v "${PWD}:/zap/wrk" ghcr.io/zaproxy/zaproxy:stable zap-baseline.py -t "http://host.docker.internal:8000/index.html" -m 5 -r zap-report.html
 ```
 
 Resultado esperado:

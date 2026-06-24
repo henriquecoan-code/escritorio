@@ -18,13 +18,13 @@ async function bypassAuthGuard(page) {
 }
 
 test('carrega a pagina principal', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
+  await page.goto(`${baseURL}/index.html`);
   await expect(page).toHaveTitle(/Oliveira\s*&\s*Benedet/i);
   await expect(page.locator('#app')).toBeVisible();
 });
 
 test('navega entre abas principais', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
+  await page.goto(`${baseURL}/index.html`);
   await disableAuthOverlay(page);
 
   await page.click('#tab-reg');
@@ -41,14 +41,14 @@ test('sem erro de runtime no carregamento', async ({ page, baseURL }) => {
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(String(error)));
 
-  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
+  await page.goto(`${baseURL}/index.html`);
   await page.waitForTimeout(1200);
 
   expect(pageErrors).toEqual([]);
 });
 
 test('alternancia de tema claro/escuro persiste', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
+  await page.goto(`${baseURL}/index.html`);
   await disableAuthOverlay(page);
 
   // Tema inicial: escuro (sem classe 'light' no <html>)
@@ -72,7 +72,7 @@ test('alternancia de tema claro/escuro persiste', async ({ page, baseURL }) => {
 });
 
 test('campo de busca esta visivel e aceita entrada', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
+  await page.goto(`${baseURL}/index.html`);
   await disableAuthOverlay(page);
 
   await page.click('#tab-reg');
@@ -85,14 +85,14 @@ test('campo de busca esta visivel e aceita entrada', async ({ page, baseURL }) =
 });
 
 test('barra de sincronizacao esta presente no rodape', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
+  await page.goto(`${baseURL}/index.html`);
   await disableAuthOverlay(page);
 
   await expect(page.locator('#sync-bar')).toBeVisible();
 });
 
 test('modal de novo registro abre e fecha', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
+  await page.goto(`${baseURL}/index.html`);
   await disableAuthOverlay(page);
   await bypassAuthGuard(page);
 

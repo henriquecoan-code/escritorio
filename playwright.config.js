@@ -14,7 +14,7 @@ module.exports = defineConfig({
   },
   webServer: {
     command: 'npm run serve',
-    url: 'http://localhost:8000/OB_Dashboard_Rede.html',
+    url: 'http://localhost:8000/index.html',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
   },
