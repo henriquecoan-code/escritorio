@@ -189,7 +189,7 @@ async function loadFromFirebase(){
     if(photosDoc.exists) photos = photosDoc.data() || {};
 
     firebasePermissionWarned=false;
-    fillSelects();fillFilters();renderDash();renderTbl();fillRegFilters();renderReg();
+    fillSelects();renderDash();fillRegFilters();renderReg();
 
     if(missingCreatedAt>0){
       backfillCreatedAtInFirebase(missingCreatedAtRecords).catch((err)=>console.warn('Backfill createdAt falhou:', err));
@@ -207,7 +207,7 @@ async function loadFromFirebase(){
       isSyncing=false;
       return;
     }
-    setSyncStatus('err','Erro no Firebase','Verifique firebase-config.js e as Rules');
+    setSyncStatus('err','Erro no Firebase','Verifique firebase-config.public.js e as Rules');
     toast('Erro ao carregar dados do Firebase.','err');
   } finally {
     isSyncing=false;
@@ -284,7 +284,7 @@ function startRealtimeSync(){
     const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     setSyncStatus('ok','Tempo real',`${DB.length} registros · ${now}`);
     firebasePermissionWarned=false;
-    fillSelects();fillFilters();renderDash();renderTbl();fillRegFilters();renderReg();
+    fillSelects();renderDash();fillRegFilters();renderReg();
   },
   (err)=>{
     console.error('onSnapshot erro:', err);
@@ -502,14 +502,6 @@ function bindStaticEvents(){
   document.getElementById('sync-now-btn')?.addEventListener('click',syncNow);
   document.getElementById('save-wo-btn')?.addEventListener('click',saveWO);
   document.getElementById('reset-wo-btn')?.addEventListener('click',resetWO);
-  document.getElementById('srch')?.addEventListener('input',onSearch);
-  ['ff-mes','ff-area','ff-adv','ff-status'].forEach((id)=>{
-    document.getElementById(id)?.addEventListener('change',()=>{pg=1;renderTbl();});
-  });
-  document.getElementById('clear-filters-btn')?.addEventListener('click',clearFilters);
-  document.querySelectorAll('.ctbl th[data-col]').forEach((th)=>{
-    th.addEventListener('click',()=>sortBy(th.dataset.col));
-  });
   document.getElementById('auth-login-btn')?.addEventListener('click',loginFirebase);
   document.getElementById('overlay')?.addEventListener('click',overlayBg);
   document.getElementById('close-modal-x-btn')?.addEventListener('click',closeM);
@@ -639,22 +631,6 @@ function bindStaticEvents(){
     woDragIdx=null;
     renderWOUI();
   });
-  document.getElementById('ctbody')?.addEventListener('click',(event)=>{
-    const actionBtn=event.target.closest('button[data-action][data-uid]');
-    if(actionBtn){
-      const uid=actionBtn.dataset.uid;
-      if(actionBtn.dataset.action==='edit') openM(uid);
-      if(actionBtn.dataset.action==='delete') askDel(uid);
-      return;
-    }
-    const row=event.target.closest('tr[data-open-uid]');
-    if(row) openM(row.dataset.openUid);
-  });
-  document.getElementById('pag-btns')?.addEventListener('click',(event)=>{
-    const pageBtn=event.target.closest('button[data-page]');
-    if(!pageBtn || pageBtn.disabled) return;
-    goPg(Number(pageBtn.dataset.page));
-  });
   document.getElementById('view-cfg')?.addEventListener('click',(event)=>{
     const addBtn=event.target.closest('button[data-cfg-add-key]');
     if(addBtn){
@@ -698,18 +674,17 @@ function init(){
     return;
   }
 
-  setSyncStatus('err','Firebase nao configurado','Preencha firebase-config.js com as credenciais do projeto');
-  toast('Firebase nao configurado. Verifique firebase-config.js','err');
+  setSyncStatus('err','Firebase nao configurado','Verifique firebase-config.public.js com as credenciais do projeto');
+  toast('Firebase nao configurado. Verifique firebase-config.public.js','err');
 }
 
 /* .. VIEWS .. */
 function sw(v){
-  ['dash','ct','reg','cfg'].forEach(k=>{
+  ['dash','reg','cfg'].forEach(k=>{
     document.getElementById(`view-${k}`)?.classList.toggle('on',k===v);
     document.getElementById(`tab-${k}`)?.classList.toggle('on',k===v);
   });
   if(v==='dash') renderDash();
-  if(v==='ct')  {fillFilters();renderTbl();}
   if(v==='reg') {fillRegFilters();renderReg();}
   if(v==='cfg')  {renderWOUI();renderAllCfg();}
 }
@@ -1055,84 +1030,6 @@ function fillSelects(){
     st.innerHTML=opts.map(v=>`<option value="${escAttr(v)}">${escHtml(v)}</option>`).join('');
   }
 }
-function fillFilters(){
-  const m=[...new Set(DB.map(r=>r.mes))].sort();
-  const mk=(id,opts,blank)=>{const el=document.getElementById(id);if(!el)return;
-    el.innerHTML=`<option value="">${blank}</option>`+opts.map(o=>`<option value="${o}">${o}</option>`).join('');};
-  mk('ff-mes',m,'Todos os meses');mk('ff-area',AREAS,'Todas as áreas');
-  mk('ff-adv',ADVS,'Todos os adv.');mk('ff-status',STATUS,'Todos status');
-}
-function clearFilters(){
-  ['srch','ff-mes','ff-area','ff-adv','ff-status'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  pg=1;renderTbl();
-}
-let _st;function onSearch(){clearTimeout(_st);_st=setTimeout(()=>{pg=1;renderTbl();},200);}
-
-/* .. TABLE .. */
-function getFiltered(){
-  const q=(document.getElementById('srch')?.value||'').toLowerCase().trim();
-  const fM=document.getElementById('ff-mes')?.value||'',fA=document.getElementById('ff-area')?.value||'',
-        fV=document.getElementById('ff-adv')?.value||'',fS=document.getElementById('ff-status')?.value||'';
-  return DB.filter(r=>{
-    if(fM&&r.mes!==fM)return false;if(fA&&r.area!==fA)return false;
-    if(fV&&r.adv!==fV)return false;if(fS&&r.status!==fS)return false;
-    if(q&&![r.cliente,r.area,r.acao,r.adv,r.mes,r.tipo,r.origem,r.status,r.obs||''].some(v=>(v||'').toLowerCase().includes(q)))return false;
-    return true;
-  });
-}
-function renderTbl(){
-  let rows=[...getFiltered()].sort((a,b)=>{
-    let av,bv;
-    if(sortCol==='data'){
-      av=dateToSort(a.data||'');
-      bv=dateToSort(b.data||'');
-    }else{
-      av=(a[sortCol]||'').toString().toLowerCase();
-      bv=(b[sortCol]||'').toString().toLowerCase();
-    }
-    return av<bv?-sortDir:av>bv?sortDir:0;
-  });
-  const total=rows.length,pages=Math.ceil(total/PG)||1;
-  pg=Math.min(pg,pages);const slice=rows.slice((pg-1)*PG,pg*PG);
-  const ctCountEl=document.getElementById('ct-count');
-  if(ctCountEl) ctCountEl.textContent=`- ${total} registro${total!==1?'s':''}`;
-  document.querySelectorAll('.ctbl th[data-col]').forEach(th=>{
-    const c=th.dataset.col;th.classList.toggle('sorted',c===sortCol);
-    th.textContent=th.textContent.replace(/ (\u2191|\u2193|\u2195)$/,'')+(c===sortCol?(sortDir===1?' ↑':' ↓'):' ↕');
-  });
-  const tB=t=>t?`<span class="bx bg">${escHtml(t)}</span>`:`<span class="bx bm">--</span>`;
-  const oB=o=>o?`<span class="bx bb">${escHtml(o)}</span>`:`<span class="bx bm">--</span>`;
-  const sB=s=>{const c=s==='Ativo'?'bgreen':s==='Encerrado'?'brose':'bamber';return`<span class="bx ${c}">${escHtml(s||'Ativo')}</span>`;};
-  const aB=a=>a?`<span class="bx bb" style="max-width:140px;display:inline-block;overflow:hidden;text-overflow:ellipsis" title="${escAttr(a)}">${escHtml(a)}</span>`:`<span class="bx bm">--</span>`;
-  const ctbodyEl=document.getElementById('ctbody');
-  if(!ctbodyEl) return;
-  ctbodyEl.innerHTML=slice.map(r=>`
-    <tr data-open-uid="${escAttr(r.uid)}">
-      <td>${escHtml(r.data||'--')}</td><td class="cl" style="max-width:180px;overflow:hidden;text-overflow:ellipsis" title="${escAttr(r.cliente||'')}">${escHtml(r.cliente||'')}</td>
-      <td>${escHtml(r.mes||'')}</td><td>${r.area?escHtml(r.area):'<span style="color:var(--t3)">--</span>'}</td>
-      <td class="wrap">${aB(r.acao)}</td><td>${tB(r.tipo)}</td>
-      <td>${r.adv?escHtml(r.adv):'<span style="color:var(--t3)">--</span>'}</td><td>${oB(r.origem)}</td>
-      <td>${sB(r.status)}</td>
-      <td><div class="ra">
-        <button class="rb" data-action="edit" data-uid="${escAttr(r.uid)}" title="Editar">&#9998;</button>
-        <button class="rb del" data-action="delete" data-uid="${escAttr(r.uid)}" title="Excluir">&#128465;</button>
-      </div></td>
-    </tr>`).join('');
-  const pagInfoEl=document.getElementById('pag-info');
-  if(pagInfoEl) pagInfoEl.textContent=`${total} contrato${total!==1?'s':''} · Página ${pg} de ${pages}`;
-  const pb=document.getElementById('pag-btns');
-  if(!pb||pages<=1){if(pb) pb.innerHTML='';return;}
-  let h=`<button class="pb2" data-page="${pg-1}" ${pg===1?'disabled':''}>&lsaquo;</button>`;
-  for(let i=1;i<=pages;i++){
-    if(i===1||i===pages||Math.abs(i-pg)<=2)h+=`<button class="pb2 ${i===pg?'on':''}" data-page="${i}">${i}</button>`;
-    else if(Math.abs(i-pg)===3)h+=`<span style="color:var(--t3);padding:0 3px">...</span>`;
-  }
-  h+=`<button class="pb2" data-page="${pg+1}" ${pg===pages?'disabled':''}>&rsaquo;</button>`;
-  if(pb) pb.innerHTML=h;
-}
-function sortBy(c){sortCol===c?sortDir*=-1:(sortCol=c,sortDir=1);pg=1;renderTbl();}
-function goPg(p){pg=p;renderTbl();}
-
 /* .. MODAL .. */
 function modalDaysBetween(aIso,bIso){
   if(!aIso||!bIso) return null;
@@ -1304,7 +1201,7 @@ async function saveC(){
     return;
   }
   toast(`"${cli}" ${editUid?'atualizado':'adicionado'}.`);
-  fillSelects();fillFilters();closeM();renderDash();renderTbl();renderReg();
+  fillSelects();closeM();renderDash();renderReg();
 }
 
 /* .. DELETE .. */
@@ -1317,7 +1214,7 @@ async function confirmDel(){
   if(!pendingDelUID)return;
   const u=pendingDelUID;DB=DB.filter(x=>x.uid!==u);pendingDelUID=null;
   await serverDelete(u);
-  closeDel();toast('Registro excluído.','info');renderDash();renderTbl();renderReg();
+  closeDel();toast('Registro excluído.','info');renderDash();renderReg();
 }
 function closeDel(){document.getElementById('del-ov').classList.remove('open');pendingDelUID=null;}
 
@@ -1348,7 +1245,7 @@ async function addCfg(key){
   const c=CFG[key],inp=document.getElementById(c.input),val=inp.value.trim();
   if(!val){inp.focus();return;}
   if(c.list().some(x=>x.toLowerCase()===val.toLowerCase())){toast(`"${val}" já existe.`,'err');inp.focus();return;}
-  c.set([...c.list(),val]);inp.value='';renderCfg(key);fillSelects();fillFilters();
+  c.set([...c.list(),val]);inp.value='';renderCfg(key);fillSelects();
   await serverSaveLists();
   toast(`"${val}" adicionado(a)!`);inp.focus();
 }
@@ -1356,7 +1253,7 @@ async function removeCfg(key,idx){
   const c=CFG[key],list=c.list(),item=list[idx];
   const u=DB.filter(r=>r[c.field]===item).length;
   if(u>0){toast(`"${item}" está em uso em ${u} contrato(s).`,'err');return;}
-  c.set(list.filter((_,i)=>i!==idx));renderCfg(key);fillSelects();fillFilters();
+  c.set(list.filter((_,i)=>i!==idx));renderCfg(key);fillSelects();
   await serverSaveLists();
   toast(`"${item}" removido(a).`,'info');
 }
@@ -1854,7 +1751,7 @@ async function saveReg(uid){
 
   DB[idx]=updated;
   isEditing=false; // libera autosync apos salvar confirmado
-  renderDash();renderTbl();renderReg();
+  renderDash();renderReg();
 
   // Atualiza duração na tela
   const durItems=getRegDurItems(DB[idx]);
