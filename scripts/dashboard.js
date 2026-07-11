@@ -397,20 +397,38 @@ function brasiliaTodayISO(){
 }
 
 function metricDaysWithOpenFallback(rec, startField, endField){
-  const start=parseDMY(rec?.[startField]) || getRecordCreatedDate(rec);
+  let start = parseDMY(rec?.[startField]);
+  let end = parseDMY(rec?.[endField]);
+
+  // Se tem ambas as datas preenchidas (aberto ou encerrado): calcula
+  if(start && end) return Math.round((end - start) / 86400000);
+
+  // Se está encerrado e falta alguma data: não conta
+  if(isDoneRecord(rec)){
+    return null;
+  }
+
+  // Se está aberto, usa hoje como fallback
+  const today = parseDMY(brasiliaTodayISO());
+  if(!today) return null;
+
+  // Usa hoje como data inicial se faltar
+  if(!start) start = today;
+  // Usa hoje como data final se faltar
+  if(!end) end = today;
+
+  return Math.max(0, Math.round((end - start) / 86400000));
+}
+
+// Para etapas intermediárias: se não tem data final, retorna null (etapa incompleta)
+function metricDaysSimple(rec, startField, endField){
+  const start=parseDMY(rec?.[startField]);
   if(!start) return null;
 
   const end=parseDMY(rec?.[endField]);
-  if(end) return Math.round((end-start)/86400000);
+  if(!end) return null;
 
-  // Se a tarefa ainda estiver aberta, mede até hoje (Brasília)
-  if(!isDoneRecord(rec)){
-    const today=parseDMY(brasiliaTodayISO());
-    if(!today) return null;
-    return Math.max(0,Math.round((today-start)/86400000));
-  }
-
-  return null;
+  return Math.round((end-start)/86400000);
 }
 
 function getRecordCreatedDate(rec){
@@ -478,10 +496,10 @@ function renderTempoWidget(){
   }).join('');
 
   const extras=[
+    {l:'Envio → Assinatura',f1:'dtEnvioContrato',f2:'dtAssinatura',ref:7},
     {l:'Assinatura → Solic. Docs',f1:'dtAssinatura',f2:'dtDocs',ref:7},
     {l:'Solic. → Docs Rec.',f1:'dtDocs',f2:'dtDocsRec',ref:14},
     {l:'Docs Rec. → Entrega',f1:'dtDocsRec',f2:'dtEntrega',ref:7},
-    {l:'Envio → Assinatura',f1:'dtEnvioContrato',f2:'dtAssinatura',ref:7},
   ];
   const extraHtml=extras.map((tm)=>{
     const vals=src.map(r=>metricDaysWithOpenFallback(r,tm.f1,tm.f2)).filter(v=>v!=null&&v>=0);
