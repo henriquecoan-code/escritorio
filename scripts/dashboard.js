@@ -1169,7 +1169,7 @@ async function saveC(){
     mes:document.getElementById('m-mes').value,
     status:document.getElementById('m-status').value,
     obs:document.getElementById('m-obs').value.trim(),
-    etapa:String(mCurE),
+    etapa:Number(mCurE)||1,
     data:fmtDate(dtAssinRaw||chegadaRaw),
     docsPendentes:[],
     dtChegada:toDMY('m-dtCheg'),
@@ -1434,7 +1434,7 @@ function regDurBadge(rec){
 }
 
 function buildRegCard(rec){
-  const etapa=rec.etapa||1;
+  const etapa=Math.max(1,Math.min(5,Number(rec.etapa)||1));
   const signed=Boolean(rec.dtAssinatura)||isDoneRecord(rec);
   const area=rec.area?(rec.area.length>18?`${rec.area.slice(0,17)}…`:rec.area):'';
   const docsPend=Array.isArray(rec.docsPendentes)?rec.docsPendentes:[];
