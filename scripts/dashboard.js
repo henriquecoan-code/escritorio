@@ -518,7 +518,9 @@ function bindStaticEvents(){
   document.getElementById('m-esel')?.addEventListener('click',(event)=>{
     const btn=event.target.closest('.esb[data-e]');
     if(!btn) return;
-    setME(Number(btn.dataset.e));
+    const nextEtapa=Number(btn.dataset.e);
+    setME(nextEtapa);
+    syncModalStageDates(nextEtapa);
   });
   document.getElementById('m-dtCheg')?.addEventListener('change',()=>{
     mSyncMesFromCheg();
@@ -756,6 +758,46 @@ const localIsoToday=()=>{
   const d=String(now.getDate()).padStart(2,'0');
   return `${y}-${m}-${d}`;
 };
+const ETAPA_DATE_SYNC={
+  1:{fields:[{modal:'m-dtCheg',panel:'dtChegada',label:'Chegada'}]},
+  2:{fields:[{modal:'m-dtCont',panel:'dtContato',label:'Ultimo Contato'}]},
+  3:{fields:[
+    {modal:'m-dtEnv',panel:'dtEnvioContrato',label:'Envio Contrato'},
+    {modal:'m-dtAssin',panel:'dtAssinatura',label:'Assinatura'}
+  ]},
+  4:{fields:[
+    {modal:'m-dtDocs',panel:'dtDocs',label:'Solic. Documentos'},
+    {modal:'m-dtDocsR',panel:'dtDocsRec',label:'Docs Recebidos'}
+  ]},
+  5:{fields:[{modal:'m-dtEnt',panel:'dtEntrega',label:'Entrega'}]}
+};
+function syncStageDatesProgressive(targetStage,getFieldKey,getValue,setValue){
+  const stage=Math.max(0,Math.min(5,Number(targetStage)||0));
+  if(!stage) return [];
+  const today=localIsoToday();
+  const filled=[];
+  for(let s=1;s<=stage;s++){
+    const cfg=ETAPA_DATE_SYNC[s];
+    const fields=(cfg&&Array.isArray(cfg.fields))?cfg.fields:[];
+    fields.forEach((f)=>{
+      const key=getFieldKey(f);
+      if(!key) return;
+      const cur=(getValue(key)||'').trim();
+      if(cur) return;
+      setValue(key,today);
+      filled.push(f.label);
+    });
+  }
+  return filled;
+}
+function stageSyncFeedback(targetStage,filled){
+  const stage=Number(targetStage)||0;
+  const list=(filled||[]).join(' e ');
+  if(!list) return '';
+  if(stage===3) return `Pronto! Preenchi ${list}.`;
+  if(stage===4) return `Pronto! Preenchi ${list}.`;
+  return `Pronto! Preenchi ${list}.`;
+}
 const dateToSort=dmy=>{const p=(dmy||'').split('/');return p.length===3?`${p[2]}${p[1]}${p[0]}`:'';};
 const isDoneRecord=(r)=>Number(r.etapa||0)===5||(String(r.status||'').toLowerCase()==='encerrado');
 
@@ -1146,6 +1188,21 @@ function mOnAssin(){
     if(sel&&m) sel.value=m;
   }
   mCalcDur();
+}
+function syncModalStageDates(targetStage){
+  const filled=syncStageDatesProgressive(
+    targetStage,
+    field=>field.modal,
+    key=>document.getElementById(key)?.value||'',
+    (key,val)=>{
+      const el=document.getElementById(key);
+      if(el) el.value=val;
+    }
+  );
+  if(!filled.length) return;
+  if(filled.includes('Chegada')) mSyncMesFromCheg();
+  mCalcDur();
+  toast(stageSyncFeedback(targetStage,filled),'info');
 }
 function openM(editUid){
   if(!ensureAuthenticated()) return;
@@ -1688,8 +1745,29 @@ function setRegEtapa(uid,etapa){
   card.querySelectorAll(`[data-set-etapa="${uid}"]`).forEach((btn)=>{
     btn.classList.toggle('on',!!etapa&&Number(btn.dataset.etapa)===Number(etapa));
   });
+  const filled=etapa?syncRegCardStageDates(uid,Number(etapa),card):[];
   const st=card.querySelector(`#pstatus-${uid}`);
-  if(st) st.textContent=etapa?'Etapa alterada — clique Salvar':'Etapa removida — clique Salvar';
+  if(st){
+    if(!etapa) st.textContent='Etapa removida. Clique em Salvar para confirmar.';
+    else if(filled.length) st.textContent=`${stageSyncFeedback(etapa,filled)} Clique em Salvar para confirmar.`;
+    else st.textContent='Etapa atualizada. Clique em Salvar para confirmar.';
+  }
+}
+
+function syncRegCardStageDates(uid,targetStage,cardEl){
+  const card=cardEl||document.getElementById(`regcard-${uid}`);
+  if(!card) return [];
+  const filled=syncStageDatesProgressive(
+    targetStage,
+    field=>field.panel,
+    key=>card.querySelector(`[data-date-field="${key}"][data-uid="${uid}"]`)?.value||'',
+    (key,val)=>{
+      const inp=card.querySelector(`[data-date-field="${key}"][data-uid="${uid}"]`);
+      if(inp) inp.value=val;
+    }
+  );
+  if(filled.length) refreshRegDurFromInputs(uid);
+  return filled;
 }
 
 function refreshRegDurFromInputs(uid){
