@@ -91,6 +91,54 @@ npm install
 npx playwright install
 ```
 
+## Automação local de validação
+
+Objetivo: reduzir regressão no fluxo de produção e garantir o mesmo comportamento entre máquina local e CI.
+
+O comando abaixo roda validação unificada:
+
+- checagem de sintaxe do arquivo principal (`node --check scripts/dashboard.js`)
+- smoke E2E do Playwright com fallback automático para Chrome local quando necessário
+
+```powershell
+npm run validate
+```
+
+Se quiser rodar só o smoke com fallback automático:
+
+```powershell
+npm run test:e2e:smoke:local
+```
+
+Para ativar validação automática antes de cada push, instale o hook de `pre-push`:
+
+```powershell
+npm run hooks:install
+```
+
+Depois disso, todo `git push` executa `npm run validate` automaticamente. Se a validação falhar, o push é bloqueado.
+
+### Troubleshooting rápido da automação
+
+- Smoke falhando por browser do Playwright ausente/corrompido:
+
+```powershell
+npx playwright install --with-deps chromium
+```
+
+- Forçar uso de Chrome do sistema em uma execução:
+
+```powershell
+$env:PW_CHROME_PATH="C:\Program Files\Google\Chrome\Application\chrome.exe"
+npm run validate
+```
+
+- Reinstalar o hook de pre-push:
+
+```powershell
+npm run hooks:install
+```
+
 ### 2. Subir o dashboard local
 
 ```powershell
@@ -170,7 +218,7 @@ Antes de publicar, execute o roteiro em `TESTE_MANUAL_15MIN.md` para validar os 
 ## Ordem recomendada de execução
 
 1. `npm run serve`
-2. `npm run test:e2e`
+2. `npm run validate`
 3. `npm run test:rules`
 4. ZAP Baseline
 5. Checklist manual (15 min)
@@ -192,7 +240,7 @@ Execuções automáticas:
 
 Jobs executados:
 
-- E2E Playwright
+- Validação unificada (sintaxe + smoke E2E)
 - Firestore Rules (com Java 21)
 - Security ZAP Baseline
 

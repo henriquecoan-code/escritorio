@@ -1,4 +1,5 @@
 const { defineConfig } = require('@playwright/test');
+const systemChromePath = process.env.PW_CHROME_PATH;
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
@@ -9,6 +10,7 @@ module.exports = defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     baseURL: process.env.BASE_URL || 'http://localhost:8000',
+    launchOptions: systemChromePath ? { executablePath: systemChromePath } : {},
     headless: true,
     trace: 'on-first-retry',
   },

@@ -5,11 +5,14 @@
   "description": "Testes automatizados do dashboard OB",
   "scripts": {
     "serve": "node scripts/serve.mjs",
+    "validate": "node --check scripts/dashboard.js && npm run test:e2e:smoke:local",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.js",
+    "test:e2e:smoke:local": "node scripts/run-smoke-local.mjs",
     "test:e2e:real": "playwright test tests/e2e/real-flow.spec.js",
     "test:rules": "firebase emulators:exec --only firestore \"vitest run tests/firestore.rules.test.mjs\"",
-    "test:security": "echo Rode o comando do OWASP ZAP descrito no README.md"
+    "test:security": "echo Rode o comando do OWASP ZAP descrito no README.md",
+    "hooks:install": "node scripts/install-git-hooks.mjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.1",

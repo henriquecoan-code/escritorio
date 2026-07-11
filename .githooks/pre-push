@@ -1,0 +1,4 @@
+#!/bin/sh
+
+echo "[pre-push] Rodando validacao local..."
+npm run validate
