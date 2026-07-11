@@ -32,12 +32,21 @@ const script = `#!/usr/bin/env sh
 # Hook gerado automaticamente por scripts/install-git-hooks.mjs
 
 printf '\n[hooks] Validando projeto antes do push...\n'
-npm run validate
+
+node --check scripts/dashboard.js
 status=$?
 if [ $status -ne 0 ]; then
-  printf '[hooks] Validacao falhou. Push cancelado.\n'
+  printf '[hooks] Validacao falhou (sintaxe dashboard.js). Push cancelado.\n'
   exit $status
 fi
+
+node scripts/run-smoke-local.mjs
+status=$?
+if [ $status -ne 0 ]; then
+  printf '[hooks] Validacao falhou (smoke E2E). Push cancelado.\n'
+  exit $status
+fi
+
 printf '[hooks] Validacao concluida. Push liberado.\n'
 `;
 
@@ -47,4 +56,4 @@ try {
 } catch {}
 
 console.log(`[hooks] Hook instalado em: ${prePushPath}`);
-console.log('[hooks] Agora o Git vai rodar "npm run validate" automaticamente no pre-push.');
+console.log('[hooks] Agora o Git vai rodar validacao direta via Node automaticamente no pre-push.');
