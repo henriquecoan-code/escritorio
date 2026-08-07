@@ -148,3 +148,13 @@ Ele mostra:
    - contagem de casos medidos ate hoje
    - tabela de registros com dias, campo inicial/final efetivamente usado e etapa
 4. Ao clicar em Pastas Concluidas, o modal mostra a listagem do periodo com flag de concluida (sim/nao), etapa e status.
+
+## Tutorial de primeira visita
+
+1. Na primeira vez que o usuario acessa o dashboard, abre um guia visual em etapas.
+2. Etapa 1: frase curta de novidade:
+   - "Melhoramos a base dos dados."
+3. Etapa 2: destaque visual no botao `Modo auditoria`, aguardando o usuario clicar nele.
+4. Etapa 3: destaque visual nos cards de Tempo, aguardando o usuario clicar em um card.
+5. Etapa 4: explicacao dos campos da tabela de auditoria (dias, inicio/fim, fallback, etapa).
+6. O tutorial e exibido apenas uma vez por navegador (salvo em `localStorage`).
