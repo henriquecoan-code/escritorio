@@ -53,7 +53,7 @@ escritorio/
 
 ## Como abrir o dashboard
 
-Como o projeto é estático, basta abrir `index.html` no navegador ou servir a pasta com qualquer servidor estático.
+Como o projeto é estático, basta abrir `index.html` ou `relacionamento.html` no navegador, ou servir a pasta com qualquer servidor estático.
 
 Se quiser usar um servidor local simples no Windows:
 
@@ -66,6 +66,14 @@ Depois acesse:
 ```text
 http://localhost:8000/index.html
 ```
+
+A área independente de Comercial e Relacionamento fica disponível em:
+
+```text
+http://localhost:8000/relacionamento.html
+```
+
+Ela exige o mesmo login do Firebase e usa as coleções `relacionamento_clientes` e `relacionamento_interacoes`, além do documento `meta/relacionamento_config`. Um backup local existente na chave `ob_crm_v1` é enviado automaticamente na primeira autenticação quando essas coleções ainda estão vazias.
 
 ## Login e permissões
 

@@ -156,6 +156,23 @@ describe('Firestore Rules - dashboard', () => {
     await assertFails(getDoc(doc(anonDb, 'meta', 'security')));
   });
 
+  it('protege os dados de relacionamento', async () => {
+    const anonDb = testEnv.unauthenticatedContext().firestore();
+    const userDb = testEnv.authenticatedContext('relationship-user').firestore();
+    await assertFails(getDoc(doc(anonDb, 'relacionamento_clientes', 'client-1')));
+    await assertSucceeds(setDoc(doc(userDb, 'relacionamento_clientes', 'client-1'), {
+      id: 'client-1',
+      nome: 'Cliente de teste',
+    }));
+    await assertSucceeds(setDoc(doc(userDb, 'relacionamento_interacoes', 'interaction-1'), {
+      id: 'interaction-1',
+      clienteId: 'client-1',
+    }));
+    await assertSucceeds(setDoc(doc(userDb, 'meta', 'relacionamento_config'), {
+      sdrs: ['Teste'],
+    }));
+  });
+
   // ── Coleção arbitrária ───────────────────────────────────────
   it('nega acesso a colecoes nao mapeadas', async () => {
     const userDb = testEnv.authenticatedContext('user-6').firestore();
