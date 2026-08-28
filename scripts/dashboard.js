@@ -36,11 +36,6 @@ let regPg=1;
 const REG_PG=12;
 let mCurE=1;
 let tempoAuditMode=false;
-let firstVisitTutorialChecked=false;
-const FIRST_VISIT_TUTORIAL_KEY='ob_dashboard_v1_tempo_tutorial_seen';
-let firstVisitGuideActive=false;
-let firstVisitGuideStep=0;
-
 function buildPeriodChipLabel(allMeses, isFiltered){
   if(isFiltered) return activeMonth || '2026';
   if(!allMeses.length) return '2026';
@@ -583,10 +578,6 @@ function openTempoAuditModal(metric){
     <td>${r.etapa||'-'}</td>
   </tr>`).join('')}</tbody>`;
   ov.classList.add('open');
-  if(firstVisitGuideActive && firstVisitGuideStep===2){
-    firstVisitGuideStep=3;
-    renderFirstVisitGuide();
-  }
 }
 
 function openTempoConcludedAudit(){
@@ -615,199 +606,6 @@ function openTempoConcludedAudit(){
       <td>${r.concluido?'sim':'não'}</td>
     </tr>`).join('')}</tbody>`;
   ov.classList.add('open');
-  if(firstVisitGuideActive && firstVisitGuideStep===2){
-    firstVisitGuideStep=3;
-    renderFirstVisitGuide();
-  }
-}
-
-function clearFirstVisitGuideHighlights(){
-  document.querySelectorAll('.first-visit-highlight, .first-visit-arrow-right').forEach((el)=>{
-    el.classList.remove('first-visit-highlight');
-    el.classList.remove('first-visit-arrow-right');
-  });
-}
-
-function getFirstVisitGuideTarget(selector){
-  if(!selector) return null;
-  const nodes=[...document.querySelectorAll(selector)];
-  return nodes.find((el)=>{
-    const rect=el.getBoundingClientRect();
-    return rect.width>0 && rect.height>0;
-  }) || null;
-}
-
-function placeFirstVisitGuide(model, ov){
-  const box=ov.querySelector('.first-visit-tutorial-box');
-  box.classList.remove('anchored','arrow-top','arrow-bottom','arrow-left','arrow-right');
-  box.style.removeProperty('top');
-  box.style.removeProperty('left');
-  box.style.removeProperty('--first-visit-arrow-left');
-
-  
-  if(!model.highlightSelector || firstVisitGuideStep===0) return;
-
-  const target=getFirstVisitGuideTarget(model.highlightSelector);
-  if(!target) return;
-
-  const currentRect=target.getBoundingClientRect();
-  const offscreen=currentRect.top < 80 || currentRect.bottom > (window.innerHeight - 80);
-  if(offscreen){
-    target.scrollIntoView({behavior:'smooth',block:'center',inline:'center'});
-    window.requestAnimationFrame(()=>window.requestAnimationFrame(()=>placeFirstVisitGuide(model, ov)));
-    return;
-  }
-
-  const rect=target.getBoundingClientRect();
-  const vw=window.innerWidth;
-  const vh=window.innerHeight;
-  box.classList.add('anchored');
-  const boxRect=box.getBoundingClientRect();
-  const gap=18;
-  const targetCenterX=rect.left + (rect.width/2);
-  const preferBelow=rect.bottom + gap + boxRect.height < vh;
-  let top=preferBelow ? rect.bottom + gap : rect.top - boxRect.height - gap;
-  top=Math.max(12,Math.min(top,vh-boxRect.height-12));
-
-  let left=targetCenterX - (boxRect.width/2);
-  left=Math.max(12,Math.min(left,vw-boxRect.width-12));
-  const arrowLeftRaw=targetCenterX-left;
-  const arrowLeft=Math.max(24,Math.min(arrowLeftRaw,boxRect.width-24));
-
-  if(arrowLeft < 64) box.classList.add('arrow-left');
-  else if(arrowLeft > boxRect.width-64) box.classList.add('arrow-right');
-
-  box.style.top=`${Math.round(top)}px`;
-  box.style.left=`${Math.round(left)}px`;
-  box.style.setProperty('--first-visit-arrow-left',`${Math.round(arrowLeft)}px`);
-  box.classList.add(preferBelow?'arrow-top':'arrow-bottom');
-}
-
-function finishFirstVisitGuide(){
-  firstVisitGuideActive=false;
-  firstVisitGuideStep=0;
-  clearFirstVisitGuideHighlights();
-  const ov=document.getElementById('first-visit-tutorial-overlay');
-  ov?.classList.remove('open');
-  try{ localStorage.setItem(FIRST_VISIT_TUTORIAL_KEY,'1'); }catch(e){}
-}
-
-function getFirstVisitGuideModel(){
-  if(firstVisitGuideStep===0){
-    return {
-      title:'Novidade',
-      message:'Melhoramos a base dos dados.',
-      detail:'Agora vamos te mostrar rapidamente como auditar os cálculos no bloco de Tempo.',
-      action:'Próximo',
-      canAdvance:true,
-    };
-  }
-  if(firstVisitGuideStep===1){
-    return {
-      title:'Passo 1 de 3',
-      message:'Clique no botão destacado para ligar o modo auditoria.',
-      detail:'Esse clique habilita os cards para abrir a auditoria detalhada.',
-      action:'Aguardando clique no botão',
-      canAdvance:false,
-      highlightSelector:'#tempo-audit-toggle-btn',
-    };
-  }
-  if(firstVisitGuideStep===2){
-    return {
-      title:'Passo 2 de 3',
-      message:'Agora clique em qualquer card de Tempo destacado.',
-      detail:'Ao clicar, vamos abrir a tabela de auditoria com os registros usados no cálculo.',
-      action:'Aguardando clique em card',
-      canAdvance:false,
-      highlightSelector:'[data-tempo-metric]',
-    };
-  }
-  return {
-    title:'Passo 3 de 3',
-    message:'Confira os campos da tabela de auditoria:',
-    detail:'Dias: valor usado na média. Início/Fim: datas efetivas após fallback. Fallback: indica troca de etapa ou uso de hoje. Etapa: estágio atual da pasta.',
-    action:'Concluir',
-    canAdvance:true,
-    highlightSelector:'#tempo-audit-table',
-  };
-}
-
-function renderFirstVisitGuide(){
-  const ov=ensureFirstVisitTutorialModal();
-  const model=getFirstVisitGuideModel();
-
-  clearFirstVisitGuideHighlights();
-  ov.classList.toggle('interactive', firstVisitGuideStep>0);
-  ov.querySelector('#first-visit-guide-title').textContent=model.title;
-  ov.querySelector('#first-visit-guide-msg').textContent=model.message;
-  ov.querySelector('#first-visit-guide-detail').textContent=model.detail||'';
-  const actionBtn=ov.querySelector('#first-visit-guide-next');
-  actionBtn.textContent=model.action;
-  actionBtn.disabled=!model.canAdvance;
-
-  if(model.highlightSelector){
-    document.querySelectorAll(model.highlightSelector).forEach((el)=>el.classList.add('first-visit-highlight'));
-    const target=getFirstVisitGuideTarget(model.highlightSelector);
-    if(target && target.getBoundingClientRect().left < (window.innerWidth * 0.33)){
-      target.classList.add('first-visit-arrow-right');
-    }
-  }
-  placeFirstVisitGuide(model, ov);
-}
-
-function ensureFirstVisitTutorialModal(){
-  let ov=document.getElementById('first-visit-tutorial-overlay');
-  if(ov) return ov;
-
-  ov=document.createElement('div');
-  ov.id='first-visit-tutorial-overlay';
-  ov.className='first-visit-tutorial-overlay';
-  ov.innerHTML=`<div class="first-visit-tutorial-box">
-    <div class="first-visit-tutorial-hd">
-      <h3 id="first-visit-guide-title">Novidade</h3>
-      <button id="first-visit-tutorial-close" class="first-visit-tutorial-close" type="button">x</button>
-    </div>
-    <div class="first-visit-tutorial-body solo">
-      <div class="first-visit-tutorial-step single">
-        <div>
-          <div class="first-visit-tutorial-step-title" id="first-visit-guide-msg">Melhoramos a base dos dados.</div>
-          <div class="first-visit-tutorial-step-txt" id="first-visit-guide-detail">Agora vamos te mostrar rapidamente como auditar os cálculos no bloco de Tempo.</div>
-        </div>
-      </div>
-    </div>
-    <div class="first-visit-tutorial-actions">
-      <button id="first-visit-guide-skip" class="btn sm" type="button">Pular</button>
-      <button id="first-visit-guide-next" class="btn primary sm" type="button">Próximo</button>
-    </div>
-  </div>`;
-  document.body.appendChild(ov);
-
-  ov.querySelector('#first-visit-tutorial-close')?.addEventListener('click',finishFirstVisitGuide);
-  ov.querySelector('#first-visit-guide-skip')?.addEventListener('click',finishFirstVisitGuide);
-  ov.querySelector('#first-visit-guide-next')?.addEventListener('click',()=>{
-    if(firstVisitGuideStep===0){
-      firstVisitGuideStep=1;
-      renderFirstVisitGuide();
-      return;
-    }
-    if(firstVisitGuideStep===3){
-      finishFirstVisitGuide();
-    }
-  });
-
-  return ov;
-}
-
-function maybeShowFirstVisitTutorial(){
-  if(firstVisitTutorialChecked) return;
-  firstVisitTutorialChecked=true;
-  try{
-    if(localStorage.getItem(FIRST_VISIT_TUTORIAL_KEY)==='1') return;
-  }catch(e){}
-  firstVisitGuideActive=true;
-  firstVisitGuideStep=0;
-  ensureFirstVisitTutorialModal().classList.add('open');
-  renderFirstVisitGuide();
 }
 
 function metricDaysWithStageForwardFallback(rec, startField, endField){
@@ -918,7 +716,6 @@ function renderTempoWidget(){
   }).join('');
   const concluidos=src.filter(r=>Number(r.etapa||0)===5||(r.status||'').toLowerCase()==='encerrado').length;
   detail.innerHTML=extraHtml+`<div class="tempo-audit-card ${tempoAuditMode?'audit-on':''}" data-tempo-metric="concluidos" style="padding:9px;border:1px solid var(--b);background:var(--b2)"><div style="font-size:9px;color:var(--t3);margin-bottom:3px">Pastas Concluídas</div><div style="font-family:Georgia,serif;font-size:20px;color:var(--green)">${concluidos}<span style="font-size:12px;color:var(--t3)">/${src.length}</span></div><div style="font-size:9px;color:var(--t3);margin-top:2px">taxa ${src.length?Math.round(concluidos/src.length*100):0}%</div></div>`;
-  if(firstVisitGuideActive) renderFirstVisitGuide();
 }
 
 function bindStaticEvents(){
@@ -1038,12 +835,6 @@ function bindStaticEvents(){
     if(auditToggle){
       tempoAuditMode=!tempoAuditMode;
       renderTempoWidget();
-      if(firstVisitGuideActive && firstVisitGuideStep===1){
-        tempoAuditMode=true;
-        renderTempoWidget();
-        firstVisitGuideStep=2;
-        renderFirstVisitGuide();
-      }
       return;
     }
     const auditCard=event.target.closest('[data-tempo-metric]');
@@ -1497,7 +1288,6 @@ function renderDash(){
     ].map(([k,v,t])=>`<tr><td style="color:var(--t3)">${k}</td><td><span class="tag">${v}</span></td>${isF?`<td><span class="tag blue">${t}</span></td>`:''}</tr>`).join('')}
     </tbody>`;
   renderTempoWidget();
-  maybeShowFirstVisitTutorial();
   setTimeout(()=>document.querySelectorAll('[data-w]').forEach(el=>{el.style.width=el.dataset.w;}),300);
 }
 
