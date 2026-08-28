@@ -73,7 +73,7 @@ A área independente de Comercial e Relacionamento fica disponível em:
 http://localhost:8000/relacionamento.html
 ```
 
-Ela exige o mesmo login do Firebase e usa as coleções `relacionamento_clientes` e `relacionamento_interacoes`, além do documento `meta/relacionamento_config`. Um backup local existente na chave `ob_crm_v1` é enviado automaticamente na primeira autenticação quando essas coleções ainda estão vazias.
+Ela exige o mesmo login do Firebase e usa as coleções `relacionamento_clientes` e `relacionamento_interacoes`, além do documento `meta/relacionamento_config`. Os dados comerciais não são mantidos no `localStorage`; use os botões de backup JSON para exportar ou restaurar dados manualmente.
 
 ## Login e permissões
 

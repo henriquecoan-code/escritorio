@@ -156,6 +156,23 @@ async function loginFirebase(){
   }
 }
 
+async function forgotPasswordFirebase(){
+  const email=(document.getElementById('auth-email').value||'').trim();
+  if(!email){
+    setAuthOverlay(true,'Informe seu email para receber o link de recuperação.');
+    return;
+  }
+  const btn=document.getElementById('auth-forgot-btn');
+  btn.disabled=true;
+  try{
+    await fbAuth.sendPasswordResetEmail(email);
+    setAuthOverlay(true,'Enviamos um link de recuperação para seu email.');
+  }catch(e){
+    const msg=e && e.code==='auth/invalid-email'?'Informe um email válido.':e && e.code==='auth/user-not-found'?'Não encontramos uma conta com esse email.':'Não foi possível enviar o link de recuperação.';
+    setAuthOverlay(true,msg);
+  }finally{btn.disabled=false;}
+}
+
 async function logoutFirebase(){
   try{ await fbAuth.signOut(); }
   catch(e){ toast('Erro ao encerrar sessao.','err'); }
@@ -627,6 +644,7 @@ function placeFirstVisitGuide(model, ov){
   box.style.removeProperty('left');
   box.style.removeProperty('--first-visit-arrow-left');
 
+  
   if(!model.highlightSelector || firstVisitGuideStep===0) return;
 
   const target=getFirstVisitGuideTarget(model.highlightSelector);
@@ -913,6 +931,10 @@ function bindStaticEvents(){
   document.getElementById('save-wo-btn')?.addEventListener('click',saveWO);
   document.getElementById('reset-wo-btn')?.addEventListener('click',resetWO);
   document.getElementById('auth-login-btn')?.addEventListener('click',loginFirebase);
+  document.getElementById('auth-forgot-btn')?.addEventListener('click',forgotPasswordFirebase);
+  document.getElementById('backup-export-btn')?.addEventListener('click',exportDashboardBackup);
+  document.getElementById('backup-import-btn')?.addEventListener('click',()=>document.getElementById('backup-file-input')?.click());
+  document.getElementById('backup-file-input')?.addEventListener('change',importDashboardBackup);
   document.getElementById('overlay')?.addEventListener('click',overlayBg);
   document.getElementById('close-modal-x-btn')?.addEventListener('click',closeM);
   document.getElementById('cancel-modal-btn')?.addEventListener('click',closeM);
@@ -1251,6 +1273,76 @@ async function serverSavePhotos(){
   if(!ensureAuthenticated()) return;
   try{ await fbDb.collection('meta').doc('photos').set(photos); }
   catch(e){}
+}
+
+function dashboardBackupPayload(){
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    contratos: DB,
+    listas: {AREAS, ACOES, TIPOS, ORIGENS, ADVS, MESES_REF},
+    fotos: photos,
+    ordemPaineis: widgetOrder,
+  };
+}
+
+function exportDashboardBackup(){
+  if(!ensureAuthenticated()) return;
+  const payload=JSON.stringify(dashboardBackupPayload(),null,2);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([payload],{type:'application/json'}));
+  a.download=`OB_dashboard_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Backup completo baixado!','ok');
+}
+
+async function commitBackupWrites(writes){
+  const chunkSize=450;
+  for(let start=0;start<writes.length;start+=chunkSize){
+    const batch=fbDb.batch();
+    writes.slice(start,start+chunkSize).forEach(({ref,data,remove})=>remove?batch.delete(ref):batch.set(ref,data));
+    await batch.commit();
+    setSyncStatus('loading','Restaurando backup...',`${Math.min(start+chunkSize,writes.length)}/${writes.length} operações`);
+  }
+}
+
+async function importDashboardBackup(event){
+  const file=event.target.files?.[0];
+  event.target.value='';
+  if(!file)return;
+  if(!ensureAuthenticated())return;
+  try{
+    const backup=JSON.parse(await file.text());
+    if(!Array.isArray(backup.contratos)||!backup.listas||typeof backup.listas!=='object')throw new Error('formato');
+    const listas={...{AREAS,ACOES,TIPOS,ORIGENS,ADVS,MESES_REF},...backup.listas};
+    const fotosBackup=backup.fotos&&typeof backup.fotos==='object'?backup.fotos:{};
+    const ordem=Array.isArray(backup.ordemPaineis)?backup.ordemPaineis:DEFAULT_ORDER;
+    const total=backup.contratos.length+Object.keys(fotosBackup).length+7;
+    if(!confirm(`Este backup contém ${backup.contratos.length} contrato(s), ${Object.keys(fotosBackup).length} foto(s) e as listas de configuração. Restaurar ${total} registro(s) no Firestore?`))return;
+
+    setSyncStatus('loading','Preparando restauração...',`${total} itens`);
+    const remote=await fbDb.collection('contratos').get();
+    const incoming=new Set(backup.contratos.map(record=>record.uid).filter(Boolean));
+    const writes=[];
+    remote.docs.forEach(doc=>{if(!incoming.has(doc.id))writes.push({ref:doc.ref,remove:true});});
+    backup.contratos.forEach(record=>{if(!record.uid)throw new Error('contrato sem uid');writes.push({ref:fbDb.collection('contratos').doc(record.uid),data:record});});
+    writes.push({ref:fbDb.collection('meta').doc('lists'),data:listas});
+    writes.push({ref:fbDb.collection('meta').doc('photos'),data:fotosBackup});
+    await commitBackupWrites(writes);
+
+    DB=backup.contratos;
+    ({AREAS,ACOES,TIPOS,ORIGENS,ADVS,MESES_REF}=listas);
+    photos=fotosBackup;widgetOrder=ordem;
+    saveWOStore();
+    renderDash();fillSelects();fillRegFilters();renderReg();renderAllCfg();
+    setSyncStatus('ok','Tempo real',`${DB.length} registros restaurados`);
+    toast(`Backup restaurado · ${DB.length} contrato(s)`,'ok');
+  }catch(e){
+    console.error('Erro ao restaurar backup:',e);
+    setSyncStatus('err','Erro na restauração','O backup não foi concluído');
+    toast('Arquivo inválido ou falha ao restaurar o backup.','err');
+  }
 }
 
 /* .. DASHBOARD .. */

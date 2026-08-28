@@ -94,6 +94,7 @@
             <div class="cfg-card"><div class="cfg-hd"><span class="cfg-icon">&#128203;</span><div><div class="cfg-title">Tipos de Contrato</div><div class="cfg-sub" id="cnt-tipos"></div></div></div><div class="cfg-items" id="lst-tipos"></div><div class="cfg-add-row"><input class="cfg-inp" id="ni-tipos" placeholder="Novo tipo..." maxlength="40"><button class="btn primary sm" data-cfg-add-key="tipos">+</button></div></div>
             <div class="cfg-card"><div class="cfg-hd"><span class="cfg-icon">&#128225;</span><div><div class="cfg-title">Origens do Lead</div><div class="cfg-sub" id="cnt-origens"></div></div></div><div class="cfg-items" id="lst-origens"></div><div class="cfg-add-row"><input class="cfg-inp" id="ni-origens" placeholder="Nova origem..." maxlength="40"><button class="btn primary sm" data-cfg-add-key="origens">+</button></div></div>
             <div class="cfg-card"><div class="cfg-hd"><span class="cfg-icon">&#128197;</span><div><div class="cfg-title">Meses de Referência</div><div class="cfg-sub" id="cnt-meses"></div></div></div><div class="cfg-items" id="lst-meses"></div><div class="cfg-add-row"><input class="cfg-inp" id="ni-meses" placeholder="Ex: Maio..." maxlength="20"><button class="btn primary sm" data-cfg-add-key="meses">+</button></div></div>
+            <div class="cfg-card cfg-backup-card"><div class="cfg-hd"><span class="cfg-icon">&#128190;</span><div><div class="cfg-title">Backup &amp; dados</div><div class="cfg-sub">Firestore · listas · fotos</div></div></div><p class="cfg-backup-hint">Exporte um backup completo ou restaure um arquivo JSON no Firestore.</p><div class="cfg-backup-actions"><button class="btn sm" id="backup-export-btn">Baixar backup (.json)</button><button class="btn sm" id="backup-import-btn">Restaurar backup</button></div><input type="file" id="backup-file-input" accept="application/json" hidden></div>
         </div>
     </div>
 
@@ -185,6 +186,7 @@
         <div class="auth-actions">
             <button class="btn primary" id="auth-login-btn">Entrar</button>
         </div>
+        <button class="auth-forgot" id="auth-forgot-btn" type="button">Esqueci minha senha</button>
         <div class="auth-err" id="auth-err"></div>
     </div>
 </div>

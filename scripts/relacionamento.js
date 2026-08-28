@@ -1,7 +1,6 @@
 /* ============================================================
    ESTADO & PERSISTÊNCIA
    ============================================================ */
-const LS='ob_crm_v1';
 const CLIENTES_COLLECTION='relacionamento_clientes';
 const INTERACOES_COLLECTION='relacionamento_interacoes';
 const CONFIG_DOC='relacionamento_config';
@@ -22,7 +21,7 @@ const DEF={
   }
 };
 const FIREBASE_CFG=window.OB_FIREBASE_CONFIG||null;
-let db=load();
+let db=structuredClone(DEF);
 let fbDb=null;
 let fbAuth=null;
 let currentUser=null;
@@ -31,21 +30,18 @@ let unsubInteracoes=null;
 let unsubConfig=null;
 let firebaseReady=false;
 
-function load(){
-  try{const r=localStorage.getItem(LS);if(r){const p=JSON.parse(r);return{...structuredClone(DEF),...p,config:{...DEF.config,...(p.config||{})}};}}catch(e){}
-  return structuredClone(DEF);
-}
 function save(){
-  try{localStorage.setItem(LS,JSON.stringify(db));}catch(e){toast('Não foi possível salvar — verifique o espaço do navegador');}
   if(firebaseReady&&currentUser)persistDb().catch(()=>toast('Não foi possível sincronizar com o Firebase'));
 }
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 
 function createFirebaseUI(){
-  document.body.insertAdjacentHTML('beforeend',`<div class="auth-overlay" id="authOverlay"><div class="auth-box"><h2>Acesso ao relacionamento</h2><p>Entre com seu email e senha para acessar a carteira.</p><input id="authEmail" type="email" placeholder="Email"><input id="authPassword" type="password" placeholder="Senha"><button class="btn primary" id="authLogin">Entrar</button><div class="auth-error" id="authError"></div></div></div><div class="sync-bar" id="syncBar"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Conectando...</span><span id="syncDetail"></span><button class="btn sm" id="syncNow">Atualizar</button></div>`);
+  document.body.insertAdjacentHTML('beforeend',`<div class="auth-overlay" id="authOverlay"><div class="auth-box"><h2>Acesso ao relacionamento</h2><p>Entre com seu email e senha para acessar a carteira.</p><input id="authEmail" type="email" placeholder="Email"><input id="authPassword" type="password" placeholder="Senha"><button class="btn primary" id="authLogin">Entrar</button><button class="auth-forgot" id="authForgot" type="button">Esqueci minha senha</button><div class="auth-error" id="authError"></div></div></div><div class="sync-bar" id="syncBar"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Conectando...</span><span id="syncDetail"></span><button class="btn sm" id="syncNow">Atualizar</button></div>`);
   document.getElementById('authLogin').addEventListener('click',login);
   document.getElementById('authPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
+  document.getElementById('authForgot').addEventListener('click',forgotPassword);
   document.getElementById('syncNow').addEventListener('click',loadFromFirebase);
+  document.getElementById('authLogout').addEventListener('click',logout);
 }
 
 function setSync(state,label,detail=''){
@@ -60,6 +56,16 @@ function setAuth(open,error=''){
   const el=document.getElementById('authError');if(el)el.textContent=error;
 }
 
+function refreshAuthUI(){
+  const userEl=document.getElementById('authUser');
+  const logoutBtn=document.getElementById('authLogout');
+  if(!userEl||!logoutBtn)return;
+  userEl.textContent=currentUser?.email||'';
+  userEl.title=currentUser?.email||'';
+  userEl.classList.toggle('visible',!!currentUser);
+  logoutBtn.classList.toggle('visible',!!currentUser);
+}
+
 async function login(){
   const email=document.getElementById('authEmail').value.trim();
   const password=document.getElementById('authPassword').value;
@@ -68,13 +74,43 @@ async function login(){
   catch(e){setAuth(true,e.code==='auth/invalid-credential'?'Email ou senha incorretos.':'Falha no login. Tente novamente.');}
 }
 
+async function forgotPassword(){
+  const email=document.getElementById('authEmail').value.trim();
+  if(!email){setAuth(true,'Informe seu email para receber o link de recuperação.');return;}
+  const button=document.getElementById('authForgot');
+  button.disabled=true;
+  try{
+    await fbAuth.sendPasswordResetEmail(email);
+    setAuth(true,'Enviamos um link de recuperação para seu email.');
+  }catch(e){
+    const message=e.code==='auth/invalid-email'?'Informe um email válido.':e.code==='auth/user-not-found'?'Não encontramos uma conta com esse email.':'Não foi possível enviar o link de recuperação.';
+    setAuth(true,message);
+  }finally{button.disabled=false;}
+}
+
+async function logout(){
+  if(!fbAuth)return;
+  try{await fbAuth.signOut();}
+  catch(e){toast('Não foi possível sair da conta');}
+}
+
 async function persistDb(){
   if(!firebaseReady||!currentUser)return;
-  const batch=fbDb.batch();
-  db.clientes.forEach(c=>batch.set(fbDb.collection(CLIENTES_COLLECTION).doc(c.id),c));
-  db.interacoes.forEach(i=>batch.set(fbDb.collection(INTERACOES_COLLECTION).doc(i.id),i));
-  batch.set(fbDb.collection('meta').doc(CONFIG_DOC),db.config);
-  await batch.commit();
+  const writes=[
+    ...db.clientes.map(c=>({ref:fbDb.collection(CLIENTES_COLLECTION).doc(c.id),data:c})),
+    ...db.interacoes.map(i=>({ref:fbDb.collection(INTERACOES_COLLECTION).doc(i.id),data:i})),
+    {ref:fbDb.collection('meta').doc(CONFIG_DOC),data:db.config}
+  ];
+  const total=writes.length;
+  const chunkSize=450;
+  setSync('loading','Enviando backup...',`${total} registro(s)`);
+  for(let start=0;start<total;start+=chunkSize){
+    const batch=fbDb.batch();
+    writes.slice(start,start+chunkSize).forEach(write=>batch.set(write.ref,write.data));
+    await batch.commit();
+    setSync('loading','Enviando backup...',`${Math.min(start+chunkSize,total)}/${total} registros`);
+  }
+  setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);
 }
 
 function renderAll(){renderDash();renderCli();renderInter();renderCfg();renderAcoes();}
@@ -93,8 +129,6 @@ async function loadFromFirebase(){
       db.clientes=clientesSnap.docs.map(d=>d.data());
       db.interacoes=interacoesSnap.docs.map(d=>d.data());
       db.config={...structuredClone(DEF.config),...(configSnap.exists?configSnap.data():{})};
-    }else if(db.clientes.length||db.interacoes.length){
-      await persistDb();
     }
     firebaseReady=true;renderAll();setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);
   }catch(e){console.error(e);setSync('error','Erro no Firebase','Verifique as Rules e a configuração');toast('Não foi possível carregar os dados do Firebase');}
@@ -114,6 +148,7 @@ function initFirebase(){
     fbDb=firebase.firestore(app);fbAuth=firebase.auth(app);
     fbAuth.onAuthStateChanged(user=>{
       currentUser=user||null;
+      refreshAuthUI();
       if(currentUser){firebaseReady=true;setAuth(false);loadFromFirebase().then(startRealtime);}
       else{firebaseReady=false;[unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
     });
@@ -773,10 +808,23 @@ function exportJSON(){
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download=`OB_relacionamento_${todayISO()}.json`;a.click();toast('Backup baixado');
 }
-function importJSON(ev){
+async function importJSON(ev){
   const f=ev.target.files[0];if(!f)return;
   const r=new FileReader();
-  r.onload=()=>{try{const p=JSON.parse(r.result);if(!p.clientes||!p.interacoes)throw 0;db={...structuredClone(DEF),...p,config:{...DEF.config,...(p.config||{})}};save();toast('Backup restaurado');renderDash();renderCli();renderInter();renderCfg();renderAcoes();}catch(e){toast('Arquivo inválido');}};
+  r.onload=async()=>{
+    try{
+      const p=JSON.parse(r.result);
+      if(!Array.isArray(p.clientes)||!Array.isArray(p.interacoes))throw 0;
+      const next={...structuredClone(DEF),...p,config:{...DEF.config,...(p.config||{})}};
+      const total=next.clientes.length+next.interacoes.length+1;
+      if(!currentUser){toast('Faça login antes de restaurar o backup');return;}
+      if(!confirm(`O backup contém ${next.clientes.length} cliente(s), ${next.interacoes.length} interação(ões) e 1 configuração. Enviar ${total} registro(s) para o Firestore?`))return;
+      db=next;
+      renderAll();
+      await persistDb();
+      toast(`Backup efetivado · ${total} registro(s) enviados`);
+    }catch(e){console.error(e);toast('Arquivo inválido ou falha ao enviar o backup');}
+  };
   r.readAsText(f);ev.target.value='';
 }
 function exportCSV(){
