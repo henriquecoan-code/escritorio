@@ -6,7 +6,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; img-src 'self' https: data: blob:; style-src 'self' 'unsafe-inline' https:; script-src 'self' https: 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.gstatic.com https://*.firebaseapp.com; font-src 'self' https: data:;">
 <meta http-equiv="X-Frame-Options" content="DENY">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
-<title>Oliveira &amp; Benedet &#8212; Dashboard</title>
+<title>Oliveira &amp; Benedet &#8212; Painel Inicial</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -15,7 +15,52 @@
 </head>
 <body>
 
-<div id="app" style="opacity:1;transition:opacity .5s ease .1s">
+<main id="home-panel" class="home-panel">
+    <header class="home-head">
+        <img id="home-logo" class="home-logo" alt="Oliveira &amp; Benedet">
+        <div class="home-head-right">
+            <span class="home-footer">Acesso interno</span>
+            <span class="home-session"><span id="home-auth-user"></span><button class="auth-forgot" id="home-auth-logout" type="button" hidden>Sair</button></span>
+        </div>
+    </header>
+    <p class="home-kicker">Oliveira &amp; Benedet</p>
+    <h1>Painel Inicial</h1>
+    <p class="home-intro">Acesse uma das áreas do escritório.</p>
+    <div class="home-links">
+        <a class="home-link home-link-primary" href="OB_Dashboard_Rede.html">
+            <span class="home-link-icon" aria-hidden="true">&#128202;</span>
+            <span><strong>Dashboard</strong><small>Contratos, registros e indicadores</small></span>
+            <span class="home-arrow" aria-hidden="true">&#8594;</span>
+        </a>
+        <a class="home-link" href="relacionamento.html">
+            <span class="home-link-icon" aria-hidden="true">&#128101;</span>
+            <span><strong>Comercial &amp; Relacionamento</strong><small>Clientes, contatos e acompanhamento</small></span>
+            <span class="home-arrow" aria-hidden="true">&#8594;</span>
+        </a>
+        <a class="home-link home-admin-link" id="home-admin-link" href="admin.html" hidden>
+            <span class="home-link-icon" aria-hidden="true">&#9881;</span>
+            <span><strong>Administração</strong><small>Usuários e permissões de acesso</small></span>
+            <span class="home-arrow" aria-hidden="true">&#8594;</span>
+        </a>
+    </div>
+</main>
+
+<div class="home-auth-overlay open" id="home-auth-overlay">
+    <div class="home-auth-box">
+        <img class="home-auth-logo" id="home-auth-logo" alt="Oliveira &amp; Benedet">
+        <div class="auth-title">Acesso ao Painel Inicial</div>
+        <div class="auth-sub">Entre com email e senha para continuar.</div>
+        <form id="home-auth-form">
+            <input class="auth-input" id="home-auth-email" type="email" placeholder="Email" autocomplete="username">
+            <input class="auth-input" id="home-auth-password" type="password" placeholder="Senha" autocomplete="current-password">
+            <button class="btn primary" type="submit">Entrar</button>
+        </form>
+        <button class="auth-forgot" id="home-auth-forgot" type="button">Esqueci minha senha</button>
+        <div class="auth-err" id="home-auth-error"></div>
+    </div>
+</div>
+
+<div id="app" class="route-hidden" style="opacity:1;transition:opacity .5s ease .1s">
 
     <header class="hd">
         <img id="hd-logo" class="hd-logo" alt="Oliveira &amp; Benedet">
@@ -176,16 +221,15 @@
 </div>
 
 <div class="auth-overlay" id="auth-overlay">
-    <div class="auth-box">
+    <div class="auth-box home-auth-box">
+        <img class="home-auth-logo" id="auth-logo" alt="Oliveira &amp; Benedet">
         <div class="auth-title">Acesso ao Dashboard</div>
-        <div class="auth-sub">Entre com email e senha para acessar os dados no Firebase.</div>
-        <div class="auth-fields">
-            <input class="auth-input" id="auth-email" type="email" placeholder="Email">
-            <input class="auth-input" id="auth-password" type="password" placeholder="Senha">
-        </div>
-        <div class="auth-actions">
-            <button class="btn primary" id="auth-login-btn">Entrar</button>
-        </div>
+        <div class="auth-sub">Entre com email e senha para continuar.</div>
+        <form id="auth-form">
+            <input class="auth-input" id="auth-email" type="email" placeholder="Email" autocomplete="username">
+            <input class="auth-input" id="auth-password" type="password" placeholder="Senha" autocomplete="current-password">
+            <button class="btn primary" id="auth-login-btn" type="submit">Entrar</button>
+        </form>
         <button class="auth-forgot" id="auth-forgot-btn" type="button">Esqueci minha senha</button>
         <div class="auth-err" id="auth-err"></div>
     </div>
@@ -198,6 +242,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="scripts/home.js"></script>
 <script src="scripts/dashboard.js"></script>
 <script src="scripts/theme.js"></script>
 </body>

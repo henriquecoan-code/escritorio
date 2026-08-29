@@ -258,7 +258,7 @@ async function backfillCreatedAtInFirebase(records){
   if(createdAtBackfillRunning) return;
 
   const source=Array.isArray(records)&&records.length?records:DB;
-  const missing=source.filter((r)=>r && r.uid && r.createdAt);
+  const missing=source.filter((r)=>r && r.uid && !r.createdAt);
   if(!missing.length) return;
 
   createdAtBackfillRunning=true;
@@ -727,7 +727,10 @@ function bindStaticEvents(){
   document.getElementById('sync-now-btn')?.addEventListener('click',syncNow);
   document.getElementById('save-wo-btn')?.addEventListener('click',saveWO);
   document.getElementById('reset-wo-btn')?.addEventListener('click',resetWO);
-  document.getElementById('auth-login-btn')?.addEventListener('click',loginFirebase);
+  document.getElementById('auth-form')?.addEventListener('submit',(event)=>{
+    event.preventDefault();
+    loginFirebase();
+  });
   document.getElementById('auth-forgot-btn')?.addEventListener('click',forgotPasswordFirebase);
   document.getElementById('backup-export-btn')?.addEventListener('click',exportDashboardBackup);
   document.getElementById('backup-import-btn')?.addEventListener('click',()=>document.getElementById('backup-file-input')?.click());
@@ -1036,8 +1039,7 @@ function firebaseErrLabel(e){
 async function serverSave(record){
   if(!ensureAuthenticated()) return false;
   record.createdAt = record.createdAt || estimateRecordCreatedAtMs(record);
-  // Item 5 - garante updatedAt atualizado antes de gravar
-  record.updatedAt = record.updatedAt || Date.now();
+  record.updatedAt = Date.now();
   try{
     await fbDb.collection('contratos').doc(record.uid).set(record);
     return true;
@@ -1109,18 +1111,19 @@ async function importDashboardBackup(event){
     const listas={...{AREAS,ACOES,TIPOS,ORIGENS,ADVS,MESES_REF},...backup.listas};
     const fotosBackup=backup.fotos&&typeof backup.fotos==='object'?backup.fotos:{};
     const ordem=Array.isArray(backup.ordemPaineis)?backup.ordemPaineis:DEFAULT_ORDER;
-    const total=backup.contratos.length+Object.keys(fotosBackup).length+7;
-    if(!confirm(`Este backup contém ${backup.contratos.length} contrato(s), ${Object.keys(fotosBackup).length} foto(s) e as listas de configuração. Restaurar ${total} registro(s) no Firestore?`))return;
-
-    setSyncStatus('loading','Preparando restauração...',`${total} itens`);
     const remote=await fbDb.collection('contratos').get();
     const incoming=new Set(backup.contratos.map(record=>record.uid).filter(Boolean));
     const writes=[];
-    remote.docs.forEach(doc=>{if(!incoming.has(doc.id))writes.push({ref:doc.ref,remove:true});});
     backup.contratos.forEach(record=>{if(!record.uid)throw new Error('contrato sem uid');writes.push({ref:fbDb.collection('contratos').doc(record.uid),data:record});});
     writes.push({ref:fbDb.collection('meta').doc('lists'),data:listas});
     writes.push({ref:fbDb.collection('meta').doc('photos'),data:fotosBackup});
+    const removals=remote.docs.filter(doc=>!incoming.has(doc.id)).map(doc=>({ref:doc.ref,remove:true}));
+    const total=writes.length+removals.length;
+    if(!confirm(`Este backup contém ${backup.contratos.length} contrato(s), ${Object.keys(fotosBackup).length} foto(s) e as listas de configuração. Restaurar ${total} operação(ões) no Firestore?`))return;
+
+    setSyncStatus('loading','Preparando restauração...',`${total} operações`);
     await commitBackupWrites(writes);
+    await commitBackupWrites(removals);
 
     DB=backup.contratos;
     ({AREAS,ACOES,TIPOS,ORIGENS,ADVS,MESES_REF}=listas);
@@ -1195,7 +1198,7 @@ function renderDash(){
     const d=prev!=null?((receb-prev)/(prev||1)*100).toFixed(0):null;
     const tag=d!=null?`<div class="mc-d ${+d>=0?'up':'dn'}">${+d>=0?'▲':'▼'} ${Math.abs(d)}%</div>`:'';
     mc.innerHTML+=`<div class="mc ${activeMonth===m?'am':''}" data-month="${escAttr(m)}">
-      <div class="mc-m">${m}</div>
+      <div class="mc-m">${escHtml(m)}</div>
       <div class="mc-row"><div class="mc-n">${assinM}</div><div class="mc-pct">${pctM}%</div></div>
       <div class="mc-s">${activeMonth===m?'<strong style="color:var(--g)">selecionado</strong>':'assinados'}</div>
       <div style="font-size:9px;color:var(--t3);margin-top:2px">${receb} recebidos</div>
@@ -1223,7 +1226,7 @@ function renderDash(){
   AREAS.map((a,i)=>({a,vAll:arA[i],vView:arV[i]})).sort((x,y)=>y.vAll-x.vAll).slice(0,10).forEach(({a,vAll,vView})=>{
     const pctAll=Math.round(vAll/arTotalAll*100);
     const pctView=Math.round(vView/arTotalView*100);
-    hArea.innerHTML+=`<div class="hbr"><div class="hbr-name">${a}</div>
+    hArea.innerHTML+=`<div class="hbr"><div class="hbr-name">${escHtml(a)}</div>
       <div class="hbr-row"><div class="hbr-lbl total">Total</div><div class="hbb"><div class="hbf total" style="width:0" data-w="${Math.round(vAll/arMax*100)}%"></div></div><div class="hbn total">${vAll} <span class="pr-n-pct">${pctAll}%</span></div></div>
       ${isF?`<div class="hbr-row"><div class="hbr-lbl month">${activeMonth.slice(0,3)}</div><div class="hbb"><div class="hbf month" style="width:0" data-w="${Math.round(vView/arMax*100)}%"></div></div><div class="hbn month">${vView} <span class="pr-n-pct">${pctView}%</span></div></div>`:''}
     </div>`;
@@ -1239,7 +1242,7 @@ function renderDash(){
   else acS.forEach(({a,vAll,vView})=>{
     const pctAll=Math.round(vAll/acTotalAll*100);
     const pctView=Math.round(vView/acTotalView*100);
-    hAcao.innerHTML+=`<div class="hbr"><div class="hbr-name" style="font-size:10px">${a}</div>
+    hAcao.innerHTML+=`<div class="hbr"><div class="hbr-name" style="font-size:10px">${escHtml(a)}</div>
       <div class="hbr-row"><div class="hbr-lbl total" style="width:36px;font-size:9px">Total</div><div class="hbb"><div class="hbf total" style="width:0;background:linear-gradient(90deg,#5B8CDB,#7AADEE)" data-w="${Math.round(vAll/acMax*100)}%"></div></div><div class="hbn total" style="color:var(--blue)">${vAll} <span class="pr-n-pct">${pctAll}%</span></div></div>
       ${isF?`<div class="hbr-row"><div class="hbr-lbl month" style="width:36px;font-size:9px">${activeMonth.slice(0,3)}</div><div class="hbb"><div class="hbf month" style="width:0" data-w="${Math.round(vView/acMax*100)}%"></div></div><div class="hbn month">${vView} <span class="pr-n-pct">${pctView}%</span></div></div>`:''}
     </div>`;
@@ -1253,7 +1256,7 @@ function renderDash(){
     options:{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{legend:{display:false},tooltip:TT}}});
   const tl=document.getElementById('tipo-leg');tl.innerHTML='';
   TIPOS.forEach((l,i)=>{const p=tiSum?Math.round(tiV[i]/tiSum*100):0;
-    tl.innerHTML+=`<div class="di"><div class="dd" style="background:${tiC[i]}"></div><div class="dn2">${l}</div><div class="dv">${tiV[i]}</div>${isF?`<span class="dv2">/ ${tiA[i]}</span>`:''}<div class="dp">${p}%</div></div>`;});
+    tl.innerHTML+=`<div class="di"><div class="dd" style="background:${tiC[i]}"></div><div class="dn2">${escHtml(l)}</div><div class="dv">${tiV[i]}</div>${isF?`<span class="dv2">/ ${tiA[i]}</span>`:''}<div class="dp">${p}%</div></div>`;});
   // Origem donut
   const orA=ORIGENS.map(o=>cnt(DB,'origem',o)),orV=ORIGENS.map(o=>cnt(view,'origem',o)),orSum=orV.reduce((a,b)=>a+b,0);
   document.getElementById('orig-total').textContent=orSum||'--';
@@ -1263,7 +1266,7 @@ function renderDash(){
     options:{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{legend:{display:false},tooltip:TT}}});
   const ol=document.getElementById('orig-leg');ol.innerHTML='';
   ORIGENS.forEach((l,i)=>{const p=orSum?Math.round(orV[i]/orSum*100):0;
-    ol.innerHTML+=`<div class="di"><div class="dd" style="background:${orC[i]}"></div><div class="dn2">${l}</div><div class="dv">${orV[i]}</div>${isF?`<span class="dv2">/ ${orA[i]}</span>`:''}<div class="dp">${p}%</div></div>`;});
+    ol.innerHTML+=`<div class="di"><div class="dd" style="background:${orC[i]}"></div><div class="dn2">${escHtml(l)}</div><div class="dv">${orV[i]}</div>${isF?`<span class="dv2">/ ${orA[i]}</span>`:''}<div class="dp">${p}%</div></div>`;});
   // Adv - Mês
   const bC=['rgba(201,168,76,.8)','rgba(78,143,232,.65)','rgba(94,201,122,.55)','rgba(232,115,90,.55)'];
   charts.adv=new Chart(document.getElementById('advChart'),{type:'bar',
@@ -1285,7 +1288,7 @@ function renderDash(){
       ['Tipo Predominante',topTipo||'--',topTipo?cnt(DB,'tipo',topTipo):'--'],
       ['Advogado Líder',topAdv||'--',topAdv?cnt(DB,'adv',topAdv):'--'],
       ['Sem Adv. Vinc.',view.filter(r=>!r.adv).length,DB.filter(r=>!r.adv).length],
-    ].map(([k,v,t])=>`<tr><td style="color:var(--t3)">${k}</td><td><span class="tag">${v}</span></td>${isF?`<td><span class="tag blue">${t}</span></td>`:''}</tr>`).join('')}
+    ].map(([k,v,t])=>`<tr><td style="color:var(--t3)">${escHtml(k)}</td><td><span class="tag">${escHtml(v)}</span></td>${isF?`<td><span class="tag blue">${escHtml(t)}</span></td>`:''}</tr>`).join('')}
     </tbody>`;
   renderTempoWidget();
   setTimeout(()=>document.querySelectorAll('[data-w]').forEach(el=>{el.style.width=el.dataset.w;}),300);
@@ -1337,7 +1340,7 @@ function fillSelects(){
     });
   const mk=(id,opts,blank='')=>{
     const el=document.getElementById(id);if(!el)return;
-    el.innerHTML=(blank?[`<option value="">${blank}</option>`]:[]).concat(opts.map(o=>`<option value="${o}">${o||'-- Selecionar --'}</option>`)).join('');
+    el.innerHTML=(blank?[`<option value="">${escHtml(blank)}</option>`]:[]).concat(opts.map(o=>`<option value="${escAttr(o)}">${escHtml(o||'-- Selecionar --')}</option>`)).join('');
   };
   mk('m-mes',m);mk('m-area',AREAS,'— Selecionar —');mk('m-acao',ACOES,'— Selecionar —');
   mk('m-tipo',TIPOS,'— Selecionar —');mk('m-orig',ORIGENS,'— Selecionar —');
@@ -2124,7 +2127,16 @@ tr:nth-child(even) td{background:#f7f7f7;}</style></head>
 }
 
 /* .. BOOT .. */
-init();
+const isDashboardRoute=new URLSearchParams(window.location.search).get('view')==='dashboard';
+document.getElementById('home-logo')?.setAttribute('src',LOGO_B64);
+document.getElementById('home-auth-logo')?.setAttribute('src',LOGO_B64);
+document.getElementById('auth-logo')?.setAttribute('src',LOGO_B64);
+if(isDashboardRoute){
+  document.getElementById('home-panel')?.classList.add('route-hidden');
+  document.getElementById('app')?.classList.remove('route-hidden');
+  document.title='Oliveira & Benedet — Dashboard';
+  init();
+}
 
 
 

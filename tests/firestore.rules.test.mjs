@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { afterAll, beforeAll, describe, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
@@ -18,6 +18,23 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await testEnv.cleanup();
+});
+
+beforeEach(async () => {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'meta', 'security'), { adminUids: ['admin-user'] });
+    for (const uid of ['user-1', 'user-2', 'user-2b', 'user-3', 'user-4', 'user-6']) {
+      await setDoc(doc(db, 'admin_users', uid), {
+        active: true,
+        panels: { dashboard: true, relacionamento: false, admin: false },
+      });
+    }
+    await setDoc(doc(db, 'admin_users', 'relationship-user'), {
+      active: true,
+      panels: { dashboard: false, relacionamento: true, admin: false },
+    });
+  });
 });
 
 describe('Firestore Rules - dashboard', () => {
@@ -143,11 +160,11 @@ describe('Firestore Rules - dashboard', () => {
   it('permite leitura de meta para autenticado', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'meta', 'security'), {
-        adminUids: ['uid-admin'],
+        adminUids: ['admin-user'],
       });
     });
 
-    const userDb = testEnv.authenticatedContext('user-5').firestore();
+    const userDb = testEnv.authenticatedContext('admin-user').firestore();
     await assertSucceeds(getDoc(doc(userDb, 'meta', 'security')));
   });
 
@@ -171,6 +188,32 @@ describe('Firestore Rules - dashboard', () => {
     await assertSucceeds(setDoc(doc(userDb, 'meta', 'relacionamento_config'), {
       sdrs: ['Teste'],
     }));
+  });
+
+  it('isola o dashboard do perfil de relacionamento', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'contratos', 'restricted-dashboard'), {
+        uid: 'restricted-dashboard', cliente: 'Contrato restrito',
+      });
+    });
+
+    const relationshipDb = testEnv.authenticatedContext('relationship-user').firestore();
+    await assertFails(getDoc(doc(relationshipDb, 'contratos', 'restricted-dashboard')));
+  });
+
+  it('isola o relacionamento do perfil de dashboard', async () => {
+    const dashboardDb = testEnv.authenticatedContext('user-1').firestore();
+    await assertFails(getDoc(doc(dashboardDb, 'relacionamento_clientes', 'client-restricted')));
+  });
+
+  it('permite ao administrador gerenciar preferencias de usuarios', async () => {
+    const adminDb = testEnv.authenticatedContext('admin-user').firestore();
+    await assertSucceeds(setDoc(doc(adminDb, 'admin_users', 'managed-user'), {
+      email: 'managed@example.com',
+      active: true,
+      panels: { dashboard: true, relacionamento: true, admin: false },
+    }));
+    await assertSucceeds(getDoc(doc(adminDb, 'admin_users', 'managed-user')));
   });
 
   // ── Coleção arbitrária ───────────────────────────────────────

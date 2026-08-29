@@ -171,6 +171,7 @@ function tipos(){return db.config.tipos||[];}
 function tipoOf(id){return tipos().find(t=>t.id===id);}
 function tipoLabel(id){const t=tipoOf(id);return t?t.label:(id||'—');}
 function tipoChip(id){const t=tipoOf(id);const c=TIPO_COLORS[(t&&t.color)||'neutral']||TIPO_COLORS.neutral;return `<span class="chip" style="border-color:${c[0]};color:${c[1]};background:${c[2]}">${esc(tipoLabel(id))}</span>`;}
+function escJsSQ(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/[\r\n]/g,c=>c==='\r'?'\\r':'\\n');}
 function parseD(s){if(!s)return null;const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
 function todayISO(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function fmtD(s){const d=parseD(s);if(!d)return '—';return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});}
@@ -551,7 +552,7 @@ function renderSdrComparativo(I){
   </div>`;
   const rows=data.map((m,idx)=>{
     const medal=idx===0?'🥇 ':idx===1?'🥈 ':idx===2?'🥉 ':'';
-    return `<tr style="cursor:pointer" onclick="document.getElementById('sdrPick').value='${esc(m.sdr)}';renderSdr()">
+    return `<tr style="cursor:pointer" onclick="document.getElementById('sdrPick').value='${escJsSQ(m.sdr)}';renderSdr()">
       <td><div class="cli-name">${medal}${esc(m.sdr)}</div></td>
       <td>${m.contatos}</td>
       <td><span style="color:var(--g)">${m.conex}</span> <span style="color:var(--t3)">· ${m.taxaConex}%</span></td>
@@ -642,7 +643,7 @@ function renderAcoes(){
   });
   document.getElementById('quentes').innerHTML=quentes.length?quentes.slice(0,15).map(i=>{
     const c=cliById(i.clienteId);
-    return `<div class="spot"><div class="av">${esc((c?.nome||'?')[0])}</div><div class="info"><div class="n">${esc(c?.nome||'Cliente')}</div><div class="m">Interesse em <b>${esc(i.servico||'serviço')}</b> · ${fmtDL(i.data)} · ${esc(i.sdr||'')}</div></div><button class="rowbtn" onclick="openInter('${i.id}')">Atualizar</button>${c?.tel?`<a class="wabtn" style="margin-left:8px" href="${waLink(c.tel,'Olá '+(c.nome.split(' ')[0])+'! Retomando nossa conversa sobre '+(i.servico||'os serviços')+'.')}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div>`;
+    return `<div class="spot"><div class="av">${esc((c?.nome||'?')[0])}</div><div class="info"><div class="n">${esc(c?.nome||'Cliente')}</div><div class="m">Interesse em <b>${esc(i.servico||'serviço')}</b> · ${fmtDL(i.data)} · ${esc(i.sdr||'')}</div></div><button class="rowbtn" onclick="openInter('${escJsSQ(i.id)}')">Atualizar</button>${c?.tel?`<a class="wabtn" style="margin-left:8px" href="${waLink(c.tel,'Olá '+(c.nome.split(' ')[0])+'! Retomando nossa conversa sobre '+(i.servico||'os serviços')+'.')}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div>`;
   }).join(''):emptyMini('Quando um cliente demonstrar interesse, ele aparece aqui para acompanhamento');
 }
 
@@ -686,7 +687,7 @@ function renderInter(){
       <td>${esc(i.sdr||'—')}</td>
       <td>${res}</td>
       <td><div style="display:flex;gap:5px;flex-wrap:wrap">${sinais.join('')||'<span style="color:var(--muted)">—</span>'}</div></td>
-      <td style="white-space:nowrap"><button class="rowbtn" onclick="openInter('${i.id}')">Editar</button> <button class="rowbtn danger" onclick="delInter('${i.id}')">×</button></td>
+      <td style="white-space:nowrap"><button class="rowbtn" onclick="openInter('${escJsSQ(i.id)}')">Editar</button> <button class="rowbtn danger" onclick="delInter('${escJsSQ(i.id)}')">×</button></td>
     </tr>`;
   }).join('');
 }
@@ -733,9 +734,9 @@ function renderCli(){
       <td>${sit}</td>
       <td style="white-space:nowrap">
         ${c.tel?`<a class="rowbtn" href="${waLink(c.tel,msg)}" target="_blank" rel="noopener">Wpp</a> `:''}
-        <button class="rowbtn" onclick="openInter();setTimeout(()=>{document.getElementById('iCliente').value='${c.id}'},30)">+Contato</button>
-        <button class="rowbtn" onclick="openCli('${c.id}')">Editar</button>
-        <button class="rowbtn danger" onclick="delCli('${c.id}')">×</button>
+        <button class="rowbtn" onclick="openInter();setTimeout(()=>{document.getElementById('iCliente').value='${escJsSQ(c.id)}'},30)">+Contato</button>
+        <button class="rowbtn" onclick="openCli('${escJsSQ(c.id)}')">Editar</button>
+        <button class="rowbtn danger" onclick="delCli('${escJsSQ(c.id)}')">×</button>
       </td>
     </tr>`;
   }).join('');

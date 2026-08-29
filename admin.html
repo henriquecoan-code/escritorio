@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; img-src 'self' https: data: blob:; style-src 'self' 'unsafe-inline' https:; script-src 'self' https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.gstatic.com https://*.firebaseapp.com; font-src 'self' https: data:;">
+<title>Oliveira &amp; Benedet — Administração</title>
+<link rel="stylesheet" href="styles/admin.css">
+</head>
+<body>
+<main class="admin-shell">
+  <header class="admin-head">
+    <a class="admin-brand" href="index.html" aria-label="Voltar ao painel inicial"><span class="admin-mark">OB</span><span><strong>Oliveira &amp; Benedet</strong><small>Administração de acessos</small></span></a>
+    <div class="admin-session"><span id="admin-user"></span><button class="admin-link" id="admin-logout" type="button" hidden>Sair</button></div>
+  </header>
+
+  <section class="admin-intro">
+    <p class="eyebrow">Área do proprietário</p>
+    <h1>Usuários e preferências</h1>
+    <p>Defina quais áreas cada usuário pode acessar. As contas são criadas no Firebase Console; aqui você administra os acessos.</p>
+  </section>
+
+  <section class="admin-status" id="admin-status" aria-live="polite"></section>
+  <section class="admin-grid">
+    <div class="admin-panel">
+      <div class="panel-head"><div><p class="eyebrow">Acessos cadastrados</p><h2>Usuários</h2></div><button class="admin-button" id="new-user">Novo usuário</button></div>
+      <div id="user-list" class="user-list"></div>
+    </div>
+    <aside class="admin-panel admin-form-panel" id="user-editor" hidden>
+      <div class="panel-head"><div><p class="eyebrow">Preferências</p><h2 id="editor-title">Novo usuário</h2></div></div>
+      <form id="user-form">
+        <input id="user-uid" type="text" placeholder="UID do Firebase" required minlength="6">
+        <input id="user-email" type="email" placeholder="Email do usuário" required>
+        <input id="user-name" type="text" placeholder="Nome de exibição" maxlength="80">
+        <label class="toggle-row"><input id="user-active" type="checkbox" checked><span>Usuário ativo</span></label>
+        <fieldset><legend>Painéis permitidos</legend>
+          <label class="check-row"><input id="access-dashboard" type="checkbox"><span>Dashboard</span></label>
+          <label class="check-row"><input id="access-relacionamento" type="checkbox"><span>Comercial &amp; Relacionamento</span></label>
+          <label class="check-row"><input id="access-admin" type="checkbox"><span>Administração</span></label>
+        </fieldset>
+        <div class="form-actions"><button class="admin-button muted" id="cancel-user" type="button">Cancelar</button><button class="admin-button primary" type="submit">Salvar acesso</button></div>
+      </form>
+    </aside>
+  </section>
+</main>
+
+<div class="admin-auth-overlay open" id="admin-auth-overlay">
+  <div class="admin-auth-box">
+    <div class="admin-mark auth-mark">OB</div>
+    <div class="auth-title">Acesso à Administração</div>
+    <div class="auth-sub">Entre com email e senha para continuar.</div>
+    <form id="admin-auth-form">
+      <input class="auth-input" id="admin-auth-email" type="email" placeholder="Email" autocomplete="username">
+      <input class="auth-input" id="admin-auth-password" type="password" placeholder="Senha" autocomplete="current-password">
+      <button class="admin-button primary" type="submit">Entrar</button>
+    </form>
+    <button class="admin-link auth-forgot" id="admin-auth-forgot" type="button">Esqueci minha senha</button>
+    <div class="auth-error" id="admin-auth-error"></div>
+  </div>
+</div>
+<script src="firebase-config.public.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="scripts/admin.js"></script>
+</body>
+</html>

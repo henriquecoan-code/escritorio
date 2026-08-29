@@ -203,8 +203,8 @@ Para adicionar mais admins no futuro, basta adicionar mais UIDs ao mesmo array.
 
 ```
 escritorio/
-├── index.html               # Redirect para OB_Dashboard_Rede.html
-├── OB_Dashboard_Rede.html   # Shell HTML + CSP
+├── index.html               # Painel inicial com links para as áreas
+├── OB_Dashboard_Rede.html   # Rota de compatibilidade para o dashboard
 ├── firebase-config.js       # Configuração Firebase local (no .gitignore)
 ├── firebase-config.public.js# Configuração Firebase pública
 ├── firebase.json            # Configuração de hospedagem Firebase

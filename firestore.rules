@@ -5,6 +5,20 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/meta/security)
+        && request.auth.uid in get(/databases/$(database)/documents/meta/security).data.adminUids;
+    }
+
+    function canAccess(panel) {
+      return isAdmin()
+        || (signedIn()
+          && exists(/databases/$(database)/documents/admin_users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.active == true
+          && get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.panels[panel] == true);
+    }
+
     // Campos permitidos no schema de contratos (v2 - adicionados campos de etapa e datas)
     function validContrato(data) {
       return data.keys().hasOnly([
@@ -15,27 +29,35 @@ service cloud.firestore {
     }
 
     match /contratos/{docId} {
-      allow read:   if signedIn();
-      allow create: if signedIn() && validContrato(request.resource.data);
-      allow update: if signedIn();
-      allow delete: if signedIn();
+      allow read:   if canAccess('dashboard');
+      allow create: if canAccess('dashboard') && validContrato(request.resource.data);
+      allow update: if canAccess('dashboard');
+      allow delete: if canAccess('dashboard');
     }
 
     match /relacionamento_clientes/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if canAccess('relacionamento');
     }
 
     match /relacionamento_interacoes/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if canAccess('relacionamento');
     }
 
     match /meta/relacionamento_config {
-      allow read, write: if signedIn();
+      allow read, write: if canAccess('relacionamento');
     }
 
     match /meta/{docId} {
+      allow read, write: if docId != 'security' && canAccess('dashboard');
+    }
+
+    match /meta/security {
       allow read: if signedIn();
-      allow write: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /admin_users/{uid} {
+      allow read, write: if isAdmin();
     }
 
     // Deny everything else by default

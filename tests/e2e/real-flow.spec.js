@@ -10,7 +10,7 @@ function todayIso() {
 }
 
 async function gotoDashboard(page, baseURL) {
-  await page.goto(`${baseURL}/index.html`);
+  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
   await expect(page.locator('#app')).toBeVisible();
 }
 
