@@ -15,7 +15,6 @@ Dashboard interno da Oliveira & Benedet para gestão e visualização de contrat
 escritorio/
 ├── index.html
 ├── OB_Dashboard_Rede.html
-├── firebase-config.js
 ├── firebase-config.public.js
 ├── firebase.json
 ├── firestore.rules
@@ -27,9 +26,11 @@ escritorio/
 ├── scripts/
 │   ├── dashboard.js
 │   ├── import-firestore.html
+│   ├── relacionamento.js
 │   └── theme.js
 ├── styles/
-│   └── dashboard.css
+│   ├── dashboard.css
+│   └── relacionamento.css
 └── tests/
     ├── e2e/
     │   └── smoke.spec.js
@@ -48,12 +49,12 @@ escritorio/
 1. Crie um projeto no Firebase.
 2. Ative Authentication com email/senha.
 3. Ative Cloud Firestore.
-4. Ajuste o arquivo `firebase-config.js` com as credenciais do seu projeto.
+4. Configure `firebase-config.public.js` com as credenciais web do seu projeto.
 5. Publique as regras de `firestore.rules`.
 
 ## Como abrir o dashboard
 
-Como o projeto é estático, basta abrir `index.html` no navegador ou servir a pasta com qualquer servidor estático.
+Como o projeto é estático, basta abrir `index.html` ou `relacionamento.html` no navegador, ou servir a pasta com qualquer servidor estático.
 
 Se quiser usar um servidor local simples no Windows:
 
@@ -66,6 +67,45 @@ Depois acesse:
 ```text
 http://localhost:8000/index.html
 ```
+
+A área independente de Comercial e Relacionamento fica disponível em:
+
+```text
+http://localhost:8000/relacionamento.html
+```
+
+Ela exige o mesmo login do Firebase e usa as coleções `relacionamento_clientes` e `relacionamento_interacoes`, além do documento `meta/relacionamento_config`. Os dados comerciais não são mantidos no `localStorage`; use os botões de backup JSON para exportar ou restaurar dados manualmente.
+
+## Área de relacionamento
+
+A página independente de Comercial e Relacionamento foi migrada para uma estrutura separada:
+
+- `relacionamento.html`: estrutura da interface.
+- `scripts/relacionamento.js`: autenticação, CRUD, métricas, importação e sincronização.
+- `styles/relacionamento.css`: estilos da página.
+
+O acesso exige autenticação pelo Firebase Auth. O cabeçalho exibe o usuário autenticado e a opção de sair. O login também oferece recuperação de senha por email através do Firebase Auth.
+
+### Dados do relacionamento
+
+Os dados são mantidos exclusivamente no Firestore:
+
+- `relacionamento_clientes`: carteira de clientes.
+- `relacionamento_interacoes`: ligações, mensagens, retornos e indicações.
+- `meta/relacionamento_config`: SDRs, serviços, áreas, tipos e origens.
+
+O `localStorage` não é usado para clientes, interações ou configurações. O backup manual é feito por JSON dentro da própria página. A restauração mostra a quantidade de registros, pede confirmação e envia os dados em lotes de até 450 operações, com indicação de progresso.
+
+### Backup do dashboard principal
+
+O `index.html` também possui o grid **Backup & dados** em Configurações. Esse backup inclui:
+
+- contratos da coleção `contratos`;
+- listas de configuração;
+- fotos dos advogados;
+- ordem dos painéis.
+
+A restauração consulta os contratos atuais, remove os que não estão no arquivo e grava os dados em lotes de até 450 operações. A operação exige usuário autenticado e confirmação antes de efetivar as alterações.
 
 ## Login e permissões
 
@@ -173,8 +213,10 @@ Observações:
 Cobertura inicial atual:
 
 - carregamento da página principal
+- carregamento da página independente de relacionamento
 - navegação entre abas (Dashboard, Registros e Configurações)
 - validação de erros de runtime no carregamento
+- presença do fluxo de recuperação de senha no login do dashboard
 
 Cobertura adicional no fluxo autenticado real (`npm run test:e2e:real`):
 
@@ -196,6 +238,7 @@ Cobertura inicial atual:
 - leitura permitida para usuário autenticado
 - criação permitida com campos válidos
 - criação bloqueada com campo não permitido
+- proteção das coleções de clientes, interações e configuração de relacionamento
 
 ### 5. Rodar OWASP ZAP Baseline
 
@@ -249,16 +292,6 @@ Relatórios gerados como artefatos da execução:
 - playwright-report
 - zap-report
 
-## Notebook e GitHub
-
-Para sincronizar um notebook novo com o GitHub neste repositório:
-
-- salve o arquivo com extensao `.ipynb` dentro deste workspace, de preferência em uma pasta como `notebooks/`
-- faça as alteracoes no notebook e salve normalmente no VS Code
-- use o painel Source Control para criar o commit e enviar para `origin/main`
-
-O arquivo [.gitattributes](.gitattributes) ja normaliza notebooks para evitar diferenças desnecessarias no Windows e no GitHub.
-
 ## Backup automatico do Firestore (GitHub Actions)
 
 Foi adicionada uma rotina automatica em [.github/workflows/firestore-backup.yml](.github/workflows/firestore-backup.yml) que:
@@ -292,12 +325,6 @@ Configure em Settings -> Secrets and variables -> Actions:
 ### Restauracao local (quando precisar)
 
 Exemplo de descriptografia no Windows (PowerShell), sem depender do OpenSSL:
-
-```powershell
-.\scripts\restore-firestore-backup.ps1 -EncryptedFile "C:\Users\henri\Downloads\firestore-backup-26795378218.zip"
-```
-
-Ou, usando o miniscript pronto do projeto:
 
 ```powershell
 .\scripts\restore-firestore-backup.ps1 -EncryptedFile "C:\Users\henri\Downloads\firestore-backup-26795378218.zip"
@@ -351,32 +378,3 @@ Para controle de tamanho, o historico mantem os 300 eventos mais recentes.
 ## Histórico
 
 O resumo das etapas de migração, segurança e refatoração está em `HISTORICO_MELHORIAS.md`.
-
-## Recomendações técnicas (análise de 2026-06-10)
-
-Prioridade alta:
-
-- Endurecer `firestore.rules` para impedir que qualquer usuário autenticado edite ou exclua qualquer contrato.
-- Restringir escrita em `meta/*` para admin.
-- Restringir ou remover o importador administrativo da publicação padrão (`scripts/import-firestore.html`).
-
-Prioridade média:
-
-- Escapar valores dinâmicos antes de montar `<option>` com `innerHTML` em `scripts/dashboard.js`.
-- Restringir CSP de `script-src` para origens explícitas e evitar `https:` genérico.
-- Ajustar testes para validar cenário seguro (negação de edição cruzada e escrita de `meta` por não admin).
-
-## Troubleshooting: erro "permissão negada" ao salvar registro
-
-Causa mais provável no estado atual:
-
-- O frontend envia `createdAt` ao salvar novo registro.
-- A regra de create validava `hasOnly(...)` sem incluir `createdAt`.
-- Resultado: o Firestore rejeita o `set(...)` com `permission-denied`.
-
-Checklist rápido:
-
-1. Confirme login ativo no overlay de autenticação.
-2. Verifique se as regras publicadas no Firebase já incluem `createdAt` em `validContrato(...)`.
-3. Após alterar regras, publique com `firebase deploy --only firestore:rules`.
-4. Teste criar um novo registro (não apenas editar um existente).

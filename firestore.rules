@@ -21,6 +21,18 @@ service cloud.firestore {
       allow delete: if signedIn();
     }
 
+    match /relacionamento_clientes/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /relacionamento_interacoes/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /meta/relacionamento_config {
+      allow read, write: if signedIn();
+    }
+
     match /meta/{docId} {
       allow read: if signedIn();
       allow write: if signedIn();

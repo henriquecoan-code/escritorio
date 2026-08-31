@@ -35,6 +35,16 @@ let regFilter = {srch:'', mes:'', adv:'', etapa:'', area:''};
 let regPg=1;
 const REG_PG=12;
 let mCurE=1;
+let tempoAuditMode=false;
+function buildPeriodChipLabel(allMeses, isFiltered){
+  if(isFiltered) return activeMonth || '2026';
+  if(!allMeses.length) return '2026';
+  if(allMeses.length <= 2) return allMeses.join(' · ');
+  const midpoint = Math.ceil(allMeses.length / 2);
+  const firstLine = allMeses.slice(0, midpoint).join(' · ');
+  const secondLine = allMeses.slice(midpoint).join(' · ');
+  return `${firstLine}\n${secondLine}`;
+}
 
 const WIDGET_DEFS=[
   {id:'evolucao',icon:'📈',name:'Evolução & Volume'},
@@ -42,6 +52,18 @@ const WIDGET_DEFS=[
   {id:'tipo_acao',icon:'📊',name:'Tipo de Contrato · Ação · Origem'},
   {id:'adv_mes',icon:'📋',name:'Advogado × Mês · Resumo'},
   {id:'tempo',icon:'⏱',name:'Tempo Médio no Comercial'},
+];
+const TEMPO_MAIN_DEFS=[
+  {id:'chegada_assinatura',l:'Chegada → Assinatura',icon:'✍',f1:'dtChegada',f2:'dtAssinatura',ref:10,d:'Da entrada até assinar'},
+  {id:'chegada_docs_solic',l:'Chegada → Docs Solic.',icon:'📋',f1:'dtChegada',f2:'dtDocs',ref:14,d:'Da entrada até solicitar docs'},
+  {id:'chegada_docs_rec',l:'Chegada → Docs Rec.',icon:'📦',f1:'dtChegada',f2:'dtDocsRec',ref:21,d:'Até receber documentos'},
+  {id:'chegada_entrega',l:'Chegada → Entrega',icon:'🏁',f1:'dtChegada',f2:'dtEntrega',ref:30,d:'Processo comercial completo'},
+];
+const TEMPO_EXTRA_DEFS=[
+  {id:'assinatura_docs_solic',l:'Assinatura → Solic. Docs',f1:'dtAssinatura',f2:'dtDocs',ref:7},
+  {id:'docs_solic_docs_rec',l:'Solic. → Docs Rec.',f1:'dtDocs',f2:'dtDocsRec',ref:14},
+  {id:'docs_rec_entrega',l:'Docs Rec. → Entrega',f1:'dtDocsRec',f2:'dtEntrega',ref:7},
+  {id:'envio_assinatura',l:'Envio → Assinatura',f1:'dtEnvioContrato',f2:'dtAssinatura',ref:7},
 ];
 const DEFAULT_ORDER=['evolucao','advogados','tipo_acao','adv_mes','tempo'];
 let widgetOrder=DEFAULT_ORDER.slice();
@@ -127,6 +149,23 @@ async function loginFirebase(){
     btn.disabled=false;
     btn.textContent='Entrar';
   }
+}
+
+async function forgotPasswordFirebase(){
+  const email=(document.getElementById('auth-email').value||'').trim();
+  if(!email){
+    setAuthOverlay(true,'Informe seu email para receber o link de recuperação.');
+    return;
+  }
+  const btn=document.getElementById('auth-forgot-btn');
+  btn.disabled=true;
+  try{
+    await fbAuth.sendPasswordResetEmail(email);
+    setAuthOverlay(true,'Enviamos um link de recuperação para seu email.');
+  }catch(e){
+    const msg=e && e.code==='auth/invalid-email'?'Informe um email válido.':e && e.code==='auth/user-not-found'?'Não encontramos uma conta com esse email.':'Não foi possível enviar o link de recuperação.';
+    setAuthOverlay(true,msg);
+  }finally{btn.disabled=false;}
 }
 
 async function logoutFirebase(){
@@ -362,6 +401,10 @@ function renderDashLayout(){
       <div class="gnw"><div class="card fu" style="animation-delay:.23s"><div class="ct">Contratos Assinados por Advogado &#8212; por Mês</div><div style="height:220px"><canvas id="advChart"></canvas></div></div>
       <div class="card fu" style="animation-delay:.26s"><div class="ct">Resumo Executivo</div><table class="stbl" id="sum-tbl"></table></div></div></div>`,
     tempo:`<div data-widget="tempo"><div class="sl"><div class="sl-line"></div><div class="sl-txt">Tempo Médio no Comercial &#8212; Permanência da Pasta</div><div class="sl-line"></div></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin:-3px 0 8px">
+        <div id="tempo-base-info" style="font-size:10px;color:var(--t3)">Base comum: --</div>
+        <button class="btn sm" id="tempo-audit-toggle-btn" type="button">Modo auditoria: off</button>
+      </div>
       <div class="g4" id="tempo-grid"></div><div class="card"><div class="ct">Detalhamento por Etapa</div><div id="tempo-detail-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px"></div></div></div>`,
   };
   wrap.innerHTML=widgetOrder.map(id=>blocks[id]||'').join('');
@@ -394,6 +437,191 @@ function brasiliaTodayISO(){
     day:'2-digit',
   });
   return fmt.format(new Date());
+}
+
+const STAGE_DATE_FLOW=['dtChegada','dtContato','dtEnvioContrato','dtAssinatura','dtDocs','dtDocsRec','dtEntrega'];
+
+function fmtPtDate(dt){
+  if(!dt || isNaN(dt)) return '-';
+  const d=String(dt.getDate()).padStart(2,'0');
+  const m=String(dt.getMonth()+1).padStart(2,'0');
+  const y=dt.getFullYear();
+  return `${d}/${m}/${y}`;
+}
+
+function fieldLabel(field){
+  const map={
+    dtChegada:'Chegada',
+    dtContato:'Contato',
+    dtEnvioContrato:'Envio Contrato',
+    dtAssinatura:'Assinatura',
+    dtDocs:'Solic. Docs',
+    dtDocsRec:'Docs Rec.',
+    dtEntrega:'Entrega',
+    today:'Hoje',
+  };
+  return map[field] || field;
+}
+
+function resolveStageDateForwardInfo(rec, field){
+  const idx=STAGE_DATE_FLOW.indexOf(field);
+  if(idx===-1) return null;
+
+  for(let i=idx;i<STAGE_DATE_FLOW.length;i++){
+    const f=STAGE_DATE_FLOW[i];
+    const dt=parseDMY(rec?.[f]);
+    if(dt) return {field:f,date:dt};
+  }
+  return null;
+}
+
+function resolveStageDateForward(rec, field){
+  const info=resolveStageDateForwardInfo(rec, field);
+  return info ? info.date : null;
+}
+
+function getTempoMetricAuditRows(source, metric){
+  const rows=[];
+  source.forEach((rec)=>{
+    const startInfo=resolveStageDateForwardInfo(rec,metric.f1);
+    const startDate=(startInfo&&startInfo.date) || getRecordCreatedDate(rec);
+    if(!startDate) return;
+
+    const endInfo=resolveStageDateForwardInfo(rec,metric.f2);
+    let endDate=endInfo?endInfo.date:null;
+    let endField=endInfo?endInfo.field:'';
+    let usesToday=false;
+
+    if(!endDate && !isDoneRecord(rec)){
+      endDate=parseDMY(brasiliaTodayISO());
+      endField='today';
+      usesToday=true;
+    }
+    if(!endDate) return;
+
+    const days=Math.max(0,Math.round((endDate-startDate)/86400000));
+    rows.push({
+      uid:rec.uid||'',
+      numero:rec.numero||0,
+      cliente:rec.cliente||'Sem nome',
+      etapa:Number(rec.etapa||0),
+      status:String(rec.status||''),
+      days,
+      startFieldRequested:metric.f1,
+      startFieldUsed:startInfo?startInfo.field:'createdAt',
+      startDate:fmtPtDate(startDate),
+      endFieldRequested:metric.f2,
+      endFieldUsed:endField,
+      endDate:fmtPtDate(endDate),
+      usedFallbackStart:Boolean(startInfo&&startInfo.field!==metric.f1),
+      usedFallbackEnd:Boolean(endInfo&&endInfo.field!==metric.f2),
+      usesToday,
+    });
+  });
+  return rows.sort((a,b)=>b.days-a.days);
+}
+
+function ensureTempoAuditModal(){
+  let ov=document.getElementById('tempo-audit-overlay');
+  if(ov) return ov;
+
+  ov=document.createElement('div');
+  ov.id='tempo-audit-overlay';
+  ov.className='tempo-audit-overlay';
+  ov.innerHTML=`<div class="tempo-audit-box">
+    <div class="tempo-audit-hd">
+      <h3 id="tempo-audit-title">Auditoria</h3>
+      <button class="tempo-audit-close" id="tempo-audit-close-btn" type="button">x</button>
+    </div>
+    <div class="tempo-audit-meta" id="tempo-audit-meta"></div>
+    <div class="tempo-audit-table-wrap">
+      <table class="tempo-audit-table" id="tempo-audit-table"></table>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+
+  ov.addEventListener('click',(event)=>{ if(event.target===ov) ov.classList.remove('open'); });
+  ov.querySelector('#tempo-audit-close-btn')?.addEventListener('click',()=>ov.classList.remove('open'));
+  return ov;
+}
+
+function openTempoAuditModal(metric){
+  const source=getView();
+  const rows=getTempoMetricAuditRows(source,metric);
+  const used=rows.length;
+  const base=source.length;
+  const fallbackStartCount=rows.filter(r=>r.usedFallbackStart).length;
+  const fallbackEndCount=rows.filter(r=>r.usedFallbackEnd).length;
+  const todayCount=rows.filter(r=>r.usesToday).length;
+
+  const ov=ensureTempoAuditModal();
+  ov.querySelector('#tempo-audit-title').textContent=`Auditoria · ${metric.l}`;
+  ov.querySelector('#tempo-audit-meta').innerHTML=
+    `Base no período: <strong>${base}</strong> · Usados: <strong>${used}</strong> · Fallback início: <strong>${fallbackStartCount}</strong> · Fallback fim: <strong>${fallbackEndCount}</strong> · Até hoje: <strong>${todayCount}</strong>`;
+
+  const table=ov.querySelector('#tempo-audit-table');
+  if(!rows.length){
+    table.innerHTML='<thead><tr><th>Resultado</th></tr></thead><tbody><tr><td>Sem registros válidos para esta métrica no período.</td></tr></tbody>';
+    ov.classList.add('open');
+    return;
+  }
+
+  table.innerHTML=`<thead><tr>
+    <th>#</th><th>Cliente</th><th>Dias</th><th>Início</th><th>Fim</th><th>Fallback</th><th>Etapa</th>
+  </tr></thead><tbody>${rows.map((r)=>`<tr>
+    <td>${r.numero||'-'}</td>
+    <td>${escHtml(r.cliente)}</td>
+    <td>${r.days}d</td>
+    <td>${escHtml(fieldLabel(r.startFieldUsed))} (${escHtml(r.startDate)})</td>
+    <td>${escHtml(fieldLabel(r.endFieldUsed))} (${escHtml(r.endDate)})</td>
+    <td>${r.usedFallbackStart||r.usedFallbackEnd||r.usesToday?'sim':'não'}</td>
+    <td>${r.etapa||'-'}</td>
+  </tr>`).join('')}</tbody>`;
+  ov.classList.add('open');
+}
+
+function openTempoConcludedAudit(){
+  const source=getView();
+  const rows=source.map((rec)=>({
+    numero:rec.numero||0,
+    cliente:rec.cliente||'Sem nome',
+    etapa:Number(rec.etapa||0),
+    status:String(rec.status||''),
+    concluido:isDoneRecord(rec),
+  })).sort((a,b)=>Number(b.concluido)-Number(a.concluido));
+
+  const concluidos=rows.filter((r)=>r.concluido).length;
+  const ov=ensureTempoAuditModal();
+  ov.querySelector('#tempo-audit-title').textContent='Auditoria · Pastas Concluídas';
+  ov.querySelector('#tempo-audit-meta').innerHTML=
+    `Concluídas: <strong>${concluidos}</strong> de <strong>${rows.length}</strong> · Taxa: <strong>${rows.length?Math.round(concluidos/rows.length*100):0}%</strong>`;
+
+  const table=ov.querySelector('#tempo-audit-table');
+  table.innerHTML=`<thead><tr><th>#</th><th>Cliente</th><th>Etapa</th><th>Status</th><th>Concluída</th></tr></thead>
+    <tbody>${rows.map((r)=>`<tr>
+      <td>${r.numero||'-'}</td>
+      <td>${escHtml(r.cliente)}</td>
+      <td>${r.etapa||'-'}</td>
+      <td>${escHtml(r.status||'-')}</td>
+      <td>${r.concluido?'sim':'não'}</td>
+    </tr>`).join('')}</tbody>`;
+  ov.classList.add('open');
+}
+
+function metricDaysWithStageForwardFallback(rec, startField, endField){
+  const start=resolveStageDateForward(rec,startField) || getRecordCreatedDate(rec);
+  if(!start) return null;
+
+  const end=resolveStageDateForward(rec,endField);
+  if(end) return Math.max(0,Math.round((end-start)/86400000));
+
+  if(!isDoneRecord(rec)){
+    const today=parseDMY(brasiliaTodayISO());
+    if(!today) return null;
+    return Math.max(0,Math.round((today-start)/86400000));
+  }
+
+  return null;
 }
 
 function metricDaysWithOpenFallback(rec, startField, endField){
@@ -456,41 +684,38 @@ function estimateRecordCreatedAtMs(rec){
 function renderTempoWidget(){
   const grid=document.getElementById('tempo-grid');
   const detail=document.getElementById('tempo-detail-grid');
+  const baseInfo=document.getElementById('tempo-base-info');
+  const auditBtn=document.getElementById('tempo-audit-toggle-btn');
   if(!grid || !detail) return;
 
   const src=getView(); // respeita filtro de mês ativo
+  const base=src;
+  if(baseInfo){
+    baseInfo.textContent=`Base comum: ${base.length} registro${base.length!==1?'s':''} no período`;
+  }
+  if(auditBtn){
+    auditBtn.textContent=`Modo auditoria: ${tempoAuditMode?'on':'off'}`;
+    auditBtn.classList.toggle('on',tempoAuditMode);
+  }
 
-  const defs=[
-    {l:'Chegada → Assinatura',icon:'✍',f1:'dtChegada',f2:'dtAssinatura',ref:10,d:'Da entrada até assinar'},
-    {l:'Chegada → Docs Solic.',icon:'📋',f1:'dtChegada',f2:'dtDocs',ref:14,d:'Da entrada até solicitar docs'},
-    {l:'Chegada → Docs Rec.',icon:'📦',f1:'dtChegada',f2:'dtDocsRec',ref:21,d:'Até receber documentos'},
-    {l:'Chegada → Entrega',icon:'🏁',f1:'dtChegada',f2:'dtEntrega',ref:30,d:'Processo comercial completo'},
-  ];
-
-  grid.innerHTML=defs.map((tm)=>{
-    const vals=src.map(r=>metricDaysWithOpenFallback(r,tm.f1,tm.f2)).filter(v=>v!=null&&v>=0);
+  grid.innerHTML=TEMPO_MAIN_DEFS.map((tm)=>{
+    const vals=base.map((r)=>metricDaysWithStageForwardFallback(r,tm.f1,tm.f2)).filter(v=>v!=null&&v>=0);
     const a=avgArr(vals);
     const col=a==null?'var(--t3)':a<=tm.ref*.7?'var(--green)':a<=tm.ref?'var(--amber)':'var(--rose)';
     const barCol=a==null?'rgba(110,106,136,.3)':a<=tm.ref*.7?'#5EC97A':a<=tm.ref?'#F0A732':'#E8735A';
     const pct=a==null?0:Math.min(Math.round(a/tm.ref*100),100);
-    return `<div class="tcard"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px"><div><div class="tm-l">${tm.l}</div><div class="tm-v" style="color:${col}">${a==null?'--':a+'d'}</div></div><div style="font-size:24px;opacity:.45">${tm.icon}</div></div>
-      <div class="tm-s">${tm.d}</div><div class="tm-bg"><div class="tm-bar" style="background:${barCol};width:0" data-w="${pct}%"></div></div><div class="tm-meta"><span>${vals.length} reg.</span><span>Meta: ≤${tm.ref}d</span></div></div>`;
+    return `<div class="tcard tempo-audit-card ${tempoAuditMode?'audit-on':''}" data-tempo-metric="${escAttr(tm.id)}"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:7px"><div><div class="tm-l">${tm.l}</div><div class="tm-v" style="color:${col}">${a==null?'--':a+'d'}</div></div><div style="font-size:24px;opacity:.45">${tm.icon}</div></div>
+      <div class="tm-s">${tm.d}</div><div class="tm-bg"><div class="tm-bar" style="background:${barCol};width:0" data-w="${pct}%"></div></div><div class="tm-meta"><span>${vals.length}/${base.length} reg.</span><span>Meta: ≤${tm.ref}d</span></div></div>`;
   }).join('');
 
-  const extras=[
-    {l:'Assinatura → Solic. Docs',f1:'dtAssinatura',f2:'dtDocs',ref:7},
-    {l:'Solic. → Docs Rec.',f1:'dtDocs',f2:'dtDocsRec',ref:14},
-    {l:'Docs Rec. → Entrega',f1:'dtDocsRec',f2:'dtEntrega',ref:7},
-    {l:'Envio → Assinatura',f1:'dtEnvioContrato',f2:'dtAssinatura',ref:7},
-  ];
-  const extraHtml=extras.map((tm)=>{
-    const vals=src.map(r=>metricDaysWithOpenFallback(r,tm.f1,tm.f2)).filter(v=>v!=null&&v>=0);
+  const extraHtml=TEMPO_EXTRA_DEFS.map((tm)=>{
+    const vals=base.map((r)=>metricDaysWithStageForwardFallback(r,tm.f1,tm.f2)).filter(v=>v!=null&&v>=0);
     const a=avgArr(vals);
     const col=a==null?'var(--t3)':a<=tm.ref*.7?'var(--green)':a<=tm.ref?'var(--amber)':'var(--rose)';
-    return `<div style="padding:9px;border:1px solid var(--b);background:var(--b2)"><div style="font-size:9px;color:var(--t3);margin-bottom:3px">${tm.l}</div><div style="font-family:Georgia,serif;font-size:20px;font-weight:300;color:${col}">${a==null?'--':a+'d'}</div><div style="font-size:9px;color:var(--t3);margin-top:2px">${vals.length} reg. · meta ≤${tm.ref}d</div></div>`;
+    return `<div class="tempo-audit-card ${tempoAuditMode?'audit-on':''}" data-tempo-metric="${escAttr(tm.id)}" style="padding:9px;border:1px solid var(--b);background:var(--b2)"><div style="font-size:9px;color:var(--t3);margin-bottom:3px">${tm.l}</div><div style="font-family:Georgia,serif;font-size:20px;font-weight:300;color:${col}">${a==null?'--':a+'d'}</div><div style="font-size:9px;color:var(--t3);margin-top:2px">${vals.length}/${base.length} reg. · meta ≤${tm.ref}d</div></div>`;
   }).join('');
   const concluidos=src.filter(r=>Number(r.etapa||0)===5||(r.status||'').toLowerCase()==='encerrado').length;
-  detail.innerHTML=extraHtml+`<div style="padding:9px;border:1px solid var(--b);background:var(--b2)"><div style="font-size:9px;color:var(--t3);margin-bottom:3px">Pastas Concluídas</div><div style="font-family:Georgia,serif;font-size:20px;color:var(--green)">${concluidos}<span style="font-size:12px;color:var(--t3)">/${src.length}</span></div><div style="font-size:9px;color:var(--t3);margin-top:2px">taxa ${src.length?Math.round(concluidos/src.length*100):0}%</div></div>`;
+  detail.innerHTML=extraHtml+`<div class="tempo-audit-card ${tempoAuditMode?'audit-on':''}" data-tempo-metric="concluidos" style="padding:9px;border:1px solid var(--b);background:var(--b2)"><div style="font-size:9px;color:var(--t3);margin-bottom:3px">Pastas Concluídas</div><div style="font-family:Georgia,serif;font-size:20px;color:var(--green)">${concluidos}<span style="font-size:12px;color:var(--t3)">/${src.length}</span></div><div style="font-size:9px;color:var(--t3);margin-top:2px">taxa ${src.length?Math.round(concluidos/src.length*100):0}%</div></div>`;
 }
 
 function bindStaticEvents(){
@@ -503,6 +728,10 @@ function bindStaticEvents(){
   document.getElementById('save-wo-btn')?.addEventListener('click',saveWO);
   document.getElementById('reset-wo-btn')?.addEventListener('click',resetWO);
   document.getElementById('auth-login-btn')?.addEventListener('click',loginFirebase);
+  document.getElementById('auth-forgot-btn')?.addEventListener('click',forgotPasswordFirebase);
+  document.getElementById('backup-export-btn')?.addEventListener('click',exportDashboardBackup);
+  document.getElementById('backup-import-btn')?.addEventListener('click',()=>document.getElementById('backup-file-input')?.click());
+  document.getElementById('backup-file-input')?.addEventListener('change',importDashboardBackup);
   document.getElementById('overlay')?.addEventListener('click',overlayBg);
   document.getElementById('close-modal-x-btn')?.addEventListener('click',closeM);
   document.getElementById('cancel-modal-btn')?.addEventListener('click',closeM);
@@ -602,6 +831,25 @@ function bindStaticEvents(){
     setMonth(btn.dataset.month);
   });
   document.getElementById('view-dash')?.addEventListener('click',(event)=>{
+    const auditToggle=event.target.closest('#tempo-audit-toggle-btn');
+    if(auditToggle){
+      tempoAuditMode=!tempoAuditMode;
+      renderTempoWidget();
+      return;
+    }
+    const auditCard=event.target.closest('[data-tempo-metric]');
+    if(auditCard && tempoAuditMode){
+      const metricId=auditCard.dataset.tempoMetric;
+      if(metricId==='concluidos'){
+        openTempoConcludedAudit();
+        return;
+      }
+      const metric=[...TEMPO_MAIN_DEFS,...TEMPO_EXTRA_DEFS].find((m)=>m.id===metricId);
+      if(metric){
+        openTempoAuditModal(metric);
+        return;
+      }
+    }
     const box=event.target.closest('.mc[data-month]');
     if(box){ setMonth(box.dataset.month); return; }
     const avatar=event.target.closest('.av[data-photo-input-id]');
@@ -818,6 +1066,76 @@ async function serverSavePhotos(){
   catch(e){}
 }
 
+function dashboardBackupPayload(){
+  return {
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    contratos: DB,
+    listas: {AREAS, ACOES, TIPOS, ORIGENS, ADVS, MESES_REF},
+    fotos: photos,
+    ordemPaineis: widgetOrder,
+  };
+}
+
+function exportDashboardBackup(){
+  if(!ensureAuthenticated()) return;
+  const payload=JSON.stringify(dashboardBackupPayload(),null,2);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([payload],{type:'application/json'}));
+  a.download=`OB_dashboard_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('Backup completo baixado!','ok');
+}
+
+async function commitBackupWrites(writes){
+  const chunkSize=450;
+  for(let start=0;start<writes.length;start+=chunkSize){
+    const batch=fbDb.batch();
+    writes.slice(start,start+chunkSize).forEach(({ref,data,remove})=>remove?batch.delete(ref):batch.set(ref,data));
+    await batch.commit();
+    setSyncStatus('loading','Restaurando backup...',`${Math.min(start+chunkSize,writes.length)}/${writes.length} operações`);
+  }
+}
+
+async function importDashboardBackup(event){
+  const file=event.target.files?.[0];
+  event.target.value='';
+  if(!file)return;
+  if(!ensureAuthenticated())return;
+  try{
+    const backup=JSON.parse(await file.text());
+    if(!Array.isArray(backup.contratos)||!backup.listas||typeof backup.listas!=='object')throw new Error('formato');
+    const listas={...{AREAS,ACOES,TIPOS,ORIGENS,ADVS,MESES_REF},...backup.listas};
+    const fotosBackup=backup.fotos&&typeof backup.fotos==='object'?backup.fotos:{};
+    const ordem=Array.isArray(backup.ordemPaineis)?backup.ordemPaineis:DEFAULT_ORDER;
+    const total=backup.contratos.length+Object.keys(fotosBackup).length+7;
+    if(!confirm(`Este backup contém ${backup.contratos.length} contrato(s), ${Object.keys(fotosBackup).length} foto(s) e as listas de configuração. Restaurar ${total} registro(s) no Firestore?`))return;
+
+    setSyncStatus('loading','Preparando restauração...',`${total} itens`);
+    const remote=await fbDb.collection('contratos').get();
+    const incoming=new Set(backup.contratos.map(record=>record.uid).filter(Boolean));
+    const writes=[];
+    remote.docs.forEach(doc=>{if(!incoming.has(doc.id))writes.push({ref:doc.ref,remove:true});});
+    backup.contratos.forEach(record=>{if(!record.uid)throw new Error('contrato sem uid');writes.push({ref:fbDb.collection('contratos').doc(record.uid),data:record});});
+    writes.push({ref:fbDb.collection('meta').doc('lists'),data:listas});
+    writes.push({ref:fbDb.collection('meta').doc('photos'),data:fotosBackup});
+    await commitBackupWrites(writes);
+
+    DB=backup.contratos;
+    ({AREAS,ACOES,TIPOS,ORIGENS,ADVS,MESES_REF}=listas);
+    photos=fotosBackup;widgetOrder=ordem;
+    saveWOStore();
+    renderDash();fillSelects();fillRegFilters();renderReg();renderAllCfg();
+    setSyncStatus('ok','Tempo real',`${DB.length} registros restaurados`);
+    toast(`Backup restaurado · ${DB.length} contrato(s)`,'ok');
+  }catch(e){
+    console.error('Erro ao restaurar backup:',e);
+    setSyncStatus('err','Erro na restauração','O backup não foi concluído');
+    toast('Arquivo inválido ou falha ao restaurar o backup.','err');
+  }
+}
+
 /* .. DASHBOARD .. */
 function renderDash(){
   Object.values(charts).forEach(c=>{try{c.destroy();}catch(e){}});charts={};
@@ -826,7 +1144,7 @@ function renderDash(){
   buildMonthPills();
   const view=getView(),total=view.length,isF=activeMonth!=='all';
   const totMes=allMeses.map(m=>DB.filter(r=>r.mes===m).length);
-  document.getElementById('period-chip').textContent=isF?activeMonth:allMeses.join(' · ')||'2026';
+  document.getElementById('period-chip').textContent=buildPeriodChipLabel(allMeses,isF);
   document.getElementById('month-bar-info').textContent=isF?`${total} contrato${total!==1?'s':''} em ${activeMonth}`:`${total} contratos no total`;
   
   // Calcula variação corretamente
@@ -849,7 +1167,7 @@ function renderDash(){
   const emAndamento=view.filter(r=>!isDoneRecord(r)).length;
   const concluidos=view.filter(r=>isDoneRecord(r)).length;
   const assinados=view.filter(r=>r.dtAssinatura).length;
-  const durEntrega=view.map(r=>metricDaysWithOpenFallback(r,'dtChegada','dtEntrega')).filter(v=>v!=null&&v>=0);
+  const durEntrega=view.map(r=>metricDaysWithStageForwardFallback(r,'dtChegada','dtEntrega')).filter(v=>v!=null&&v>=0);
   const tempoMedio=avgArr(durEntrega);
   const pctAssin=total?Math.round(assinados/total*100):0;
   const pctAnd=total?Math.round(emAndamento/total*100):0;
