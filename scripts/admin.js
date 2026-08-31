@@ -7,6 +7,14 @@ let adminUser=null;
 let users=[];
 
 const byId=id=>document.getElementById(id);
+async function loadBrandLogo(){
+  try{
+    const response=await fetch('scripts/dashboard.js');
+    if(!response.ok)return;
+    const match=(await response.text()).match(/const LOGO_B64\s*=\s*'([^']+)'/);
+    if(match)byId('admin-logo').src=match[1];
+  }catch(error){console.warn('Não foi possível carregar o logo.',error);}
+}
 function setStatus(message,type=''){const el=byId('admin-status');el.textContent=message;el.className=`admin-status ${type}`;}
 function authMessage(error){
   if(error?.code==='auth/invalid-credential')return 'Email ou senha incorretos.';
@@ -66,4 +74,5 @@ function startAdmin(){
     }catch(error){setAuthOpen(false);setStatus('Configure o UID do proprietário em meta/security.adminUids antes de usar esta página.','error');}
   });
 }
+loadBrandLogo();
 if(typeof firebase==='undefined'||!window.OB_FIREBASE_CONFIG){setAuthOpen(true);setAuthError('Firebase não está configurado.');}else{startAdmin();}
