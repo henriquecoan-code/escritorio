@@ -13,6 +13,7 @@ Dashboard interno da Oliveira & Benedet para gestão e visualização de contrat
 
 ```text
 escritorio/
+├── admin.html
 ├── index.html
 ├── OB_Dashboard_Rede.html
 ├── firebase-config.public.js
@@ -24,11 +25,13 @@ escritorio/
 ├── package.json
 ├── playwright.config.js
 ├── scripts/
+│   ├── admin.js
 │   ├── dashboard.js
 │   ├── import-firestore.html
 │   ├── relacionamento.js
 │   └── theme.js
 ├── styles/
+│   ├── admin.css
 │   ├── dashboard.css
 │   └── relacionamento.css
 └── tests/
@@ -81,6 +84,8 @@ http://localhost:8000/relacionamento.html
 ```
 
 A área de administração do proprietário fica disponível em `admin.html`. As contas são criadas no Firebase Console; a página administra os perfis em `admin_users`, com os painéis permitidos em `panels.dashboard`, `panels.relacionamento` e `panels.admin`. Para liberar o primeiro proprietário, configure seu UID em `meta/security.adminUids` no Firebase Console.
+
+O cabeçalho administrativo usa o mesmo logo e as mesmas dimensões responsivas do painel inicial. Seus estilos ficam centralizados em `styles/admin.css`; mantenha novas regras visuais da página nessa folha, em vez de incluí-las em `admin.html`.
 
 Ela exige o mesmo login do Firebase e usa as coleções `relacionamento_clientes` e `relacionamento_interacoes`, além do documento `meta/relacionamento_config`. Os dados comerciais não são mantidos no `localStorage`; use os botões de backup JSON para exportar ou restaurar dados manualmente.
 
