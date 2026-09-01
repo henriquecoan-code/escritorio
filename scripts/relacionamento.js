@@ -731,10 +731,20 @@ function renderInter(){
   });
   const resultLabel=i=>i.resultado==='ativado'?'ativado':i.resultado==='acompanhar'?'acompanhar':i.conexao?'sem-retorno':'nao-atendeu';
   const signalCount=i=>[i.feliz,i.interesse,i.indicaria,i.indicacoes>0].filter(Boolean).length;
+  const cliNameById=new Map(db.clientes.map(c=>[c.id,c.nome]));
+  const interValue=i=>{
+    if(interSort.field==='cliente')return cliNameById.get(i.clienteId)||'';
+    if(interSort.field==='tipo')return tipoLabel(i.tipo);
+    if(interSort.field==='resultado')return resultLabel(i);
+    if(interSort.field==='sinais')return signalCount(i);
+    return i[interSort.field]||'';
+  };
   rows.sort((first,second)=>{
-    const firstValue=interSort.field==='cliente'?(cliById(first.clienteId)?.nome||''):interSort.field==='tipo'?tipoLabel(first.tipo):interSort.field==='resultado'?resultLabel(first):interSort.field==='sinais'?signalCount(first):interSort.field==='ordemCriacao'?first.ordemCriacao??first.data:first[interSort.field]||'';
-    const secondValue=interSort.field==='cliente'?(cliById(second.clienteId)?.nome||''):interSort.field==='tipo'?tipoLabel(second.tipo):interSort.field==='resultado'?resultLabel(second):interSort.field==='sinais'?signalCount(second):interSort.field==='ordemCriacao'?second.ordemCriacao??second.data:second[interSort.field]||'';
-    const comparison=typeof firstValue==='number'&&typeof secondValue==='number'?firstValue-secondValue:String(firstValue).localeCompare(String(secondValue),'pt-BR');
+    const firstValue=interSort.field==='ordemCriacao'?(first.ordemCriacao??first.data):interValue(first);
+    const secondValue=interSort.field==='ordemCriacao'?(second.ordemCriacao??second.data):interValue(second);
+    const comparison=typeof firstValue==='number'&&typeof secondValue==='number'
+      ? firstValue-secondValue
+      : String(firstValue).localeCompare(String(secondValue),'pt-BR');
     return comparison*(interSort.direction==='asc'?1:-1);
   });
   const tb=document.getElementById('interBody');
