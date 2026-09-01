@@ -244,7 +244,7 @@ function fillSelect(id,arr,ph){const s=document.getElementById(id);s.innerHTML=(
 
 function openInter(id){
   const m=document.getElementById('interModal');
-  fillSelect('iCliente',db.clientes.map(c=>({v:c.id,l:c.nome})),db.clientes.length?'':'Cadastre um cliente primeiro');
+  fillSelect('iCliente',db.clientes.slice().sort((first,second)=>first.nome.localeCompare(second.nome,'pt-BR')).map(c=>({v:c.id,l:c.nome})),'Selecione um cliente');
   fillSelect('iSdr',db.config.sdrs);
   fillSelect('iTipo',db.config.tipos.map(t=>({v:t.id,l:t.label})));
   fillSelect('iServico',db.config.servicos,'—');
@@ -282,7 +282,7 @@ function openInter(id){
 
 function saveInter(){
   const cli=document.getElementById('iCliente').value;
-  if(!cli){toast('Selecione ou cadastre um cliente');return;}
+  if(!cli){toast('Selecione um cliente');return;}
   const conexao=pillVal('conexao')==='1';
   const rec={
     id:document.getElementById('iId').value||uid(),
