@@ -29,10 +29,9 @@ let unsubClientes=null;
 let unsubInteracoes=null;
 let unsubConfig=null;
 let firebaseReady=false;
-
-function save(){
-  if(firebaseReady&&currentUser)persistDb().catch(()=>toast('Não foi possível sincronizar com o Firebase'));
-}
+let clientesIniciaisCarregados=false;
+let interacoesIniciaisCarregadas=false;
+let migracaoOrdemExecutada=false;
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 
 function createFirebaseUI(){
@@ -40,7 +39,7 @@ function createFirebaseUI(){
   document.getElementById('authLogin').addEventListener('click',login);
   document.getElementById('authPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
   document.getElementById('authForgot').addEventListener('click',forgotPassword);
-  document.getElementById('syncNow').addEventListener('click',loadFromFirebase);
+  document.getElementById('syncNow').addEventListener('click',startRealtime);
   document.getElementById('authLogout').addEventListener('click',logout);
 }
 
@@ -113,32 +112,70 @@ async function persistDb(){
   setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);
 }
 
+async function persistDocuments(collection,documents){
+  if(!firebaseReady||!currentUser||!documents.length)return;
+  for(let start=0;start<documents.length;start+=450){
+    const batch=fbDb.batch();
+    documents.slice(start,start+450).forEach(document=>batch.set(fbDb.collection(collection).doc(document.id),document));
+    await batch.commit();
+  }
+}
+
+async function deleteDocuments(collection,ids){
+  if(!firebaseReady||!currentUser||!ids.length)return;
+  for(let start=0;start<ids.length;start+=450){
+    const batch=fbDb.batch();
+    ids.slice(start,start+450).forEach(id=>batch.delete(fbDb.collection(collection).doc(id)));
+    await batch.commit();
+  }
+}
+
+function persistConfig(){
+  if(!firebaseReady||!currentUser)return Promise.resolve();
+  return fbDb.collection('meta').doc(CONFIG_DOC).set(db.config);
+}
+
 function renderAll(){renderDash();renderCli();renderInter();renderCfg();renderAcoes();}
 
-async function loadFromFirebase(){
-  if(!currentUser)return;
-  setSync('loading','Carregando Firebase...');
-  try{
-    const [clientesSnap,interacoesSnap,configSnap]=await Promise.all([
-      fbDb.collection(CLIENTES_COLLECTION).get(),
-      fbDb.collection(INTERACOES_COLLECTION).get(),
-      fbDb.collection('meta').doc(CONFIG_DOC).get()
-    ]);
-    const hasRemote=!clientesSnap.empty||!interacoesSnap.empty||configSnap.exists;
-    if(hasRemote){
-      db.clientes=clientesSnap.docs.map(d=>d.data());
-      db.interacoes=interacoesSnap.docs.map(d=>d.data());
-      db.config={...structuredClone(DEF.config),...(configSnap.exists?configSnap.data():{})};
-    }
-    firebaseReady=true;renderAll();setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);
-  }catch(e){console.error(e);setSync('error','Erro no Firebase','Verifique as Rules e a configuração');toast('Não foi possível carregar os dados do Firebase');}
+function interacaoOrdemPendente(first,second){
+  const dataComparison=(first.data||'').localeCompare(second.data||'');
+  if(dataComparison)return dataComparison;
+  const firstName=cliById(first.clienteId)?.nome||'';
+  const secondName=cliById(second.clienteId)?.nome||'';
+  const nameComparison=firstName.localeCompare(secondName,'pt-BR');
+  return nameComparison||(first.id||'').localeCompare(second.id||'');
+}
+
+async function preencherOrdemInteracoes(){
+  const pendentes=db.interacoes.filter(interacao=>!Number.isInteger(interacao.ordemCriacao)||interacao.ordemCriacao<1).sort(interacaoOrdemPendente);
+  if(!pendentes.length)return;
+  const maiorOrdem=Math.max(0,...db.interacoes.map(interacao=>Number.isInteger(interacao.ordemCriacao)?interacao.ordemCriacao:0));
+  pendentes.forEach((interacao,index)=>{interacao.ordemCriacao=maiorOrdem+index+1;});
+  for(let start=0;start<pendentes.length;start+=450){
+    const batch=fbDb.batch();
+    pendentes.slice(start,start+450).forEach(interacao=>batch.set(fbDb.collection(INTERACOES_COLLECTION).doc(interacao.id),{ordemCriacao:interacao.ordemCriacao},{merge:true}));
+    await batch.commit();
+  }
+}
+
+function proximaOrdemInteracao(){
+  return Math.max(0,...db.interacoes.map(interacao=>Number.isInteger(interacao.ordemCriacao)?interacao.ordemCriacao:0))+1;
 }
 
 function startRealtime(){
   [unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());
-  unsubClientes=fbDb.collection(CLIENTES_COLLECTION).onSnapshot(snap=>{db.clientes=snap.docs.map(d=>d.data());renderAll();});
-  unsubInteracoes=fbDb.collection(INTERACOES_COLLECTION).onSnapshot(snap=>{db.interacoes=snap.docs.map(d=>d.data());renderAll();});
-  unsubConfig=fbDb.collection('meta').doc(CONFIG_DOC).onSnapshot(snap=>{if(snap.exists)db.config={...structuredClone(DEF.config),...snap.data()};renderAll();});
+  clientesIniciaisCarregados=false;interacoesIniciaisCarregadas=false;migracaoOrdemExecutada=false;
+  setSync('loading','Carregando Firebase...');
+  const atualizar=()=>{renderAll();setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);};
+  const migrarOrdem=()=>{
+    if(!clientesIniciaisCarregados||!interacoesIniciaisCarregadas||migracaoOrdemExecutada)return;
+    migracaoOrdemExecutada=true;
+    preencherOrdemInteracoes().catch(error=>{console.error(error);toast('Não foi possível atualizar a ordem das interações');});
+  };
+  const falhou=error=>{console.error(error);setSync('error','Erro no Firebase','Verifique as Rules e a configuração');};
+  unsubClientes=fbDb.collection(CLIENTES_COLLECTION).onSnapshot(snap=>{db.clientes=snap.docs.map(d=>d.data());clientesIniciaisCarregados=true;migrarOrdem();atualizar();},falhou);
+  unsubInteracoes=fbDb.collection(INTERACOES_COLLECTION).onSnapshot(snap=>{db.interacoes=snap.docs.map(d=>d.data());interacoesIniciaisCarregadas=true;migrarOrdem();atualizar();},falhou);
+  unsubConfig=fbDb.collection('meta').doc(CONFIG_DOC).onSnapshot(snap=>{if(snap.exists)db.config={...structuredClone(DEF.config),...snap.data()};atualizar();},falhou);
 }
 
 function initFirebase(){
@@ -146,10 +183,14 @@ function initFirebase(){
   try{
     const app=firebase.apps.length?firebase.app():firebase.initializeApp(FIREBASE_CFG);
     fbDb=firebase.firestore(app);fbAuth=firebase.auth(app);
+    if(['localhost','127.0.0.1'].includes(location.hostname)){
+      fbDb.useEmulator('127.0.0.1',8080);
+      fbAuth.useEmulator('http://127.0.0.1:9099');
+    }
     fbAuth.onAuthStateChanged(user=>{
       currentUser=user||null;
       refreshAuthUI();
-      if(currentUser){firebaseReady=true;setAuth(false);loadFromFirebase().then(startRealtime);}
+      if(currentUser){firebaseReady=true;setAuth(false);startRealtime();}
       else{firebaseReady=false;[unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
     });
   }catch(e){console.error(e);setSync('error','Erro ao iniciar Firebase');setAuth(true,'Não foi possível iniciar o Firebase.');}
@@ -280,12 +321,15 @@ function openInter(id){
   m.classList.add('show');
 }
 
-function saveInter(){
+async function saveInter(){
   const cli=document.getElementById('iCliente').value;
   if(!cli){toast('Selecione um cliente');return;}
   const conexao=pillVal('conexao')==='1';
+  const existing=db.interacoes.find(interacao=>interacao.id===document.getElementById('iId').value);
   const rec={
     id:document.getElementById('iId').value||uid(),
+    ordemCriacao:existing?.ordemCriacao||proximaOrdemInteracao(),
+    criadoEm:existing?.criadoEm||new Date().toISOString(),
     clienteId:cli,
     data:document.getElementById('iData').value||todayISO(),
     sdr:document.getElementById('iSdr').value,
@@ -315,7 +359,11 @@ function saveInter(){
   rec.indicacoes=indicados.length;
   const ix=db.interacoes.findIndex(x=>x.id===rec.id);
   if(ix>=0)db.interacoes[ix]=rec;else db.interacoes.unshift(rec);
-  save();closeModal('interModal');
+  try{
+    const clientesIndicados=[...new Set(indicados.map(indicado=>indicado.clienteId))].map(clienteId=>cliById(clienteId)).filter(Boolean);
+    await Promise.all([persistDocuments(INTERACOES_COLLECTION,[rec]),persistDocuments(CLIENTES_COLLECTION,clientesIndicados)]);
+  }catch(error){console.error(error);toast('Não foi possível salvar no Firebase');return;}
+  closeModal('interModal');
   toast(indicados.length?`Contato salvo · ${indicados.length} indicado(s) na carteira`:'Contato registrado');
   renderInter();renderCli();renderDash();renderAcoes();
 }
@@ -339,7 +387,7 @@ async function delInter(id){
   if(!confirm('Excluir este registro de contato?'))return;
   db.interacoes=db.interacoes.filter(i=>i.id!==id);
   if(firebaseReady&&currentUser)await fbDb.collection(INTERACOES_COLLECTION).doc(id).delete();
-  save();renderInter();renderDash();toast('Contato excluído');
+  renderInter();renderDash();toast('Contato excluído');
 }
 
 /* ============================================================
@@ -368,7 +416,7 @@ function openCli(id){
   }
   m.classList.add('show');
 }
-function saveCli(){
+async function saveCli(){
   const nome=document.getElementById('cNome').value.trim();
   if(!nome){toast('Informe o nome do cliente');return;}
   const proc=pillVal('proc')==='1';
@@ -379,11 +427,13 @@ function saveCli(){
     nasc:document.getElementById('cNasc').value,
     origem:document.getElementById('cOrigem').value.trim(),
     obs:document.getElementById('cObs').value.trim(),
-    criadoEm:document.getElementById('cId').value?undefined:todayISO()
+    criadoEm:cliById(document.getElementById('cId').value)?.criadoEm||todayISO()
   };
   const ix=db.clientes.findIndex(c=>c.id===rec.id);
   if(ix>=0)db.clientes[ix]={...db.clientes[ix],...rec};else db.clientes.unshift(rec);
-  save();closeModal('cliModal');toast('Cliente salvo');renderCli();renderDash();renderAcoes();
+  try{await persistDocuments(CLIENTES_COLLECTION,[db.clientes.find(cliente=>cliente.id===rec.id)]);}
+  catch(error){console.error(error);toast('Não foi possível salvar no Firebase');return;}
+  closeModal('cliModal');toast('Cliente salvo');renderCli();renderDash();renderAcoes();
 }
 async function delCli(id){
   const n=interByCli(id).length;
@@ -397,7 +447,7 @@ async function delCli(id){
     interactionIds.forEach(interactionId=>batch.delete(fbDb.collection(INTERACOES_COLLECTION).doc(interactionId)));
     await batch.commit();
   }
-  save();renderCli();renderDash();renderAcoes();toast('Cliente excluído');
+  renderCli();renderDash();renderAcoes();toast('Cliente excluído');
 }
 
 function closeModal(id){document.getElementById(id).classList.remove('show');}
@@ -805,9 +855,9 @@ function drawTags(key,el){
 function addTag(key,inputId){
   const inp=document.getElementById(inputId);const v=inp.value.trim();
   if(!v)return;if((db.config[key]||[]).includes(v)){toast('Já existe');return;}
-  (db.config[key]=db.config[key]||[]).push(v);inp.value='';save();renderCfg();afterConfigChange();
+  (db.config[key]=db.config[key]||[]).push(v);inp.value='';persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();
 }
-function rmTag(key,idx){db.config[key].splice(idx,1);save();renderCfg();afterConfigChange();}
+function rmTag(key,idx){db.config[key].splice(idx,1);persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();}
 
 /* ---- Tipos de contato (editor com cor) ---- */
 function drawTipos(){
@@ -831,15 +881,15 @@ function addTipo(){
   const cor=document.getElementById('tipoCor').value;
   if(tipos().some(t=>t.label.toLowerCase()===v.toLowerCase())){toast('Já existe um tipo com esse nome');return;}
   db.config.tipos.push({id:uid(),label:v,color:cor});inp.value='';
-  save();renderCfg();afterConfigChange();toast('Tipo adicionado');
+  persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();toast('Tipo adicionado');
 }
-function renameTipo(id,val){const t=tipoOf(id);if(!t)return;val=val.trim();if(!val)return;t.label=val;save();afterConfigChange();}
-function recolorTipo(id,col){const t=tipoOf(id);if(!t)return;t.color=col;save();drawTipos();afterConfigChange();}
+function renameTipo(id,val){const t=tipoOf(id);if(!t)return;val=val.trim();if(!val)return;t.label=val;persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));afterConfigChange();}
+function recolorTipo(id,col){const t=tipoOf(id);if(!t)return;t.color=col;persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));drawTipos();afterConfigChange();}
 function rmTipo(id){
   const n=db.interacoes.filter(i=>i.tipo===id).length;
   if(n&&!confirm(`${n} contato(s) usam este tipo. Eles continuarão registrados, mas sem cor/rótulo definidos. Remover mesmo assim?`))return;
   db.config.tipos=db.config.tipos.filter(t=>t.id!==id);
-  save();renderCfg();afterConfigChange();toast('Tipo removido');
+  persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();toast('Tipo removido');
 }
 /* re-render dependent views when option lists change */
 function afterConfigChange(){
@@ -890,9 +940,17 @@ function exportCSV(){
   const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`OB_carteira_${todayISO()}.csv`;a.click();toast('CSV exportado');
 }
-function wipeAll(){if(!confirm('Apagar TODOS os dados (clientes, interações e configurações)? Esta ação não pode ser desfeita.'))return;db=structuredClone(DEF);save();renderDash();renderCli();renderInter();renderCfg();renderAcoes();toast('Tudo apagado');}
+async function wipeAll(){
+  if(!confirm('Apagar TODOS os dados (clientes, interações e configurações)? Esta ação não pode ser desfeita.'))return;
+  const clienteIds=db.clientes.map(cliente=>cliente.id);
+  const interacaoIds=db.interacoes.map(interacao=>interacao.id);
+  try{
+    await Promise.all([deleteDocuments(CLIENTES_COLLECTION,clienteIds),deleteDocuments(INTERACOES_COLLECTION,interacaoIds)]);
+  }catch(error){console.error(error);toast('Não foi possível apagar os dados no Firebase');return;}
+  db=structuredClone(DEF);await persistConfig();renderDash();renderCli();renderInter();renderCfg();renderAcoes();toast('Tudo apagado');
+}
 
-function loadSample(){
+async function loadSample(){
   if(db.clientes.length&&!confirm('Isso adiciona clientes de exemplo aos dados atuais. Continuar?'))return;
   const sdrs=db.config.sdrs;const servs=db.config.servicos;const areas=db.config.areas;
   const nomes=['Maria Aparecida Silva','João Batista Souza','Rosa Mendes','Antônio Carlos Lima','Ivete Gonçalves','Pedro Henrique Alves','Cleusa Martins','Sebastião Ferreira','Marlene Costa','Geraldo Pereira'];
@@ -915,6 +973,7 @@ function loadSample(){
       const indicaria=conexao&&Math.random()>.6;
       db.interacoes.push({
         id:uid(),clienteId:c.id,data:dISO(Math.floor(Math.random()*55)),
+        ordemCriacao:proximaOrdemInteracao(),criadoEm:new Date().toISOString(),
         sdr:rd(sdrs),tipo:rd(['minerar','ativar','informacao','aniversario','inbound']),
         conexao,feliz:conexao&&Math.random()>.3,
         satisfeito:conexao?(Math.random()>.3?'1':(Math.random()>.5?'0':'na')):null,
@@ -925,7 +984,9 @@ function loadSample(){
       });
     }
   });
-  save();toast('Dados de exemplo carregados');renderDash();renderCli();renderInter();renderCfg();renderAcoes();
+  try{await Promise.all([persistDocuments(CLIENTES_COLLECTION,newCli),persistDocuments(INTERACOES_COLLECTION,db.interacoes.filter(interacao=>newCli.some(cliente=>cliente.id===interacao.clienteId)))]);}
+  catch(error){console.error(error);toast('Não foi possível salvar os dados de exemplo no Firebase');return;}
+  toast('Dados de exemplo carregados');renderDash();renderCli();renderInter();renderCfg();renderAcoes();
 }
 
 /* ============================================================
@@ -1108,12 +1169,14 @@ function updatePreview(){
   el.innerHTML=parts.join('<br>');
 }
 
-function doImport(){
+async function doImport(){
   const {recs,noNomeCol}=buildImportRecords();
   if(noNomeCol){toast('Selecione a coluna do nome do cliente');return;}
   if(!recs.length){toast('Nenhum cliente novo para importar');return;}
   db.clientes=[...recs,...db.clientes];
-  save();closeModal('importModal');
+  try{await persistDocuments(CLIENTES_COLLECTION,recs);}
+  catch(error){console.error(error);toast('Não foi possível importar para o Firebase');return;}
+  closeModal('importModal');
   toast(`${recs.length} cliente(s) importados`);
   renderCli();renderDash();renderAcoes();
 }

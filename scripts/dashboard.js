@@ -86,6 +86,10 @@ function initFirebaseIfConfigured(){
     const app = firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CFG);
     fbDb = firebase.firestore(app);
     fbAuth = firebase.auth(app);
+    if(['localhost','127.0.0.1'].includes(location.hostname)){
+      fbDb.useEmulator('127.0.0.1',8080);
+      fbAuth.useEmulator('http://127.0.0.1:9099');
+    }
     USE_FIREBASE = true;
     return true;
   }catch(e){
@@ -186,33 +190,6 @@ async function loadFromFirebase(){
   isSyncing=true;
   setSyncStatus('loading','Conectando Firebase...','');
   try{
-    // -- contratos: verifica se precisa semear --
-    const contractsSnap = await fbDb.collection('contratos').get();
-    if(contractsSnap.empty){
-      DB = JSON.parse(JSON.stringify(SEED_DATA));
-      const batch = fbDb.batch();
-      DB.forEach((r)=>{
-        r.createdAt = r.createdAt || Date.now();
-        r.updatedAt=Date.now();
-        batch.set(fbDb.collection('contratos').doc(r.uid), r);
-      });
-      await batch.commit();
-      toast(`Firebase inicializado com ${DB.length} contratos.`);
-    } else {
-      DB = contractsSnap.docs.map((d)=>d.data());
-    }
-
-    let missingCreatedAt=0;
-    const missingCreatedAtRecords=[];
-    DB.forEach((r)=>{
-      if(!r.createdAt){
-        r.createdAt=estimateRecordCreatedAtMs(r);
-        missingCreatedAt++;
-        missingCreatedAtRecords.push(r);
-      }
-      if(!r.updatedAt) r.updatedAt=r.createdAt;
-    });
-
     // -- meta: listas e fotos --
     const listsDoc = await fbDb.collection('meta').doc('lists').get();
     if(listsDoc.exists){
@@ -230,9 +207,6 @@ async function loadFromFirebase(){
     firebasePermissionWarned=false;
     fillSelects();renderDash();fillRegFilters();renderReg();
 
-    if(missingCreatedAt>0){
-      backfillCreatedAtInFirebase(missingCreatedAtRecords).catch((err)=>console.warn('Backfill createdAt falhou:', err));
-    }
   }catch(e){
     console.error(e);
     const code = (e && (e.code || e.status)) ? String(e.code || e.status) : '';
@@ -302,6 +276,13 @@ function startRealtimeSync(){
     // nao sobrescreve durante edicao
     if(isEditing) return;
 
+    if(snap.empty&&SEED_DATA.length){
+      const batch=fbDb.batch();
+      SEED_DATA.forEach(record=>batch.set(fbDb.collection('contratos').doc(record.uid),{...record,createdAt:record.createdAt||Date.now(),updatedAt:Date.now()}));
+      batch.commit().catch(error=>console.error('Falha ao inicializar contratos:',error));
+      return;
+    }
+
     // Item 5 - mescla inteligente usando updatedAt
     const remoteUids = new Set();
     snap.docs.forEach((doc)=>{
@@ -319,6 +300,13 @@ function startRealtimeSync(){
     });
     // remove registros excluidos remotamente
     DB = DB.filter(r=>remoteUids.has(r.uid));
+
+    const missingCreatedAtRecords=[];
+    DB.forEach(record=>{
+      if(!record.createdAt){record.createdAt=estimateRecordCreatedAtMs(record);missingCreatedAtRecords.push(record);}
+      if(!record.updatedAt)record.updatedAt=record.createdAt;
+    });
+    if(missingCreatedAtRecords.length)backfillCreatedAtInFirebase(missingCreatedAtRecords).catch(error=>console.warn('Backfill createdAt falhou:',error));
 
     const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
     setSyncStatus('ok','Tempo real',`${DB.length} registros · ${now}`);

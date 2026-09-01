@@ -181,11 +181,23 @@ npm run hooks:install
 
 ### 2. Subir o dashboard local
 
+Para desenvolvimento, inicie primeiro o Firestore e o Auth Emulator em um terminal:
+
+```powershell
+npm run emulators
+```
+
+Em outro terminal, sirva o dashboard:
+
 ```powershell
 npm run serve
 ```
 
 Acesse: `http://localhost:8000/index.html`
+
+Em `localhost`, o dashboard e a área de relacionamento se conectam automaticamente aos emuladores em vez do projeto Firebase real. Assim, leituras, escritas e testes manuais não consomem a cota diária de produção. A interface dos emuladores fica disponível em `http://localhost:4000`.
+
+Para usar os dados reais, abra o dashboard publicado fora de `localhost`.
 
 ### 3. Rodar testes E2E (Playwright)
 

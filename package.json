@@ -5,6 +5,7 @@
   "description": "Testes automatizados do dashboard OB",
   "scripts": {
     "serve": "node scripts/serve.mjs",
+    "emulators": "firebase emulators:start --only auth,firestore",
     "validate": "node --check scripts/dashboard.js && npm run test:e2e:smoke:local",
     "test:e2e": "playwright test",
     "test:e2e:smoke": "playwright test tests/e2e/smoke.spec.js",
