@@ -649,6 +649,17 @@ function renderAcoes(){
 /* ============================================================
    INTERAÇÕES (tabela)
    ============================================================ */
+let interSort={field:'data',direction:'desc'};
+
+function sortInter(field){
+  interSort=interSort.field===field?{field,direction:interSort.direction==='asc'?'desc':'asc'}:{field,direction:'asc'};
+  document.querySelectorAll('.sort-head[data-sort]').forEach(button=>{
+    const indicator=button.querySelector('span');
+    if(indicator)indicator.textContent=button.dataset.sort===interSort.field?(interSort.direction==='asc'?'↑':'↓'):'↕';
+  });
+  renderInter();
+}
+
 function renderInter(){
   // popular filtros (SDR e Tipo) a partir do config, preservando a seleção
   const fs=document.getElementById('interFilterSdr');
@@ -662,12 +673,21 @@ function renderInter(){
   const q=(document.getElementById('interSearch').value||'').toLowerCase();
   const ft=ftSel.value;
   const fsdr=fs.value;
-  let rows=db.interacoes.slice().sort((a,b)=>b.data.localeCompare(a.data));
+  let rows=db.interacoes.slice();
   rows=rows.filter(i=>{
     if(ft&&i.tipo!==ft)return false;
     if(fsdr&&i.sdr!==fsdr)return false;
-    if(q){const c=cliById(i.clienteId);const hay=`${c?.nome||''} ${i.sdr||''} ${i.obs||''}`.toLowerCase();if(!hay.includes(q))return false;}
+    const c=cliById(i.clienteId);
+    if(q){const hay=`${c?.nome||''} ${i.sdr||''} ${i.obs||''}`.toLowerCase();if(!hay.includes(q))return false;}
     return true;
+  });
+  const resultLabel=i=>i.resultado==='ativado'?'ativado':i.resultado==='acompanhar'?'acompanhar':i.conexao?'sem-retorno':'nao-atendeu';
+  const signalCount=i=>[i.feliz,i.interesse,i.indicaria,i.indicacoes>0].filter(Boolean).length;
+  rows.sort((first,second)=>{
+    const firstValue=interSort.field==='cliente'?(cliById(first.clienteId)?.nome||''):interSort.field==='tipo'?tipoLabel(first.tipo):interSort.field==='resultado'?resultLabel(first):interSort.field==='sinais'?signalCount(first):first[interSort.field]||'';
+    const secondValue=interSort.field==='cliente'?(cliById(second.clienteId)?.nome||''):interSort.field==='tipo'?tipoLabel(second.tipo):interSort.field==='resultado'?resultLabel(second):interSort.field==='sinais'?signalCount(second):second[interSort.field]||'';
+    const comparison=typeof firstValue==='number'&&typeof secondValue==='number'?firstValue-secondValue:firstValue.localeCompare(secondValue,'pt-BR');
+    return comparison*(interSort.direction==='asc'?1:-1);
   });
   const tb=document.getElementById('interBody');
   if(!rows.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty"><div class="ic">📋</div><h3>Nenhuma interação registrada</h3><p>Cada ligação, mensagem ou retorno do time vira um registro aqui. É a base de todas as métricas.</p><button class="btn primary" onclick="openInter()">Registrar primeiro contato</button></div></td></tr>`;return;}
@@ -694,10 +714,32 @@ function renderInter(){
 /* ============================================================
    CLIENTES (tabela)
    ============================================================ */
+let cliSort={field:'nome',direction:'asc'};
+
+function sortCli(field){
+  cliSort=cliSort.field===field?{field,direction:cliSort.direction==='asc'?'desc':'asc'}:{field,direction:'asc'};
+  document.querySelectorAll('.sort-head[data-cli-sort]').forEach(button=>{
+    const indicator=button.querySelector('span');
+    if(indicator)indicator.textContent=button.dataset.cliSort===cliSort.field?(cliSort.direction==='asc'?'↑':'↓'):'↕';
+  });
+  renderCli();
+}
+
+function cliSortValue(cliente){
+  const interacoes=interByCli(cliente.id);
+  const ativado=interacoes.some(interacao=>interacao.resultado==='ativado');
+  const promotor=interacoes.some(interacao=>interacao.indicaria);
+  const situacao=ativado?'Ativado':promotor?'Promotor':cliente.indicadoPor?'Indicado':interacoes.length?'Em relacionamento':'Novo';
+  if(cliSort.field==='ultimoContato')return interacoes[0]?.data||'';
+  if(cliSort.field==='contatos')return interacoes.length;
+  if(cliSort.field==='situacao')return situacao;
+  return cliente[cliSort.field]||'';
+}
+
 function renderCli(){
   const q=(document.getElementById('cliSearch').value||'').toLowerCase();
   const f=document.getElementById('cliFilter').value;
-  let rows=db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  let rows=db.clientes.slice();
   rows=rows.filter(c=>{
     const inter=interByCli(c.id);
     if(f==='proc'&&!c.proc)return false;
@@ -707,6 +749,12 @@ function renderCli(){
     if(f==='indicado'&&!c.indicadoPor)return false;
     if(q){if(!(`${c.nome} ${c.tel||''}`.toLowerCase().includes(q)))return false;}
     return true;
+  });
+  rows.sort((first,second)=>{
+    const firstValue=cliSortValue(first);
+    const secondValue=cliSortValue(second);
+    const comparison=typeof firstValue==='number'&&typeof secondValue==='number'?firstValue-secondValue:String(firstValue).localeCompare(String(secondValue),'pt-BR');
+    return comparison*(cliSort.direction==='asc'?1:-1);
   });
   const tb=document.getElementById('cliBody');
   if(!rows.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty"><div class="ic">👥</div><h3>Nenhum cliente na carteira</h3><p>Cadastre os clientes do escritório para começar a registrar contatos e medir o relacionamento.</p><button class="btn primary" onclick="openCli()">Cadastrar cliente</button></div></td></tr>`;return;}

@@ -152,7 +152,12 @@
       <div class="tscroll">
         <table id="interTable">
           <thead><tr>
-            <th>Data</th><th>Cliente</th><th>Tipo</th><th>SDR</th><th>Resultado</th><th>Sinais</th><th></th>
+            <th><button class="sort-head" type="button" data-sort="data" onclick="sortInter('data')">Data <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-sort="cliente" onclick="sortInter('cliente')">Cliente <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-sort="tipo" onclick="sortInter('tipo')">Tipo <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-sort="sdr" onclick="sortInter('sdr')">SDR <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-sort="resultado" onclick="sortInter('resultado')">Resultado <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-sort="sinais" onclick="sortInter('sinais')">Sinais <span aria-hidden="true">↕</span></button></th><th></th>
           </tr></thead>
           <tbody id="interBody"></tbody>
         </table>
@@ -187,7 +192,11 @@
       <div class="tscroll">
         <table id="cliTable">
           <thead><tr>
-            <th>Cliente</th><th>Processo/Atend.</th><th>Último contato</th><th>Contatos</th><th>Situação</th><th></th>
+            <th><button class="sort-head" type="button" data-cli-sort="nome" onclick="sortCli('nome')">Cliente <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-cli-sort="proc" onclick="sortCli('proc')">Processo/Atend. <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-cli-sort="ultimoContato" onclick="sortCli('ultimoContato')">Último contato <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-cli-sort="contatos" onclick="sortCli('contatos')">Contatos <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-cli-sort="situacao" onclick="sortCli('situacao')">Situação <span aria-hidden="true">↕</span></button></th><th></th>
           </tr></thead>
           <tbody id="cliBody"></tbody>
         </table>
