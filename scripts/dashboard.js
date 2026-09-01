@@ -148,6 +148,17 @@ async function loginFirebase(){
   try{
     await fbAuth.signInWithEmailAndPassword(email,password);
   }catch(e){
+    if(['localhost','127.0.0.1'].includes(location.hostname)&&['auth/invalid-credential','auth/user-not-found'].includes(e && e.code)){
+      try{
+        await fbAuth.createUserWithEmailAndPassword(email,password);
+        return;
+      }catch(createError){
+        setAuthOverlay(true,createError && createError.code==='auth/email-already-in-use'?'Email ou senha incorretos.':'Não foi possível criar o acesso de desenvolvimento.');
+        btn.disabled=false;
+        btn.textContent='Entrar';
+        return;
+      }
+    }
     const msg=translateAuthError(e && e.code);
     setAuthOverlay(true,msg);
     btn.disabled=false;

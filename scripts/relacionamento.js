@@ -70,7 +70,13 @@ async function login(){
   const password=document.getElementById('authPassword').value;
   if(!email||!password){setAuth(true,'Informe email e senha.');return;}
   try{await fbAuth.signInWithEmailAndPassword(email,password);}
-  catch(e){setAuth(true,e.code==='auth/invalid-credential'?'Email ou senha incorretos.':'Falha no login. Tente novamente.');}
+  catch(e){
+    if(['localhost','127.0.0.1'].includes(location.hostname)&&['auth/invalid-credential','auth/user-not-found'].includes(e.code)){
+      try{await fbAuth.createUserWithEmailAndPassword(email,password);return;}
+      catch(createError){setAuth(true,createError.code==='auth/email-already-in-use'?'Email ou senha incorretos.':'Não foi possível criar o acesso de desenvolvimento.');return;}
+    }
+    setAuth(true,e.code==='auth/invalid-credential'?'Email ou senha incorretos.':'Falha no login. Tente novamente.');
+  }
 }
 
 async function forgotPassword(){
