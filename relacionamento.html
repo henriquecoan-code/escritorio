@@ -291,7 +291,7 @@
         <div class="field">
           <label>Cliente</label>
           <select id="iCliente"></select>
-          <button class="linkbtn" style="margin-top:6px" onclick="openCli()">+ cadastrar novo cliente</button>
+          <button class="linkbtn" style="margin-top:6px" onclick="openCli('',true)">+ cadastrar novo cliente</button>
         </div>
         <div class="field"><label>Data do contato</label><input type="date" id="iData"></div>
       </div>
@@ -402,7 +402,7 @@
       </div>
       <div class="row2">
         <div class="field"><label>Data de nascimento <span style="font-weight:400;color:var(--muted)">(para aniversário)</span></label><input type="date" id="cNasc"></div>
-        <div class="field"><label>Como entrou na carteira</label><input id="cOrigem" list="origensList" placeholder="Selecione ou digite…" autocomplete="off"><datalist id="origensList"></datalist></div>
+        <div class="field"><label>Como entrou na carteira</label><select id="cOrigem"></select></div>
       </div>
       <div class="field"><label>Observações</label><textarea id="cObs" placeholder="Notas sobre o cliente…"></textarea></div>
     </div>
