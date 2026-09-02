@@ -29,6 +29,9 @@ let unsubClientes=null;
 let unsubInteracoes=null;
 let unsubConfig=null;
 let firebaseReady=false;
+const OUTBOX_DB='ob-relacionamento-outbox';
+const OUTBOX_STORE='operacoes';
+let pendingOperations=new Map();
 
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 
@@ -91,52 +94,114 @@ async function logout(){
   catch(e){toast('Não foi possível sair da conta');}
 }
 
-async function persistDb(){
-  if(!firebaseReady||!currentUser)return;
-  const writes=[
-    ...db.clientes.map(c=>({ref:fbDb.collection(CLIENTES_COLLECTION).doc(c.id),data:c})),
-    ...db.interacoes.map(i=>({ref:fbDb.collection(INTERACOES_COLLECTION).doc(i.id),data:i})),
-    {ref:fbDb.collection('meta').doc(CONFIG_DOC),data:db.config}
-  ];
-  const total=writes.length;
-  const chunkSize=450;
-  setSync('loading','Enviando backup...',`${total} registro(s)`);
-  for(let start=0;start<total;start+=chunkSize){
+function openOutbox(){
+  return new Promise((resolve,reject)=>{
+    const request=indexedDB.open(OUTBOX_DB,1);
+    request.onupgradeneeded=()=>request.result.createObjectStore(OUTBOX_STORE,{keyPath:'id'});
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error);
+  });
+}
+function operationId(collection,documentId){return `${currentUser.uid}:${collection}:${documentId}`;}
+async function queueOperations(operations){
+  if(!operations.length)return;
+  const database=await openOutbox();
+  await new Promise((resolve,reject)=>{
+    const transaction=database.transaction(OUTBOX_STORE,'readwrite');
+    operations.forEach(operation=>{pendingOperations.set(operation.id,operation);transaction.objectStore(OUTBOX_STORE).put(operation);});
+    transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error);
+  });
+  database.close();
+}
+async function removeQueuedOperations(operations){
+  if(!operations.length)return;
+  const database=await openOutbox();
+  await new Promise((resolve,reject)=>{
+    const transaction=database.transaction(OUTBOX_STORE,'readwrite');
+    operations.forEach(operation=>{pendingOperations.delete(operation.id);transaction.objectStore(OUTBOX_STORE).delete(operation.id);});
+    transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error);
+  });
+  database.close();
+}
+async function loadQueuedOperations(){
+  if(!currentUser)return;
+  const database=await openOutbox();
+  const operations=await new Promise((resolve,reject)=>{
+    const request=database.transaction(OUTBOX_STORE,'readonly').objectStore(OUTBOX_STORE).getAll();
+    request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+  });
+  database.close();
+  pendingOperations=new Map(operations.filter(operation=>operation.userId===currentUser.uid).map(operation=>[operation.id,operation]));
+}
+function applyQueuedOperations(){
+  pendingOperations.forEach(operation=>{
+    const records=operation.collection===CLIENTES_COLLECTION?db.clientes:operation.collection===INTERACOES_COLLECTION?db.interacoes:null;
+    if(operation.collection==='meta'&&operation.documentId===CONFIG_DOC){if(operation.type==='set')db.config={...structuredClone(DEF.config),...operation.data};return;}
+    if(!records)return;
+    const index=records.findIndex(record=>record.id===operation.documentId);
+    if(operation.type==='delete'){if(index>=0)records.splice(index,1);return;}
+    if(index>=0)records[index]=operation.data;else records.unshift(operation.data);
+  });
+}
+function updatePendingSync(){if(pendingOperations.size)setSync('pending','Alterações pendentes',`${pendingOperations.size} alteração(ões) aguardando o Firebase`);}
+async function sendOperations(operations){
+  if(!firebaseReady||!currentUser)throw new Error('Firebase indisponível');
+  for(let start=0;start<operations.length;start+=450){
     const batch=fbDb.batch();
-    writes.slice(start,start+chunkSize).forEach(write=>batch.set(write.ref,write.data));
+    operations.slice(start,start+450).forEach(operation=>{
+      const reference=fbDb.collection(operation.collection).doc(operation.documentId);
+      if(operation.type==='delete')batch.delete(reference);else batch.set(reference,operation.data);
+    });
     await batch.commit();
-    setSync('loading','Enviando backup...',`${Math.min(start+chunkSize,total)}/${total} registros`);
   }
-  setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);
+}
+async function persistOperations(operations){
+  await queueOperations(operations);
+  try{await sendOperations(operations);await removeQueuedOperations(operations);return true;}
+  catch(error){console.error(error);updatePendingSync();toast('Alteração salva neste dispositivo e pendente de sincronização');return false;}
+}
+async function retryQueuedOperations(){
+  const operations=[...pendingOperations.values()];
+  if(!operations.length)return true;
+  try{await sendOperations(operations);await removeQueuedOperations(operations);setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);toast('Alterações pendentes sincronizadas');return true;}
+  catch(error){console.error(error);setSync('error','Sincronização pendente',syncErrorDetail(error));return false;}
+}
+function setOperations(collection,documents){return documents.map(document=>({id:operationId(collection,document.id),userId:currentUser.uid,collection,documentId:document.id,type:'set',data:document}));}
+function deleteOperations(collection,ids){return ids.map(id=>({id:operationId(collection,id),userId:currentUser.uid,collection,documentId:id,type:'delete'}));}
+
+async function persistDb(){
+  if(!currentUser)return false;
+  const operations=[...setOperations(CLIENTES_COLLECTION,db.clientes),...setOperations(INTERACOES_COLLECTION,db.interacoes),...setOperations('meta',[{id:CONFIG_DOC,...db.config}])];
+  const total=operations.length;
+  setSync('loading','Enviando backup...',`${total} registro(s)`);
+  return persistOperations(operations);
 }
 
 async function persistDocuments(collection,documents){
-  if(!firebaseReady||!currentUser||!documents.length)return;
-  for(let start=0;start<documents.length;start+=450){
-    const batch=fbDb.batch();
-    documents.slice(start,start+450).forEach(document=>batch.set(fbDb.collection(collection).doc(document.id),document));
-    await batch.commit();
-  }
+  if(!currentUser||!documents.length)return false;
+  return persistOperations(setOperations(collection,documents));
 }
 
 async function deleteDocuments(collection,ids){
-  if(!firebaseReady||!currentUser||!ids.length)return;
-  for(let start=0;start<ids.length;start+=450){
-    const batch=fbDb.batch();
-    ids.slice(start,start+450).forEach(id=>batch.delete(fbDb.collection(collection).doc(id)));
-    await batch.commit();
-  }
+  if(!currentUser||!ids.length)return false;
+  return persistOperations(deleteOperations(collection,ids));
 }
 
 function persistConfig(){
-  if(!firebaseReady||!currentUser)return Promise.resolve();
-  return fbDb.collection('meta').doc(CONFIG_DOC).set(db.config);
+  if(!currentUser)return Promise.resolve(false);
+  return persistOperations(setOperations('meta',[{id:CONFIG_DOC,...db.config}]));
 }
 
 function renderAll(){renderDash();renderCli();renderInter();renderCfg();renderAcoes();}
 
 function proximaOrdemInteracao(){
   return Math.max(0,...db.interacoes.map(interacao=>Number.isInteger(interacao.ordemCriacao)?interacao.ordemCriacao:0))+1;
+}
+
+function syncErrorDetail(error){
+  if(error?.code==='resource-exhausted')return 'Limite diário do Firebase atingido. Aguarde a renovação da cota.';
+  if(error?.code==='permission-denied')return 'Seu acesso não permite carregar estes dados.';
+  return 'Não foi possível sincronizar. Verifique sua conexão e tente novamente.';
 }
 
 async function loadFromFirebase(){
@@ -154,15 +219,25 @@ async function loadFromFirebase(){
       db.interacoes=interacoesSnap.docs.map(d=>d.data());
       db.config={...structuredClone(DEF.config),...(configSnap.exists?configSnap.data():{})};
     }
+    applyQueuedOperations();
     firebaseReady=true;renderAll();setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);
-  }catch(e){console.error(e);setSync('error','Erro no Firebase','Verifique as Rules e a configuração');toast('Não foi possível carregar os dados do Firebase');}
+    await retryQueuedOperations();
+  }catch(e){console.error(e);setSync('error','Erro no Firebase',syncErrorDetail(e));toast(syncErrorDetail(e));}
 }
 
-function startRealtime(){
+async function startRealtime(){
   [unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());
-  unsubClientes=fbDb.collection(CLIENTES_COLLECTION).onSnapshot(snap=>{db.clientes=snap.docs.map(d=>d.data());renderAll();});
-  unsubInteracoes=fbDb.collection(INTERACOES_COLLECTION).onSnapshot(snap=>{db.interacoes=snap.docs.map(d=>d.data());renderAll();});
-  unsubConfig=fbDb.collection('meta').doc(CONFIG_DOC).onSnapshot(snap=>{if(snap.exists)db.config={...structuredClone(DEF.config),...snap.data()};renderAll();});
+  try{await loadQueuedOperations();}catch(error){console.error(error);toast('Não foi possível preparar o armazenamento local');}
+  setSync('loading','Conectando ao Firebase...');
+  const handleRealtimeError=error=>{
+    console.error(error);
+    setSync('error','Sincronização indisponível',syncErrorDetail(error));
+    toast(syncErrorDetail(error));
+  };
+  unsubClientes=fbDb.collection(CLIENTES_COLLECTION).onSnapshot(snap=>{db.clientes=snap.docs.map(d=>d.data());applyQueuedOperations();renderAll();updatePendingSync();if(!pendingOperations.size)setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);},handleRealtimeError);
+  unsubInteracoes=fbDb.collection(INTERACOES_COLLECTION).onSnapshot(snap=>{db.interacoes=snap.docs.map(d=>d.data());applyQueuedOperations();renderAll();updatePendingSync();if(!pendingOperations.size)setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);},handleRealtimeError);
+  unsubConfig=fbDb.collection('meta').doc(CONFIG_DOC).onSnapshot(snap=>{if(snap.exists)db.config={...structuredClone(DEF.config),...snap.data()};applyQueuedOperations();renderAll();updatePendingSync();},handleRealtimeError);
+  await retryQueuedOperations();
 }
 
 function initFirebase(){
@@ -173,7 +248,7 @@ function initFirebase(){
     fbAuth.onAuthStateChanged(user=>{
       currentUser=user||null;
       refreshAuthUI();
-      if(currentUser){firebaseReady=true;setAuth(false);loadFromFirebase().then(startRealtime);}
+      if(currentUser){firebaseReady=true;setAuth(false);startRealtime();}
       else{firebaseReady=false;[unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
     });
   }catch(e){console.error(e);setSync('error','Erro ao iniciar Firebase');setAuth(true,'Não foi possível iniciar o Firebase.');}
@@ -380,7 +455,7 @@ function ensureReferredClient(nome,tel,refNome,refId){
 async function delInter(id){
   if(!confirm('Excluir este registro de contato?'))return;
   db.interacoes=db.interacoes.filter(i=>i.id!==id);
-  if(firebaseReady&&currentUser)await fbDb.collection(INTERACOES_COLLECTION).doc(id).delete();
+  await deleteDocuments(INTERACOES_COLLECTION,[id]);
   renderInter();renderDash();toast('Contato excluído');
 }
 
@@ -439,12 +514,7 @@ async function delCli(id){
   const interactionIds=db.interacoes.filter(i=>i.clienteId===id).map(i=>i.id);
   db.clientes=db.clientes.filter(c=>c.id!==id);
   db.interacoes=db.interacoes.filter(i=>i.clienteId!==id);
-  if(firebaseReady&&currentUser){
-    const batch=fbDb.batch();
-    batch.delete(fbDb.collection(CLIENTES_COLLECTION).doc(id));
-    interactionIds.forEach(interactionId=>batch.delete(fbDb.collection(INTERACOES_COLLECTION).doc(interactionId)));
-    await batch.commit();
-  }
+  await Promise.all([deleteDocuments(CLIENTES_COLLECTION,[id]),deleteDocuments(INTERACOES_COLLECTION,interactionIds)]);
   renderCli();renderDash();renderAcoes();toast('Cliente excluído');
 }
 
