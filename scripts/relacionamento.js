@@ -17,9 +17,15 @@ const DEF={
       {id:'aniversario',label:'Aniversário',color:'purple'},
       {id:'inbound',label:'Cliente contatou',color:'green'}
     ],
-    origens:['Indicação','Tráfego pago','Cliente antigo','Balcão / espontâneo','Prospecção ativa','Convênio / parceria']
+    origens:['Indicação','Tráfego pago','Instagram / redes sociais','Cliente antigo','Balcão / espontâneo','Prospecção ativa','Convênio / parceria']
   }
 };
+function normalizeConfig(config){
+  const normalized={...structuredClone(DEF.config),...(config||{})};
+  normalized.origens=[...(normalized.origens||[])];
+  if(!normalized.origens.includes('Instagram / redes sociais'))normalized.origens.push('Instagram / redes sociais');
+  return normalized;
+}
 const FIREBASE_CFG=window.OB_FIREBASE_CONFIG||null;
 let db=structuredClone(DEF);
 let fbDb=null;
@@ -136,7 +142,7 @@ async function loadQueuedOperations(){
 function applyQueuedOperations(){
   pendingOperations.forEach(operation=>{
     const records=operation.collection===CLIENTES_COLLECTION?db.clientes:operation.collection===INTERACOES_COLLECTION?db.interacoes:null;
-    if(operation.collection==='meta'&&operation.documentId===CONFIG_DOC){if(operation.type==='set')db.config={...structuredClone(DEF.config),...operation.data};return;}
+    if(operation.collection==='meta'&&operation.documentId===CONFIG_DOC){if(operation.type==='set')db.config=normalizeConfig(operation.data);return;}
     if(!records)return;
     const index=records.findIndex(record=>record.id===operation.documentId);
     if(operation.type==='delete'){if(index>=0)records.splice(index,1);return;}
@@ -217,7 +223,7 @@ async function loadFromFirebase(){
     if(hasRemote){
       db.clientes=clientesSnap.docs.map(d=>d.data());
       db.interacoes=interacoesSnap.docs.map(d=>d.data());
-      db.config={...structuredClone(DEF.config),...(configSnap.exists?configSnap.data():{})};
+      db.config=normalizeConfig(configSnap.exists?configSnap.data():{});
     }
     applyQueuedOperations();
     firebaseReady=true;renderAll();setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);
@@ -236,7 +242,7 @@ async function startRealtime(){
   };
   unsubClientes=fbDb.collection(CLIENTES_COLLECTION).onSnapshot(snap=>{db.clientes=snap.docs.map(d=>d.data());applyQueuedOperations();renderAll();updatePendingSync();if(!pendingOperations.size)setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);},handleRealtimeError);
   unsubInteracoes=fbDb.collection(INTERACOES_COLLECTION).onSnapshot(snap=>{db.interacoes=snap.docs.map(d=>d.data());applyQueuedOperations();renderAll();updatePendingSync();if(!pendingOperations.size)setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);},handleRealtimeError);
-  unsubConfig=fbDb.collection('meta').doc(CONFIG_DOC).onSnapshot(snap=>{if(snap.exists)db.config={...structuredClone(DEF.config),...snap.data()};applyQueuedOperations();renderAll();updatePendingSync();},handleRealtimeError);
+  unsubConfig=fbDb.collection('meta').doc(CONFIG_DOC).onSnapshot(snap=>{if(snap.exists)db.config=normalizeConfig(snap.data());applyQueuedOperations();renderAll();updatePendingSync();},handleRealtimeError);
   await retryQueuedOperations();
 }
 
@@ -991,7 +997,7 @@ async function importJSON(ev){
     try{
       const p=JSON.parse(r.result);
       if(!Array.isArray(p.clientes)||!Array.isArray(p.interacoes))throw 0;
-      const next={...structuredClone(DEF),...p,config:{...DEF.config,...(p.config||{})}};
+      const next={...structuredClone(DEF),...p,config:normalizeConfig(p.config)};
       const total=next.clientes.length+next.interacoes.length+1;
       if(!currentUser){toast('Faça login antes de restaurar o backup');return;}
       if(!confirm(`O backup contém ${next.clientes.length} cliente(s), ${next.interacoes.length} interação(ões) e 1 configuração. Enviar ${total} registro(s) para o Firestore?`))return;
