@@ -33,6 +33,30 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    match /cobranca_propria_vista/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /cobranca_propria_parc/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /cobranca_clientes_vista/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /cobranca_clientes_parc/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /cobranca_acordos/{docId} {
+      allow read, write: if signedIn();
+    }
+
+    match /cobranca_judicial/{docId} {
+      allow read, write: if signedIn();
+    }
+
     match /meta/{docId} {
       allow read: if signedIn();
       allow write: if signedIn();
