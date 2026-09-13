@@ -43,6 +43,7 @@ a{color:inherit}
 }
 .brand{display:flex;align-items:center;gap:16px;max-width:1320px;margin:0 auto}
 .brand .mark{display:none}
+.brand-logo-link{display:flex;align-items:center;text-decoration:none;flex:none}
 .ob-logo{height:42px;width:auto;display:block;flex:none}
 .brand-divider{width:1px;height:34px;background:var(--b);flex:none;margin:0 2px}
 .brand-ctx h1{font-size:18px;color:var(--t);line-height:1.15}

@@ -299,8 +299,9 @@ const TIPO_COLORS={
 function tipos(){return db.config.tipos||[];}
 function tipoOf(id){return tipos().find(t=>t.id===id);}
 function tipoLabel(id){const t=tipoOf(id);return t?t.label:(id||'—');}
+function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function escJsSQ(s){return esc(String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/[\r\n\u2028\u2029]/g,c=>c==='\r'?'\\r':c==='\n'?'\\n':c==='\u2028'?'\\u2028':'\\u2029'));}
 function tipoChip(id){const t=tipoOf(id);const c=TIPO_COLORS[(t&&t.color)||'neutral']||TIPO_COLORS.neutral;return `<span class="chip" style="border-color:${c[0]};color:${c[1]};background:${c[2]}">${esc(tipoLabel(id))}</span>`;}
-function escJsSQ(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/[\r\n]/g,c=>c==='\r'?'\\r':'\\n');}
 function parseD(s){if(!s)return null;const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
 function todayISO(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function fmtD(s){const d=parseD(s);if(!d)return '—';return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});}
@@ -311,7 +312,6 @@ function interByCli(id){return db.interacoes.filter(i=>i.clienteId===id).sort((a
 function lastContact(id){const arr=interByCli(id);return arr.length?arr[0].data:null;}
 function telDigits(t){return (t||'').replace(/\D/g,'').replace(/^0+/,'');}
 function waLink(tel,msg){const d=telDigits(tel);const n=d.length>=11?'55'+d:d;return `https://wa.me/${n}?text=${encodeURIComponent(msg||'')}`;}
-function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function formatarNome(nome){
   const particulas=new Set(['da','das','de','do','dos','e']);
   return String(nome||'').trim().toLocaleLowerCase('pt-BR').split(/\s+/).map((parte,index)=>particulas.has(parte)&&index>0?parte:parte.charAt(0).toLocaleUpperCase('pt-BR')+parte.slice(1)).join(' ');

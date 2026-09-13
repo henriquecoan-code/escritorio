@@ -18,7 +18,10 @@ service cloud.firestore {
             && request.auth.uid in get(/databases/$(database)/documents/meta/security).data.adminUids
           ) || (
             'adminEmails' in get(/databases/$(database)/documents/meta/security).data
-            && userEmail() in get(/databases/$(database)/documents/meta/security).data.adminEmails
+            && (
+              userEmail() in get(/databases/$(database)/documents/meta/security).data.adminEmails
+              || (request.auth.token.email != null && request.auth.token.email in get(/databases/$(database)/documents/meta/security).data.adminEmails)
+            )
           )
         );
     }
@@ -89,7 +92,7 @@ service cloud.firestore {
     }
 
     match /meta/{docId} {
-      allow read, write: if docId != 'security' && canAccess('dashboard');
+      allow read, write: if docId in ['lists', 'photos', 'importAudit'] && canAccess('dashboard');
     }
 
     match /meta/security {

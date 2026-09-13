@@ -54,6 +54,7 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;
 #app{position:relative;z-index:1;max-width:1600px;margin:0 auto;padding:0 28px 80px;}
 .route-hidden{display:none!important;}
 .home-panel{position:relative;z-index:1;min-height:100vh;max-width:720px;margin:0 auto;padding:clamp(72px,12vh,140px) 28px 48px;}
+.home-logo-link{display:inline-flex;align-items:center;text-decoration:none;}
 .home-logo{width:min(360px,80vw);height:80px;object-fit:contain;object-position:left center;margin-bottom:30px;}
 .home-head{display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid var(--b);padding-bottom:18px;margin-bottom:30px;}
 .home-head .home-logo{width:min(280px,48vw);height:58px;margin-bottom:0;}
@@ -113,6 +114,7 @@ html.light .home-link{background:rgba(255,255,255,.72);}
 /* "?"? HEADER "?"? */
 .hd{display:flex;align-items:center;justify-content:space-between;padding:20px 0 16px;
   border-bottom:1px solid var(--b);margin-bottom:16px;gap:10px;flex-wrap:wrap;}
+.hd-logo-link{display:inline-flex;align-items:center;text-decoration:none;}
 .hd-logo{height:44px;object-fit:contain;}
 .hd-right{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
 .chip{padding:4px 12px;border:1px solid var(--b);font-size:10px;letter-spacing:2px;

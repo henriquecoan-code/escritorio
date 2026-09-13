@@ -68,7 +68,13 @@ function startAdmin(){
   byId('new-user').addEventListener('click',()=>openEditor());byId('cancel-user').addEventListener('click',closeEditor);byId('user-form').addEventListener('submit',saveUser);
   adminAuth.onAuthStateChanged(async user=>{
     adminUser=user||null;byId('admin-user').textContent=user?.email||'';byId('admin-logout').hidden=!user;
-    if(!user){setAuthOpen(true);return;}
+    if(!user){
+      users=[];
+      renderUsers();
+      closeEditor();
+      setAuthOpen(true);
+      return;
+    }
     try{
       const security=await adminDb.collection('meta').doc(ADMIN_SECURITY_DOC).get();
       const securityData=security.data()||{};
@@ -82,6 +88,9 @@ function startAdmin(){
       const currentUserEmail=(user.email||'').toLowerCase().trim();
       const isOwner=adminUids.includes(user.uid)||(currentUserEmail&&adminEmails.includes(currentUserEmail));
       if(!isOwner){
+        users=[];
+        renderUsers();
+        closeEditor();
         setAuthOpen(false);
         setStatus(`A conta logada (${currentUserEmail}) não possui permissão de proprietário. Verifique se o e-mail está em meta/security -> adminEmails.`,'error');
         byId('new-user').disabled=true;

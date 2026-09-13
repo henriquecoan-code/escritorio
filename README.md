@@ -26,21 +26,15 @@ escritorio/
 ├── package.json
 ├── playwright.config.js
 ├── scripts/
-<<<<<<< HEAD
 │   ├── admin.js
-=======
 │   ├── cobranca.js
->>>>>>> origin/main
 │   ├── dashboard.js
 │   ├── import-firestore.html
 │   ├── relacionamento.js
 │   └── theme.js
 ├── styles/
-<<<<<<< HEAD
 │   ├── admin.css
-=======
 │   ├── cobranca.css
->>>>>>> origin/main
 │   ├── dashboard.css
 │   └── relacionamento.css
 └── tests/
