@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Oliveira &amp; Benedet — Comercial &amp; Relacionamento</title>
+<title>Oliveira &amp; Benedet - Relacionamento</title>
 <link rel="stylesheet" href="styles/relacionamento.css">
 </head>
 <body>
@@ -152,7 +152,12 @@
       <div class="tscroll">
         <table id="interTable">
           <thead><tr>
-            <th>Data</th><th>Cliente</th><th>Tipo</th><th>SDR</th><th>Resultado</th><th>Sinais</th><th></th>
+            <th><button class="sort-head" type="button" data-sort="data" onclick="sortInter('data')">Data <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-sort="cliente" onclick="sortInter('cliente')">Cliente <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-sort="tipo" onclick="sortInter('tipo')">Tipo <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-sort="sdr" onclick="sortInter('sdr')">SDR <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-sort="resultado" onclick="sortInter('resultado')">Resultado <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-sort="sinais" onclick="sortInter('sinais')">Sinais <span aria-hidden="true">↕</span></button></th><th></th>
           </tr></thead>
           <tbody id="interBody"></tbody>
         </table>
@@ -187,7 +192,11 @@
       <div class="tscroll">
         <table id="cliTable">
           <thead><tr>
-            <th>Cliente</th><th>Processo/Atend.</th><th>Último contato</th><th>Contatos</th><th>Situação</th><th></th>
+            <th><button class="sort-head" type="button" data-cli-sort="nome" onclick="sortCli('nome')">Cliente <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-cli-sort="proc" onclick="sortCli('proc')">Processo/Atend. <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-cli-sort="ultimoContato" onclick="sortCli('ultimoContato')">Último contato <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-cli-sort="contatos" onclick="sortCli('contatos')">Contatos <span aria-hidden="true">↕</span></button></th>
+            <th><button class="sort-head" type="button" data-cli-sort="situacao" onclick="sortCli('situacao')">Situação <span aria-hidden="true">↕</span></button></th><th></th>
           </tr></thead>
           <tbody id="cliBody"></tbody>
         </table>
@@ -282,7 +291,7 @@
         <div class="field">
           <label>Cliente</label>
           <select id="iCliente"></select>
-          <button class="linkbtn" style="margin-top:6px" onclick="openCli()">+ cadastrar novo cliente</button>
+          <button class="linkbtn" style="margin-top:6px" onclick="openCli('',true)">+ cadastrar novo cliente</button>
         </div>
         <div class="field"><label>Data do contato</label><input type="date" id="iData"></div>
       </div>
@@ -393,7 +402,7 @@
       </div>
       <div class="row2">
         <div class="field"><label>Data de nascimento <span style="font-weight:400;color:var(--muted)">(para aniversário)</span></label><input type="date" id="cNasc"></div>
-        <div class="field"><label>Como entrou na carteira</label><input id="cOrigem" list="origensList" placeholder="Selecione ou digite…" autocomplete="off"><datalist id="origensList"></datalist></div>
+        <div class="field"><label>Como entrou na carteira</label><select id="cOrigem"></select></div>
       </div>
       <div class="field"><label>Observações</label><textarea id="cObs" placeholder="Notas sobre o cliente…"></textarea></div>
     </div>

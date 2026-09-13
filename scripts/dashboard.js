@@ -1423,44 +1423,50 @@ function syncModalStageDates(targetStage){
   toast(stageSyncFeedback(targetStage,filled),'info');
 }
 function openM(editUid){
-  if(!ensureAuthenticated()) return;
-  isEditing=true;
-  document.getElementById('m-uid').value=editUid||'';
-  if(editUid){
-    const r=DB.find(x=>x.uid===editUid);if(!r)return;
-    document.getElementById('m-title').textContent='Editar Registro';
-    document.getElementById('m-cli').value=r.cliente||'';
-    document.getElementById('m-adv').value=r.adv||'';
-    document.getElementById('m-area').value=r.area||'';
-    document.getElementById('m-acao').value=r.acao||'';
-    document.getElementById('m-tipo').value=r.tipo||'';
-    document.getElementById('m-orig').value=r.origem||'';
-    document.getElementById('m-mes').value=r.mes||'';
-    document.getElementById('m-status').value=r.status||'Em andamento';
-    document.getElementById('m-dtCheg').value=isoDate(r.dtChegada||r.data||'');
-    document.getElementById('m-dtCont').value=isoDate(r.dtContato||'');
-    document.getElementById('m-dtEnv').value=isoDate(r.dtEnvioContrato||'');
-    document.getElementById('m-dtAssin').value=isoDate(r.dtAssinatura||'');
-    document.getElementById('m-dtDocs').value=isoDate(r.dtDocs||'');
-    document.getElementById('m-dtDocsR').value=isoDate(r.dtDocsRec||'');
-    document.getElementById('m-dtEnt').value=isoDate(r.dtEntrega||'');
-    document.getElementById('m-obs').value=r.obs||'';
-    setME(Number(r.etapa)||1);
-    mCalcDur();
-  }else{
-    document.getElementById('m-title').textContent='Novo Registro';
-    const mesMoment=MESES_REF[new Date().getMonth()]||'';
-    ['m-cli','m-obs'].forEach(id=>document.getElementById(id).value='');
-    ['m-adv','m-area','m-acao','m-tipo','m-orig'].forEach(id=>document.getElementById(id).value='');
-    ['m-dtCont','m-dtEnv','m-dtAssin','m-dtDocs','m-dtDocsR','m-dtEnt'].forEach(id=>document.getElementById(id).value='');
-    document.getElementById('m-dtCheg').value=localIsoToday();
-    document.getElementById('m-mes').value=activeMonth!=='all'?activeMonth:mesMoment;
-    document.getElementById('m-status').value='Em andamento';
-    setME(1);
-    mCalcDur();
+  try {
+    if(!ensureAuthenticated()) return;
+    isEditing=true;
+    const mUid = document.getElementById('m-uid'); if(mUid) mUid.value=editUid||'';
+    const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val || ''; };
+
+    if(editUid){
+      const r=(Array.isArray(DB)?DB:[]).find(x=>x.uid===editUid);if(!r)return;
+      const mTitle = document.getElementById('m-title'); if(mTitle) mTitle.textContent='Editar Registro';
+      setVal('m-cli', r.cliente);
+      setVal('m-adv', r.adv);
+      setVal('m-area', r.area);
+      setVal('m-acao', r.acao);
+      setVal('m-tipo', r.tipo);
+      setVal('m-orig', r.origem);
+      setVal('m-mes', r.mes);
+      setVal('m-status', r.status || 'Em andamento');
+      setVal('m-dtCheg', isoDate(r.dtChegada||r.data||''));
+      setVal('m-dtCont', isoDate(r.dtContato||''));
+      setVal('m-dtEnv', isoDate(r.dtEnvioContrato||''));
+      setVal('m-dtAssin', isoDate(r.dtAssinatura||''));
+      setVal('m-dtDocs', isoDate(r.dtDocs||''));
+      setVal('m-dtDocsR', isoDate(r.dtDocsRec||''));
+      setVal('m-dtEnt', isoDate(r.dtEntrega||''));
+      setVal('m-obs', r.obs);
+      setME(Number(r.etapa)||1);
+      try { mCalcDur(); } catch(e) {}
+    }else{
+      const mTitle = document.getElementById('m-title'); if(mTitle) mTitle.textContent='Novo Registro';
+      const mesArr = (typeof MESES_REF !== 'undefined' && Array.isArray(MESES_REF)) ? MESES_REF : [];
+      const mesMoment = mesArr[new Date().getMonth()]||'';
+      ['m-cli','m-obs','m-adv','m-area','m-acao','m-tipo','m-orig','m-dtCont','m-dtEnv','m-dtAssin','m-dtDocs','m-dtDocsR','m-dtEnt'].forEach(id => setVal(id, ''));
+      setVal('m-dtCheg', typeof localIsoToday === 'function' ? localIsoToday() : new Date().toISOString().split('T')[0]);
+      setVal('m-mes', (typeof activeMonth !== 'undefined' && activeMonth !== 'all') ? activeMonth : mesMoment);
+      setVal('m-status', 'Em andamento');
+      setME(1);
+      try { mCalcDur(); } catch(e) {}
+    }
+    const overlay = document.getElementById('overlay'); if(overlay) overlay.classList.add('open');
+    setTimeout(() => { const cli = document.getElementById('m-cli'); if(cli && typeof cli.focus === 'function') cli.focus(); }, 120);
+  } catch(err) {
+    console.error('Erro em openM:', err);
+    const overlay = document.getElementById('overlay'); if(overlay) overlay.classList.add('open');
   }
-  document.getElementById('overlay').classList.add('open');
-  setTimeout(()=>document.getElementById('m-cli').focus(),120);
 }
 function closeM(){isEditing=false;document.getElementById('overlay').classList.remove('open');}
 function overlayBg(e){if(e.target===e.currentTarget)closeM();}

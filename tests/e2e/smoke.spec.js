@@ -35,7 +35,7 @@ test('carrega o dashboard pela rota OB_Dashboard_Rede', async ({ page, baseURL }
 
 test('carrega a pagina independente de relacionamento', async ({ page, baseURL }) => {
   await page.goto(`${baseURL}/relacionamento.html`);
-  await expect(page).toHaveTitle(/Comercial\s*&\s*Relacionamento/i);
+  await expect(page).toHaveTitle(/Oliveira\s*&\s*Benedet\s*-\s*Relacionamento/i);
   await expect(page.locator('#tabs')).toBeVisible();
   await expect(page.locator('#authOverlay')).toBeVisible();
 });

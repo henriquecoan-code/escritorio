@@ -17,9 +17,15 @@ const DEF={
       {id:'aniversario',label:'Aniversário',color:'purple'},
       {id:'inbound',label:'Cliente contatou',color:'green'}
     ],
-    origens:['Indicação','Tráfego pago','Cliente antigo','Balcão / espontâneo','Prospecção ativa','Convênio / parceria']
+    origens:['Indicação','Tráfego pago','Instagram / redes sociais','Cliente antigo','Balcão / espontâneo','Prospecção ativa','Convênio / parceria']
   }
 };
+function normalizeConfig(config){
+  const normalized={...structuredClone(DEF.config),...(config||{})};
+  normalized.origens=[...(normalized.origens||[])];
+  if(!normalized.origens.includes('Instagram / redes sociais'))normalized.origens.push('Instagram / redes sociais');
+  return normalized;
+}
 const FIREBASE_CFG=window.OB_FIREBASE_CONFIG||null;
 let db=structuredClone(DEF);
 let fbDb=null;
@@ -29,10 +35,10 @@ let unsubClientes=null;
 let unsubInteracoes=null;
 let unsubConfig=null;
 let firebaseReady=false;
+const OUTBOX_DB='ob-relacionamento-outbox';
+const OUTBOX_STORE='operacoes';
+let pendingOperations=new Map();
 
-function save(){
-  if(firebaseReady&&currentUser)persistDb().catch(()=>toast('Não foi possível sincronizar com o Firebase'));
-}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 
 function createFirebaseUI(){
@@ -94,26 +100,115 @@ async function logout(){
   catch(e){toast('Não foi possível sair da conta');}
 }
 
-async function persistDb(){
-  if(!firebaseReady||!currentUser)return;
-  const writes=[
-    ...db.clientes.map(c=>({ref:fbDb.collection(CLIENTES_COLLECTION).doc(c.id),data:c})),
-    ...db.interacoes.map(i=>({ref:fbDb.collection(INTERACOES_COLLECTION).doc(i.id),data:i})),
-    {ref:fbDb.collection('meta').doc(CONFIG_DOC),data:db.config}
-  ];
-  const total=writes.length;
-  const chunkSize=450;
-  setSync('loading','Enviando backup...',`${total} registro(s)`);
-  for(let start=0;start<total;start+=chunkSize){
+function openOutbox(){
+  return new Promise((resolve,reject)=>{
+    const request=indexedDB.open(OUTBOX_DB,1);
+    request.onupgradeneeded=()=>request.result.createObjectStore(OUTBOX_STORE,{keyPath:'id'});
+    request.onsuccess=()=>resolve(request.result);
+    request.onerror=()=>reject(request.error);
+  });
+}
+function operationId(collection,documentId){return `${currentUser.uid}:${collection}:${documentId}`;}
+async function queueOperations(operations){
+  if(!operations.length)return;
+  const database=await openOutbox();
+  await new Promise((resolve,reject)=>{
+    const transaction=database.transaction(OUTBOX_STORE,'readwrite');
+    operations.forEach(operation=>{pendingOperations.set(operation.id,operation);transaction.objectStore(OUTBOX_STORE).put(operation);});
+    transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error);
+  });
+  database.close();
+}
+async function removeQueuedOperations(operations){
+  if(!operations.length)return;
+  const database=await openOutbox();
+  await new Promise((resolve,reject)=>{
+    const transaction=database.transaction(OUTBOX_STORE,'readwrite');
+    operations.forEach(operation=>{pendingOperations.delete(operation.id);transaction.objectStore(OUTBOX_STORE).delete(operation.id);});
+    transaction.oncomplete=resolve;transaction.onerror=()=>reject(transaction.error);transaction.onabort=()=>reject(transaction.error);
+  });
+  database.close();
+}
+async function loadQueuedOperations(){
+  if(!currentUser)return;
+  const database=await openOutbox();
+  const operations=await new Promise((resolve,reject)=>{
+    const request=database.transaction(OUTBOX_STORE,'readonly').objectStore(OUTBOX_STORE).getAll();
+    request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+  });
+  database.close();
+  pendingOperations=new Map(operations.filter(operation=>operation.userId===currentUser.uid).map(operation=>[operation.id,operation]));
+}
+function applyQueuedOperations(){
+  pendingOperations.forEach(operation=>{
+    const records=operation.collection===CLIENTES_COLLECTION?db.clientes:operation.collection===INTERACOES_COLLECTION?db.interacoes:null;
+    if(operation.collection==='meta'&&operation.documentId===CONFIG_DOC){if(operation.type==='set')db.config=normalizeConfig(operation.data);return;}
+    if(!records)return;
+    const index=records.findIndex(record=>record.id===operation.documentId);
+    if(operation.type==='delete'){if(index>=0)records.splice(index,1);return;}
+    if(index>=0)records[index]=operation.data;else records.unshift(operation.data);
+  });
+}
+function updatePendingSync(){if(pendingOperations.size)setSync('pending','Alterações pendentes',`${pendingOperations.size} alteração(ões) aguardando o Firebase`);}
+async function sendOperations(operations){
+  if(!firebaseReady||!currentUser)throw new Error('Firebase indisponível');
+  for(let start=0;start<operations.length;start+=450){
     const batch=fbDb.batch();
-    writes.slice(start,start+chunkSize).forEach(write=>batch.set(write.ref,write.data));
+    operations.slice(start,start+450).forEach(operation=>{
+      const reference=fbDb.collection(operation.collection).doc(operation.documentId);
+      if(operation.type==='delete')batch.delete(reference);else batch.set(reference,operation.data);
+    });
     await batch.commit();
-    setSync('loading','Enviando backup...',`${Math.min(start+chunkSize,total)}/${total} registros`);
   }
-  setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);
+}
+async function persistOperations(operations){
+  await queueOperations(operations);
+  try{await sendOperations(operations);await removeQueuedOperations(operations);return true;}
+  catch(error){console.error(error);updatePendingSync();toast('Alteração salva neste dispositivo e pendente de sincronização');return false;}
+}
+async function retryQueuedOperations(){
+  const operations=[...pendingOperations.values()];
+  if(!operations.length)return true;
+  try{await sendOperations(operations);await removeQueuedOperations(operations);setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);toast('Alterações pendentes sincronizadas');return true;}
+  catch(error){console.error(error);setSync('error','Sincronização pendente',syncErrorDetail(error));return false;}
+}
+function setOperations(collection,documents){return documents.map(document=>({id:operationId(collection,document.id),userId:currentUser.uid,collection,documentId:document.id,type:'set',data:document}));}
+function deleteOperations(collection,ids){return ids.map(id=>({id:operationId(collection,id),userId:currentUser.uid,collection,documentId:id,type:'delete'}));}
+
+async function persistDb(){
+  if(!currentUser)return false;
+  const operations=[...setOperations(CLIENTES_COLLECTION,db.clientes),...setOperations(INTERACOES_COLLECTION,db.interacoes),...setOperations('meta',[{id:CONFIG_DOC,...db.config}])];
+  const total=operations.length;
+  setSync('loading','Enviando backup...',`${total} registro(s)`);
+  return persistOperations(operations);
+}
+
+async function persistDocuments(collection,documents){
+  if(!currentUser||!documents.length)return false;
+  return persistOperations(setOperations(collection,documents));
+}
+
+async function deleteDocuments(collection,ids){
+  if(!currentUser||!ids.length)return false;
+  return persistOperations(deleteOperations(collection,ids));
+}
+
+function persistConfig(){
+  if(!currentUser)return Promise.resolve(false);
+  return persistOperations(setOperations('meta',[{id:CONFIG_DOC,...db.config}]));
 }
 
 function renderAll(){renderDash();renderCli();renderInter();renderCfg();renderAcoes();}
+
+function proximaOrdemInteracao(){
+  return Math.max(0,...db.interacoes.map(interacao=>Number.isInteger(interacao.ordemCriacao)?interacao.ordemCriacao:0))+1;
+}
+
+function syncErrorDetail(error){
+  if(error?.code==='resource-exhausted')return 'Limite diário do Firebase atingido. Aguarde a renovação da cota.';
+  if(error?.code==='permission-denied')return 'Seu acesso não permite carregar estes dados.';
+  return 'Não foi possível sincronizar. Verifique sua conexão e tente novamente.';
+}
 
 async function loadFromFirebase(){
   if(!currentUser)return;
@@ -128,17 +223,27 @@ async function loadFromFirebase(){
     if(hasRemote){
       db.clientes=clientesSnap.docs.map(d=>d.data());
       db.interacoes=interacoesSnap.docs.map(d=>d.data());
-      db.config={...structuredClone(DEF.config),...(configSnap.exists?configSnap.data():{})};
+      db.config=normalizeConfig(configSnap.exists?configSnap.data():{});
     }
+    applyQueuedOperations();
     firebaseReady=true;renderAll();setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);
-  }catch(e){console.error(e);setSync('error','Erro no Firebase','Verifique as Rules e a configuração');toast('Não foi possível carregar os dados do Firebase');}
+    await retryQueuedOperations();
+  }catch(e){console.error(e);setSync('error','Erro no Firebase',syncErrorDetail(e));toast(syncErrorDetail(e));}
 }
 
-function startRealtime(){
+async function startRealtime(){
   [unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());
-  unsubClientes=fbDb.collection(CLIENTES_COLLECTION).onSnapshot(snap=>{db.clientes=snap.docs.map(d=>d.data());renderAll();});
-  unsubInteracoes=fbDb.collection(INTERACOES_COLLECTION).onSnapshot(snap=>{db.interacoes=snap.docs.map(d=>d.data());renderAll();});
-  unsubConfig=fbDb.collection('meta').doc(CONFIG_DOC).onSnapshot(snap=>{if(snap.exists)db.config={...structuredClone(DEF.config),...snap.data()};renderAll();});
+  try{await loadQueuedOperations();}catch(error){console.error(error);toast('Não foi possível preparar o armazenamento local');}
+  setSync('loading','Conectando ao Firebase...');
+  const handleRealtimeError=error=>{
+    console.error(error);
+    setSync('error','Sincronização indisponível',syncErrorDetail(error));
+    toast(syncErrorDetail(error));
+  };
+  unsubClientes=fbDb.collection(CLIENTES_COLLECTION).onSnapshot(snap=>{db.clientes=snap.docs.map(d=>d.data());applyQueuedOperations();renderAll();updatePendingSync();if(!pendingOperations.size)setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);},handleRealtimeError);
+  unsubInteracoes=fbDb.collection(INTERACOES_COLLECTION).onSnapshot(snap=>{db.interacoes=snap.docs.map(d=>d.data());applyQueuedOperations();renderAll();updatePendingSync();if(!pendingOperations.size)setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);},handleRealtimeError);
+  unsubConfig=fbDb.collection('meta').doc(CONFIG_DOC).onSnapshot(snap=>{if(snap.exists)db.config=normalizeConfig(snap.data());applyQueuedOperations();renderAll();updatePendingSync();},handleRealtimeError);
+  await retryQueuedOperations();
 }
 
 function initFirebase(){
@@ -149,7 +254,7 @@ function initFirebase(){
     fbAuth.onAuthStateChanged(user=>{
       currentUser=user||null;
       refreshAuthUI();
-      if(currentUser){firebaseReady=true;setAuth(false);loadFromFirebase().then(startRealtime);}
+      if(currentUser){firebaseReady=true;setAuth(false);startRealtime();}
       else{firebaseReady=false;[unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
     });
   }catch(e){console.error(e);setSync('error','Erro ao iniciar Firebase');setAuth(true,'Não foi possível iniciar o Firebase.');}
@@ -183,6 +288,10 @@ function lastContact(id){const arr=interByCli(id);return arr.length?arr[0].data:
 function telDigits(t){return (t||'').replace(/\D/g,'').replace(/^0+/,'');}
 function waLink(tel,msg){const d=telDigits(tel);const n=d.length>=11?'55'+d:d;return `https://wa.me/${n}?text=${encodeURIComponent(msg||'')}`;}
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function formatarNome(nome){
+  const particulas=new Set(['da','das','de','do','dos','e']);
+  return String(nome||'').trim().toLocaleLowerCase('pt-BR').split(/\s+/).map((parte,index)=>particulas.has(parte)&&index>0?parte:parte.charAt(0).toLocaleUpperCase('pt-BR')+parte.slice(1)).join(' ');
+}
 
 let toastT;
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2600);}
@@ -243,9 +352,14 @@ function setPill(key,v){document.querySelectorAll(`.pills[data-pill="${key}"] .p
    ============================================================ */
 function fillSelect(id,arr,ph){const s=document.getElementById(id);s.innerHTML=(ph?`<option value="">${ph}</option>`:'')+arr.map(o=>`<option value="${esc(o.v??o)}">${esc(o.l??o)}</option>`).join('');}
 
+function fillInterClientes(selectedId=''){
+  fillSelect('iCliente',db.clientes.slice().sort((first,second)=>first.nome.localeCompare(second.nome,'pt-BR')).map(cliente=>({v:cliente.id,l:cliente.nome})),'Selecione um cliente');
+  document.getElementById('iCliente').value=selectedId;
+}
+
 function openInter(id){
   const m=document.getElementById('interModal');
-  fillSelect('iCliente',db.clientes.map(c=>({v:c.id,l:c.nome})),db.clientes.length?'':'Cadastre um cliente primeiro');
+  fillInterClientes();
   fillSelect('iSdr',db.config.sdrs);
   fillSelect('iTipo',db.config.tipos.map(t=>({v:t.id,l:t.label})));
   fillSelect('iServico',db.config.servicos,'—');
@@ -281,12 +395,16 @@ function openInter(id){
   m.classList.add('show');
 }
 
-function saveInter(){
+async function saveInter(){
   const cli=document.getElementById('iCliente').value;
-  if(!cli){toast('Selecione ou cadastre um cliente');return;}
+  if(!cli){toast('Selecione um cliente');return;}
   const conexao=pillVal('conexao')==='1';
+  const id=document.getElementById('iId').value||uid();
+  const existing=db.interacoes.find(interacao=>interacao.id===id);
   const rec={
-    id:document.getElementById('iId').value||uid(),
+    id,
+    ordemCriacao:existing?.ordemCriacao||proximaOrdemInteracao(),
+    criadoEm:existing?.criadoEm||new Date().toISOString(),
     clienteId:cli,
     data:document.getElementById('iData').value||todayISO(),
     sdr:document.getElementById('iSdr').value,
@@ -316,7 +434,11 @@ function saveInter(){
   rec.indicacoes=indicados.length;
   const ix=db.interacoes.findIndex(x=>x.id===rec.id);
   if(ix>=0)db.interacoes[ix]=rec;else db.interacoes.unshift(rec);
-  save();closeModal('interModal');
+  try{
+    const clientesIndicados=[...new Set(indicados.map(indicado=>indicado.clienteId))].map(clienteId=>cliById(clienteId)).filter(Boolean);
+    await Promise.all([persistDocuments(INTERACOES_COLLECTION,[rec]),persistDocuments(CLIENTES_COLLECTION,clientesIndicados)]);
+  }catch(error){console.error(error);toast('Não foi possível salvar no Firebase');return;}
+  closeModal('interModal');
   toast(indicados.length?`Contato salvo · ${indicados.length} indicado(s) na carteira`:'Contato registrado');
   renderInter();renderCli();renderDash();renderAcoes();
 }
@@ -328,6 +450,7 @@ function addIndicado(o){const box=document.getElementById('indList');const e=box
 function rmIndRow(btn){const box=document.getElementById('indList');btn.closest('.ind-row').remove();if(!box.children.length)box.innerHTML='<div class="ind-empty">Nenhum indicado adicionado.</div>';}
 function collectIndicados(){return [...document.querySelectorAll('#indList .ind-row')].map(r=>({clienteId:r.dataset.cid||'',nome:r.querySelector('.ind-nome').value.trim(),tel:r.querySelector('.ind-tel').value.trim()})).filter(x=>x.nome);}
 function ensureReferredClient(nome,tel,refNome,refId){
+  nome=formatarNome(nome);
   const k=keyOf(nome,tel);
   const existing=db.clientes.find(c=>keyOf(c.nome,c.tel)===k);
   if(existing){ if(!existing.indicadoPor){existing.indicadoPor=refId; if(!existing.origem)existing.origem='Indicação de '+(refNome||'cliente');} return existing.id; }
@@ -339,17 +462,18 @@ function ensureReferredClient(nome,tel,refNome,refId){
 async function delInter(id){
   if(!confirm('Excluir este registro de contato?'))return;
   db.interacoes=db.interacoes.filter(i=>i.id!==id);
-  if(firebaseReady&&currentUser)await fbDb.collection(INTERACOES_COLLECTION).doc(id).delete();
-  save();renderInter();renderDash();toast('Contato excluído');
+  await deleteDocuments(INTERACOES_COLLECTION,[id]);
+  renderInter();renderDash();toast('Contato excluído');
 }
 
 /* ============================================================
    MODAL: CLIENTE
    ============================================================ */
-function openCli(id){
+function openCli(id,returnToInter=false){
   const m=document.getElementById('cliModal');
+  m.dataset.returnToInter=returnToInter?'true':'';
   fillSelect('cArea',db.config.areas,'—');
-  document.getElementById('origensList').innerHTML=(db.config.origens||[]).map(o=>`<option value="${esc(o)}">`).join('');
+  fillSelect('cOrigem',db.config.origens,'Selecione uma origem');
   document.querySelectorAll('#cliModal .pill').forEach(p=>p.classList.remove('on'));
   document.getElementById('areaWrap').style.display='none';
   if(id){
@@ -369,8 +493,8 @@ function openCli(id){
   }
   m.classList.add('show');
 }
-function saveCli(){
-  const nome=document.getElementById('cNome').value.trim();
+async function saveCli(){
+  const nome=formatarNome(document.getElementById('cNome').value);
   if(!nome){toast('Informe o nome do cliente');return;}
   const proc=pillVal('proc')==='1';
   const rec={
@@ -380,11 +504,16 @@ function saveCli(){
     nasc:document.getElementById('cNasc').value,
     origem:document.getElementById('cOrigem').value.trim(),
     obs:document.getElementById('cObs').value.trim(),
-    criadoEm:document.getElementById('cId').value?undefined:todayISO()
+    criadoEm:cliById(document.getElementById('cId').value)?.criadoEm||todayISO()
   };
   const ix=db.clientes.findIndex(c=>c.id===rec.id);
   if(ix>=0)db.clientes[ix]={...db.clientes[ix],...rec};else db.clientes.unshift(rec);
-  save();closeModal('cliModal');toast('Cliente salvo');renderCli();renderDash();renderAcoes();
+  try{await persistDocuments(CLIENTES_COLLECTION,[db.clientes.find(cliente=>cliente.id===rec.id)]);}
+  catch(error){console.error(error);toast('Não foi possível salvar no Firebase');return;}
+  const returnToInter=document.getElementById('cliModal').dataset.returnToInter==='true';
+  closeModal('cliModal');
+  if(returnToInter)fillInterClientes(rec.id);
+  toast('Cliente salvo');renderCli();renderDash();renderAcoes();
 }
 async function delCli(id){
   const n=interByCli(id).length;
@@ -392,13 +521,8 @@ async function delCli(id){
   const interactionIds=db.interacoes.filter(i=>i.clienteId===id).map(i=>i.id);
   db.clientes=db.clientes.filter(c=>c.id!==id);
   db.interacoes=db.interacoes.filter(i=>i.clienteId!==id);
-  if(firebaseReady&&currentUser){
-    const batch=fbDb.batch();
-    batch.delete(fbDb.collection(CLIENTES_COLLECTION).doc(id));
-    interactionIds.forEach(interactionId=>batch.delete(fbDb.collection(INTERACOES_COLLECTION).doc(interactionId)));
-    await batch.commit();
-  }
-  save();renderCli();renderDash();renderAcoes();toast('Cliente excluído');
+  await Promise.all([deleteDocuments(CLIENTES_COLLECTION,[id]),deleteDocuments(INTERACOES_COLLECTION,interactionIds)]);
+  renderCli();renderDash();renderAcoes();toast('Cliente excluído');
 }
 
 function closeModal(id){document.getElementById(id).classList.remove('show');}
@@ -650,6 +774,17 @@ function renderAcoes(){
 /* ============================================================
    INTERAÇÕES (tabela)
    ============================================================ */
+let interSort={field:'ordemCriacao',direction:'desc'};
+
+function sortInter(field){
+  interSort=interSort.field===field?{field,direction:interSort.direction==='asc'?'desc':'asc'}:{field,direction:'asc'};
+  document.querySelectorAll('.sort-head[data-sort]').forEach(button=>{
+    const indicator=button.querySelector('span');
+    if(indicator)indicator.textContent=button.dataset.sort===interSort.field?(interSort.direction==='asc'?'↑':'↓'):'↕';
+  });
+  renderInter();
+}
+
 function renderInter(){
   // popular filtros (SDR e Tipo) a partir do config, preservando a seleção
   const fs=document.getElementById('interFilterSdr');
@@ -663,12 +798,31 @@ function renderInter(){
   const q=(document.getElementById('interSearch').value||'').toLowerCase();
   const ft=ftSel.value;
   const fsdr=fs.value;
-  let rows=db.interacoes.slice().sort((a,b)=>b.data.localeCompare(a.data));
+  let rows=db.interacoes.slice();
   rows=rows.filter(i=>{
     if(ft&&i.tipo!==ft)return false;
     if(fsdr&&i.sdr!==fsdr)return false;
-    if(q){const c=cliById(i.clienteId);const hay=`${c?.nome||''} ${i.sdr||''} ${i.obs||''}`.toLowerCase();if(!hay.includes(q))return false;}
+    const c=cliById(i.clienteId);
+    if(q){const hay=`${c?.nome||''} ${i.sdr||''} ${i.obs||''}`.toLowerCase();if(!hay.includes(q))return false;}
     return true;
+  });
+  const resultLabel=i=>i.resultado==='ativado'?'ativado':i.resultado==='acompanhar'?'acompanhar':i.conexao?'sem-retorno':'nao-atendeu';
+  const signalCount=i=>[i.feliz,i.interesse,i.indicaria,i.indicacoes>0].filter(Boolean).length;
+  const cliNameById=new Map(db.clientes.map(c=>[c.id,c.nome]));
+  const interValue=i=>{
+    if(interSort.field==='cliente')return cliNameById.get(i.clienteId)||'';
+    if(interSort.field==='tipo')return tipoLabel(i.tipo);
+    if(interSort.field==='resultado')return resultLabel(i);
+    if(interSort.field==='sinais')return signalCount(i);
+    return i[interSort.field]||'';
+  };
+  rows.sort((first,second)=>{
+    const firstValue=interSort.field==='ordemCriacao'?(first.ordemCriacao??first.data):interValue(first);
+    const secondValue=interSort.field==='ordemCriacao'?(second.ordemCriacao??second.data):interValue(second);
+    const comparison=typeof firstValue==='number'&&typeof secondValue==='number'
+      ? firstValue-secondValue
+      : String(firstValue).localeCompare(String(secondValue),'pt-BR');
+    return comparison*(interSort.direction==='asc'?1:-1);
   });
   const tb=document.getElementById('interBody');
   if(!rows.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty"><div class="ic">📋</div><h3>Nenhuma interação registrada</h3><p>Cada ligação, mensagem ou retorno do time vira um registro aqui. É a base de todas as métricas.</p><button class="btn primary" onclick="openInter()">Registrar primeiro contato</button></div></td></tr>`;return;}
@@ -695,10 +849,32 @@ function renderInter(){
 /* ============================================================
    CLIENTES (tabela)
    ============================================================ */
+let cliSort={field:'nome',direction:'asc'};
+
+function sortCli(field){
+  cliSort=cliSort.field===field?{field,direction:cliSort.direction==='asc'?'desc':'asc'}:{field,direction:'asc'};
+  document.querySelectorAll('.sort-head[data-cli-sort]').forEach(button=>{
+    const indicator=button.querySelector('span');
+    if(indicator)indicator.textContent=button.dataset.cliSort===cliSort.field?(cliSort.direction==='asc'?'↑':'↓'):'↕';
+  });
+  renderCli();
+}
+
+function cliSortValue(cliente){
+  const interacoes=interByCli(cliente.id);
+  const ativado=interacoes.some(interacao=>interacao.resultado==='ativado');
+  const promotor=interacoes.some(interacao=>interacao.indicaria);
+  const situacao=ativado?'Ativado':promotor?'Promotor':cliente.indicadoPor?'Indicado':interacoes.length?'Em relacionamento':'Novo';
+  if(cliSort.field==='ultimoContato')return interacoes[0]?.data||'';
+  if(cliSort.field==='contatos')return interacoes.length;
+  if(cliSort.field==='situacao')return situacao;
+  return cliente[cliSort.field]||'';
+}
+
 function renderCli(){
   const q=(document.getElementById('cliSearch').value||'').toLowerCase();
   const f=document.getElementById('cliFilter').value;
-  let rows=db.clientes.slice().sort((a,b)=>a.nome.localeCompare(b.nome));
+  let rows=db.clientes.slice();
   rows=rows.filter(c=>{
     const inter=interByCli(c.id);
     if(f==='proc'&&!c.proc)return false;
@@ -708,6 +884,12 @@ function renderCli(){
     if(f==='indicado'&&!c.indicadoPor)return false;
     if(q){if(!(`${c.nome} ${c.tel||''}`.toLowerCase().includes(q)))return false;}
     return true;
+  });
+  rows.sort((first,second)=>{
+    const firstValue=cliSortValue(first);
+    const secondValue=cliSortValue(second);
+    const comparison=typeof firstValue==='number'&&typeof secondValue==='number'?firstValue-secondValue:String(firstValue).localeCompare(String(secondValue),'pt-BR');
+    return comparison*(cliSort.direction==='asc'?1:-1);
   });
   const tb=document.getElementById('cliBody');
   if(!rows.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty"><div class="ic">👥</div><h3>Nenhum cliente na carteira</h3><p>Cadastre os clientes do escritório para começar a registrar contatos e medir o relacionamento.</p><button class="btn primary" onclick="openCli()">Cadastrar cliente</button></div></td></tr>`;return;}
@@ -758,9 +940,9 @@ function drawTags(key,el){
 function addTag(key,inputId){
   const inp=document.getElementById(inputId);const v=inp.value.trim();
   if(!v)return;if((db.config[key]||[]).includes(v)){toast('Já existe');return;}
-  (db.config[key]=db.config[key]||[]).push(v);inp.value='';save();renderCfg();afterConfigChange();
+  (db.config[key]=db.config[key]||[]).push(v);inp.value='';persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();
 }
-function rmTag(key,idx){db.config[key].splice(idx,1);save();renderCfg();afterConfigChange();}
+function rmTag(key,idx){db.config[key].splice(idx,1);persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();}
 
 /* ---- Tipos de contato (editor com cor) ---- */
 function drawTipos(){
@@ -784,15 +966,15 @@ function addTipo(){
   const cor=document.getElementById('tipoCor').value;
   if(tipos().some(t=>t.label.toLowerCase()===v.toLowerCase())){toast('Já existe um tipo com esse nome');return;}
   db.config.tipos.push({id:uid(),label:v,color:cor});inp.value='';
-  save();renderCfg();afterConfigChange();toast('Tipo adicionado');
+  persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();toast('Tipo adicionado');
 }
-function renameTipo(id,val){const t=tipoOf(id);if(!t)return;val=val.trim();if(!val)return;t.label=val;save();afterConfigChange();}
-function recolorTipo(id,col){const t=tipoOf(id);if(!t)return;t.color=col;save();drawTipos();afterConfigChange();}
+function renameTipo(id,val){const t=tipoOf(id);if(!t)return;val=val.trim();if(!val)return;t.label=val;persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));afterConfigChange();}
+function recolorTipo(id,col){const t=tipoOf(id);if(!t)return;t.color=col;persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));drawTipos();afterConfigChange();}
 function rmTipo(id){
   const n=db.interacoes.filter(i=>i.tipo===id).length;
   if(n&&!confirm(`${n} contato(s) usam este tipo. Eles continuarão registrados, mas sem cor/rótulo definidos. Remover mesmo assim?`))return;
   db.config.tipos=db.config.tipos.filter(t=>t.id!==id);
-  save();renderCfg();afterConfigChange();toast('Tipo removido');
+  persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();toast('Tipo removido');
 }
 /* re-render dependent views when option lists change */
 function afterConfigChange(){
@@ -816,7 +998,7 @@ async function importJSON(ev){
     try{
       const p=JSON.parse(r.result);
       if(!Array.isArray(p.clientes)||!Array.isArray(p.interacoes))throw 0;
-      const next={...structuredClone(DEF),...p,config:{...DEF.config,...(p.config||{})}};
+      const next={...structuredClone(DEF),...p,config:normalizeConfig(p.config)};
       const total=next.clientes.length+next.interacoes.length+1;
       if(!currentUser){toast('Faça login antes de restaurar o backup');return;}
       if(!confirm(`O backup contém ${next.clientes.length} cliente(s), ${next.interacoes.length} interação(ões) e 1 configuração. Enviar ${total} registro(s) para o Firestore?`))return;
@@ -843,16 +1025,26 @@ function exportCSV(){
   const blob=new Blob(['\ufeff'+lines.join('\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`OB_carteira_${todayISO()}.csv`;a.click();toast('CSV exportado');
 }
-function wipeAll(){if(!confirm('Apagar TODOS os dados (clientes, interações e configurações)? Esta ação não pode ser desfeita.'))return;db=structuredClone(DEF);save();renderDash();renderCli();renderInter();renderCfg();renderAcoes();toast('Tudo apagado');}
+async function wipeAll(){
+  if(!confirm('Apagar TODOS os dados (clientes, interações e configurações)? Esta ação não pode ser desfeita.'))return;
+  const clienteIds=db.clientes.map(cliente=>cliente.id);
+  const interacaoIds=db.interacoes.map(interacao=>interacao.id);
+  try{
+    await Promise.all([deleteDocuments(CLIENTES_COLLECTION,clienteIds),deleteDocuments(INTERACOES_COLLECTION,interacaoIds)]);
+    db=structuredClone(DEF);
+    await persistConfig();
+  }catch(error){console.error(error);toast('Não foi possível apagar os dados no Firebase');return;}
+  renderDash();renderCli();renderInter();renderCfg();renderAcoes();toast('Tudo apagado');
+}
 
-function loadSample(){
+async function loadSample(){
   if(db.clientes.length&&!confirm('Isso adiciona clientes de exemplo aos dados atuais. Continuar?'))return;
   const sdrs=db.config.sdrs;const servs=db.config.servicos;const areas=db.config.areas;
   const nomes=['Maria Aparecida Silva','João Batista Souza','Rosa Mendes','Antônio Carlos Lima','Ivete Gonçalves','Pedro Henrique Alves','Cleusa Martins','Sebastião Ferreira','Marlene Costa','Geraldo Pereira'];
   const tel=()=>'(48) 9 '+(8000+Math.floor(Math.random()*1999))+'-'+(1000+Math.floor(Math.random()*8999));
   const rd=(a)=>a[Math.floor(Math.random()*a.length)];
   const dISO=(daysBack)=>{const d=new Date();d.setDate(d.getDate()-daysBack);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
-  const newCli=[];
+  const newCli=[];const newInteracoes=[];
   nomes.forEach((n,k)=>{
     const proc=Math.random()>.4;
     const bd=new Date();bd.setFullYear(bd.getFullYear()-(40+k));bd.setDate(bd.getDate()+(k<3?k+1:30+k));
@@ -866,8 +1058,9 @@ function loadSample(){
       const interesse=conexao&&Math.random()>.5;
       const ativado=interesse&&Math.random()>.5;
       const indicaria=conexao&&Math.random()>.6;
-      db.interacoes.push({
+      const interacao={
         id:uid(),clienteId:c.id,data:dISO(Math.floor(Math.random()*55)),
+        ordemCriacao:proximaOrdemInteracao(),criadoEm:new Date().toISOString(),
         sdr:rd(sdrs),tipo:rd(['minerar','ativar','informacao','aniversario','inbound']),
         conexao,feliz:conexao&&Math.random()>.3,
         satisfeito:conexao?(Math.random()>.3?'1':(Math.random()>.5?'0':'na')):null,
@@ -875,10 +1068,13 @@ function loadSample(){
         indicaria,indicacoes:indicaria&&Math.random()>.5?1:0,
         resultado:ativado?'ativado':(conexao&&Math.random()>.5?'acompanhar':'nenhum'),
         obs:''
-      });
+      };
+      newInteracoes.push(interacao);db.interacoes.push(interacao);
     }
   });
-  save();toast('Dados de exemplo carregados');renderDash();renderCli();renderInter();renderCfg();renderAcoes();
+  try{await Promise.all([persistDocuments(CLIENTES_COLLECTION,newCli),persistDocuments(INTERACOES_COLLECTION,newInteracoes)]);}
+  catch(error){console.error(error);toast('Não foi possível salvar os dados de exemplo no Firebase');return;}
+  toast('Dados de exemplo carregados');renderDash();renderCli();renderInter();renderCfg();renderAcoes();
 }
 
 /* ============================================================
@@ -1041,7 +1237,7 @@ function buildImportRecords(){
   const seen=new Set();const recs=[];let semNome=0,dups=0;
   dataRows.forEach(r=>{
     const get=f=>map[f]>=0?String(r[map[f]]??'').trim():'';
-    const nome=get('nome');if(!nome){semNome++;return;}
+    const nome=formatarNome(get('nome'));if(!nome){semNome++;return;}
     const tel=get('tel');const k=keyOf(nome,tel);
     if((dedupe&&existing.has(k))||seen.has(k)){dups++;return;}
     seen.add(k);
@@ -1061,12 +1257,14 @@ function updatePreview(){
   el.innerHTML=parts.join('<br>');
 }
 
-function doImport(){
+async function doImport(){
   const {recs,noNomeCol}=buildImportRecords();
   if(noNomeCol){toast('Selecione a coluna do nome do cliente');return;}
   if(!recs.length){toast('Nenhum cliente novo para importar');return;}
   db.clientes=[...recs,...db.clientes];
-  save();closeModal('importModal');
+  try{await persistDocuments(CLIENTES_COLLECTION,recs);}
+  catch(error){console.error(error);toast('Não foi possível importar para o Firebase');return;}
+  closeModal('importModal');
   toast(`${recs.length} cliente(s) importados`);
   renderCli();renderDash();renderAcoes();
 }
