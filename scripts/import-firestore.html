@@ -157,13 +157,16 @@ auth.onAuthStateChanged(async user => {
     document.getElementById('btnExport').disabled = false;
     document.getElementById('btnImport').disabled = false;
 
-    // Verifica se é admin (UID em meta/security.adminUids)
+    // Verifica se é admin (UID em meta/security.adminUids ou email em meta/security.adminEmails)
     let isAdmin = false;
     try {
       const metaSnap = await db.collection('meta').doc('security').get();
       if (metaSnap.exists) {
-        const adminUids = metaSnap.data().adminUids || [];
-        isAdmin = adminUids.includes(user.uid);
+        const secData = metaSnap.data() || {};
+        const adminUids = secData.adminUids || [];
+        const adminEmails = (secData.adminEmails || []).map(e => String(e).toLowerCase());
+        const userEmail = (user.email || '').toLowerCase();
+        isAdmin = adminUids.includes(user.uid) || (userEmail && adminEmails.includes(userEmail));
       }
     } catch(e) {
       log('Aviso: não foi possível verificar permissões de admin — ' + e.message, 'warn');

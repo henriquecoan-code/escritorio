@@ -61,7 +61,18 @@
       try{
         const db=firebase.firestore(app);
         const security=await db.collection('meta').doc('security').get();
-        if((security.data()?.adminUids||[]).includes(user.uid))adminLink?.removeAttribute('hidden');
+        const secData=security.data()||{};
+        const adminUids=Array.isArray(secData.adminUids)?secData.adminUids:[];
+        let adminEmails=[];
+        if(Array.isArray(secData.adminEmails)){
+          adminEmails=secData.adminEmails.map(e=>String(e).toLowerCase().trim());
+        }else if(typeof secData.adminEmails==='string'){
+          adminEmails=[secData.adminEmails.toLowerCase().trim()];
+        }
+        const userEmail=(user.email||'').toLowerCase().trim();
+        if(adminUids.includes(user.uid)||(userEmail&&adminEmails.includes(userEmail))){
+          adminLink?.removeAttribute('hidden');
+        }
       }catch(error){adminLink?.setAttribute('hidden','');}
       showError('');
     });

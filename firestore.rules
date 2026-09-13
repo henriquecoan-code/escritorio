@@ -5,18 +5,31 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function userEmail() {
+      return signedIn() && request.auth.token.email != null ? request.auth.token.email.lower() : '';
+    }
+
     function isAdmin() {
       return signedIn()
         && exists(/databases/$(database)/documents/meta/security)
-        && request.auth.uid in get(/databases/$(database)/documents/meta/security).data.adminUids;
+        && (
+          (
+            'adminUids' in get(/databases/$(database)/documents/meta/security).data
+            && request.auth.uid in get(/databases/$(database)/documents/meta/security).data.adminUids
+          ) || (
+            'adminEmails' in get(/databases/$(database)/documents/meta/security).data
+            && userEmail() in get(/databases/$(database)/documents/meta/security).data.adminEmails
+          )
+        );
     }
 
     function canAccess(panel) {
       return isAdmin()
         || (signedIn()
-          && exists(/databases/$(database)/documents/admin_users/$(request.auth.uid))
-          && get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.active == true
-          && get(/databases/$(database)/documents/admin_users/$(request.auth.uid)).data.panels[panel] == true);
+          && userEmail() != ''
+          && exists(/databases/$(database)/documents/admin_users/$(userEmail()))
+          && get(/databases/$(database)/documents/admin_users/$(userEmail())).data.active == true
+          && get(/databases/$(database)/documents/admin_users/$(userEmail())).data.panels[panel] == true);
     }
 
     // Campos permitidos no schema de contratos (v2 - adicionados campos de etapa e datas)
@@ -48,27 +61,31 @@ service cloud.firestore {
     }
 
     match /cobranca_propria_vista/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if canAccess('financeiro');
     }
 
     match /cobranca_propria_parc/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if canAccess('financeiro');
     }
 
     match /cobranca_clientes_vista/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if canAccess('financeiro');
     }
 
     match /cobranca_clientes_parc/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if canAccess('financeiro');
     }
 
     match /cobranca_acordos/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if canAccess('financeiro');
     }
 
     match /cobranca_judicial/{docId} {
-      allow read, write: if signedIn();
+      allow read, write: if canAccess('financeiro');
+    }
+
+    match /meta/cobranca_config {
+      allow read, write: if canAccess('financeiro');
     }
 
     match /meta/{docId} {

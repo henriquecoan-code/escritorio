@@ -80,14 +80,12 @@ Depois acesse:
 http://localhost:8000/index.html
 ```
 
-<<<<<<< HEAD
 O dashboard de contratos fica disponível em:
 
 ```text
 http://localhost:8000/OB_Dashboard_Rede.html
 ```
 
-=======
 A área de Cobrança e Gestão Financeira fica disponível em:
 
 ```text
@@ -96,14 +94,13 @@ http://localhost:8000/Financeiro.html
 
 Ela exige o mesmo login do Firebase e usa as coleções de cobrança (`cobranca_propria_vista`, `cobranca_propria_parc`, `cobranca_clientes_vista`, `cobranca_clientes_parc`, `cobranca_acordos`, `cobranca_judicial` e `meta/cobranca_config`).
 
->>>>>>> origin/main
 A área independente de Comercial e Relacionamento fica disponível em:
 
 ```text
 http://localhost:8000/relacionamento.html
 ```
 
-A área de administração do proprietário fica disponível em `admin.html`. As contas são criadas no Firebase Console; a página administra os perfis em `admin_users`, com os painéis permitidos em `panels.dashboard`, `panels.relacionamento` e `panels.admin`. Para liberar o primeiro proprietário, configure seu UID em `meta/security.adminUids` no Firebase Console.
+A área de administração do proprietário fica disponível em `admin.html`. As contas são criadas no Firebase Console; a página administra os perfis em `admin_users` identificados por e-mail, com os painéis permitidos em `panels.dashboard`, `panels.financeiro`, `panels.relacionamento` e `panels.admin`. Para liberar o primeiro proprietário, configure seu e-mail em `meta/security.adminEmails` (ou seu UID em `meta/security.adminUids`) no Firebase Console.
 
 O cabeçalho administrativo usa o mesmo logo e as mesmas dimensões responsivas do painel inicial. Seus estilos ficam centralizados em `styles/admin.css`; mantenha novas regras visuais da página nessa folha, em vez de incluí-las em `admin.html`.
 

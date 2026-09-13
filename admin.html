@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; img-src 'self' https: data: blob:; style-src 'self' 'unsafe-inline' https:; script-src 'self' https:; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.gstatic.com https://*.firebaseapp.com; font-src 'self' https: data:;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; img-src 'self' https: data: blob:; style-src 'self' 'unsafe-inline' https:; script-src 'self' https: 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.gstatic.com https://*.firebaseapp.com; font-src 'self' https: data:;">
 <title>Oliveira &amp; Benedet — Administração</title>
 <link rel="stylesheet" href="styles/admin.css">
 </head>
@@ -29,13 +29,13 @@
     <aside class="admin-panel admin-form-panel" id="user-editor" hidden>
       <div class="panel-head"><div><p class="eyebrow">Preferências</p><h2 id="editor-title">Novo usuário</h2></div></div>
       <form id="user-form">
-        <input id="user-uid" type="text" placeholder="UID do Firebase" required minlength="6">
-        <input id="user-email" type="email" placeholder="Email do usuário" required>
+        <input id="user-email" type="email" placeholder="Email do usuário (ex: usuario@escritorio.com)" required>
         <input id="user-name" type="text" placeholder="Nome de exibição" maxlength="80">
         <label class="toggle-row"><input id="user-active" type="checkbox" checked><span>Usuário ativo</span></label>
         <fieldset><legend>Painéis permitidos</legend>
           <label class="check-row"><input id="access-dashboard" type="checkbox"><span>Dashboard</span></label>
-          <label class="check-row"><input id="access-relacionamento" type="checkbox"><span>Comercial &amp; Relacionamento</span></label>
+          <label class="check-row"><input id="access-financeiro" type="checkbox"><span>Financeiro</span></label>
+          <label class="check-row"><input id="access-relacionamento" type="checkbox"><span>Relacionamento</span></label>
           <label class="check-row"><input id="access-admin" type="checkbox"><span>Administração</span></label>
         </fieldset>
         <div class="form-actions"><button class="admin-button muted" id="cancel-user" type="button">Cancelar</button><button class="admin-button primary" type="submit">Salvar acesso</button></div>

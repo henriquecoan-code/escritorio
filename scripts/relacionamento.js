@@ -20,10 +20,34 @@ const DEF={
     origens:['Indicação','Tráfego pago','Instagram / redes sociais','Cliente antigo','Balcão / espontâneo','Prospecção ativa','Convênio / parceria']
   }
 };
+function isInstagramOrigem(str){
+  if(typeof str!=='string')return false;
+  const s=str.trim().toLowerCase();
+  return s.includes('insta')||s.includes('rede social')||s.includes('redes sociais');
+}
 function normalizeConfig(config){
   const normalized={...structuredClone(DEF.config),...(config||{})};
-  normalized.origens=[...(normalized.origens||[])];
-  if(!normalized.origens.includes('Instagram / redes sociais'))normalized.origens.push('Instagram / redes sociais');
+  const canonicalInstagram='Instagram / redes sociais';
+  const rawOrigens=Array.isArray(normalized.origens)?normalized.origens:[];
+  let hasInstagram=false;
+  const cleanedOrigens=[];
+  for(const o of rawOrigens){
+    if(typeof o!=='string')continue;
+    const trimmed=o.trim();
+    if(!trimmed)continue;
+    if(isInstagramOrigem(trimmed)){
+      if(!hasInstagram){
+        cleanedOrigens.push(canonicalInstagram);
+        hasInstagram=true;
+      }
+    }else if(!cleanedOrigens.some(item=>item.toLowerCase()===trimmed.toLowerCase())){
+      cleanedOrigens.push(trimmed);
+    }
+  }
+  if(!hasInstagram){
+    cleanedOrigens.push(canonicalInstagram);
+  }
+  normalized.origens=cleanedOrigens;
   return normalized;
 }
 const FIREBASE_CFG=window.OB_FIREBASE_CONFIG||null;
@@ -483,7 +507,11 @@ function openCli(id,returnToInter=false){
     document.getElementById('cNome').value=c.nome;
     document.getElementById('cTel').value=c.tel||'';
     document.getElementById('cNasc').value=c.nasc||'';
-    document.getElementById('cOrigem').value=c.origem||'';
+    let origVal=c.origem||'';
+    if(origVal&&isInstagramOrigem(origVal)&&origVal!=='Instagram / redes sociais'){
+      origVal='Instagram / redes sociais';
+    }
+    document.getElementById('cOrigem').value=origVal;
     document.getElementById('cObs').value=c.obs||'';
     setPill('proc',c.proc?1:0);
     if(c.proc){document.getElementById('areaWrap').style.display='block';document.getElementById('cArea').value=c.area||'';}
@@ -939,8 +967,13 @@ function drawTags(key,el){
 }
 function addTag(key,inputId){
   const inp=document.getElementById(inputId);const v=inp.value.trim();
-  if(!v)return;if((db.config[key]||[]).includes(v)){toast('Já existe');return;}
-  (db.config[key]=db.config[key]||[]).push(v);inp.value='';persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();
+  if(!v)return;
+  const currentList=db.config[key]||[];
+  if(currentList.some(item=>item.toLowerCase()===v.toLowerCase())||(key==='origens'&&isInstagramOrigem(v)&&currentList.some(isInstagramOrigem))){
+    toast('Já existe');
+    return;
+  }
+  (db.config[key]=currentList).push(v);inp.value='';persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();
 }
 function rmTag(key,idx){db.config[key].splice(idx,1);persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();}
 

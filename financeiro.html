@@ -70,6 +70,12 @@
         <button class="ptab" onclick="setPer('mes',this)">M&ecirc;s</button>
         <button class="ptab" onclick="setPer('ano',this)">Ano</button>
       </div>
+      <div id="per-custom-wrap" class="per-custom-wrap">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--teal)" stroke-width="1.5" style="flex-shrink:0"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M5 1v3M11 1v3M2 7h12"/></svg>
+        <input type="date" id="per-ini" class="per-date-input" title="Data inicial" onchange="setCustomPer()" oninput="setCustomPer()">
+        <span style="color:var(--tx3);font-size:11px">&agrave;</span>
+        <input type="date" id="per-fim" class="per-date-input" title="Data final" onchange="setCustomPer()" oninput="setCustomPer()">
+      </div>
       <div style="display:flex;align-items:center;gap:8px;padding:5px 12px;background:var(--ink3);border:1px solid var(--rim);border-radius:var(--rs)">
         <div style="width:6px;height:6px;background:var(--teal);border-radius:50%"></div>
         <span id="topbar-date" style="font-size:11px;color:var(--tx2)"></span>

@@ -1,6 +1,6 @@
 const ADMIN_SECURITY_DOC='security';
 const ADMIN_USERS_COLLECTION='admin_users';
-const PANEL_LABELS={dashboard:'Dashboard',relacionamento:'Relacionamento',admin:'Administração'};
+const PANEL_LABELS={dashboard:'Dashboard',financeiro:'Financeiro',relacionamento:'Relacionamento',admin:'Administração'};
 let adminAuth=null;
 let adminDb=null;
 let adminUser=null;
@@ -28,32 +28,35 @@ function renderUsers(){
   if(!users.length){list.innerHTML='<div class="user-card"><div><strong>Nenhum acesso configurado</strong><small>Use Novo usuário para cadastrar o primeiro perfil.</small></div></div>';return;}
   list.innerHTML=users.map(user=>{
     const panels=Object.entries(PANEL_LABELS).map(([key,label])=>`<span class="access-chip ${user.panels?.[key]?'on':''}">${label}</span>`).join('');
-    return `<article class="user-card"><div><strong>${escapeHtml(user.displayName||user.email||user.uid)}</strong><small>${escapeHtml(user.email||'')} · ${escapeHtml(user.uid)} · ${user.active===false?'inativo':'ativo'}</small></div><div class="user-access">${panels}<button class="admin-link" data-edit-user="${escapeAttr(user.uid)}" type="button">Editar</button></div></article>`;
+    const email=user.email||user.id;
+    return `<article class="user-card"><div><strong>${escapeHtml(user.displayName||email)}</strong><small>${escapeHtml(email)} · ${user.active===false?'inativo':'ativo'}</small></div><div class="user-access">${panels}<button class="admin-link" data-edit-user="${escapeAttr(email)}" type="button">Editar</button></div></article>`;
   }).join('');
   list.querySelectorAll('[data-edit-user]').forEach(button=>button.addEventListener('click',()=>openEditor(button.dataset.editUser)));
 }
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));}
 function escapeAttr(value){return escapeHtml(value).replace(/`/g,'&#96;');}
-function openEditor(uid=''){
-  const user=users.find(item=>item.uid===uid)||{uid:'',email:'',displayName:'',active:true,panels:{dashboard:true,relacionamento:false,admin:false}};
+function openEditor(email=''){
+  const user=users.find(item=>item.id===email||item.email===email)||{id:'',email:'',displayName:'',active:true,panels:{dashboard:true,financeiro:false,relacionamento:false,admin:false}};
   byId('user-editor').hidden=false;
-  byId('editor-title').textContent=uid?'Editar usuário':'Novo usuário';
-  byId('user-uid').value=user.uid;byId('user-uid').readOnly=!!uid;
-  byId('user-email').value=user.email||'';byId('user-name').value=user.displayName||'';byId('user-active').checked=user.active!==false;
-  byId('access-dashboard').checked=!!user.panels?.dashboard;byId('access-relacionamento').checked=!!user.panels?.relacionamento;byId('access-admin').checked=!!user.panels?.admin;
-  byId('user-uid').focus();
+  byId('editor-title').textContent=email?'Editar usuário':'Novo usuário';
+  byId('user-email').value=user.email||email;byId('user-email').readOnly=!!email;
+  byId('user-name').value=user.displayName||'';byId('user-active').checked=user.active!==false;
+  byId('access-dashboard').checked=!!user.panels?.dashboard;byId('access-financeiro').checked=!!user.panels?.financeiro;byId('access-relacionamento').checked=!!user.panels?.relacionamento;byId('access-admin').checked=!!user.panels?.admin;
+  if(email) byId('user-name').focus(); else byId('user-email').focus();
 }
-function closeEditor(){byId('user-editor').hidden=true;byId('user-form').reset();byId('user-uid').readOnly=false;}
+function closeEditor(){byId('user-editor').hidden=true;byId('user-form').reset();byId('user-email').readOnly=false;}
 async function loadUsers(){
-  const snapshot=await adminDb.collection(ADMIN_USERS_COLLECTION).orderBy('email').get();
-  users=snapshot.docs.map(doc=>({uid:doc.id,...doc.data()}));renderUsers();
+  const snapshot=await adminDb.collection(ADMIN_USERS_COLLECTION).get();
+  users=snapshot.docs.map(doc=>({id:doc.id,email:doc.data().email||doc.id,...doc.data()}));
+  users.sort((a,b)=>(a.email||'').localeCompare(b.email||''));
+  renderUsers();
 }
 async function saveUser(event){
   event.preventDefault();
-  const uid=byId('user-uid').value.trim();
-  if(!uid){setStatus('Informe o UID do usuário.','error');return;}
-  const data={email:byId('user-email').value.trim(),displayName:byId('user-name').value.trim(),active:byId('user-active').checked,panels:{dashboard:byId('access-dashboard').checked,relacionamento:byId('access-relacionamento').checked,admin:byId('access-admin').checked},updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
-  try{await adminDb.collection(ADMIN_USERS_COLLECTION).doc(uid).set(data,{merge:true});closeEditor();await loadUsers();setStatus('Acesso salvo.','ok');}
+  const email=byId('user-email').value.trim().toLowerCase();
+  if(!email){setStatus('Informe o email do usuário.','error');return;}
+  const data={email:email,displayName:byId('user-name').value.trim(),active:byId('user-active').checked,panels:{dashboard:byId('access-dashboard').checked,financeiro:byId('access-financeiro').checked,relacionamento:byId('access-relacionamento').checked,admin:byId('access-admin').checked},updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+  try{await adminDb.collection(ADMIN_USERS_COLLECTION).doc(email).set(data,{merge:true});closeEditor();await loadUsers();setStatus('Acesso salvo.','ok');}
   catch(error){console.error(error);setStatus('Não foi possível salvar este acesso.','error');}
 }
 function startAdmin(){
@@ -68,10 +71,36 @@ function startAdmin(){
     if(!user){setAuthOpen(true);return;}
     try{
       const security=await adminDb.collection('meta').doc(ADMIN_SECURITY_DOC).get();
-      const adminUids=security.data()?.adminUids||[];
-      if(!adminUids.includes(user.uid)){setAuthOpen(false);setStatus('Esta conta não possui permissão de proprietário.','error');byId('new-user').disabled=true;return;}
-      setAuthOpen(false);await loadUsers();setStatus('Acesso de proprietário confirmado.');
-    }catch(error){setAuthOpen(false);setStatus('Configure o UID do proprietário em meta/security.adminUids antes de usar esta página.','error');}
+      const securityData=security.data()||{};
+      const adminUids=Array.isArray(securityData.adminUids)?securityData.adminUids:[];
+      let adminEmails=[];
+      if(Array.isArray(securityData.adminEmails)){
+        adminEmails=securityData.adminEmails.map(e=>String(e).toLowerCase().trim());
+      }else if(typeof securityData.adminEmails==='string'){
+        adminEmails=[securityData.adminEmails.toLowerCase().trim()];
+      }
+      const currentUserEmail=(user.email||'').toLowerCase().trim();
+      const isOwner=adminUids.includes(user.uid)||(currentUserEmail&&adminEmails.includes(currentUserEmail));
+      if(!isOwner){
+        setAuthOpen(false);
+        setStatus(`A conta logada (${currentUserEmail}) não possui permissão de proprietário. Verifique se o e-mail está em meta/security -> adminEmails.`,'error');
+        byId('new-user').disabled=true;
+        return;
+      }
+      byId('new-user').disabled=false;
+      setAuthOpen(false);
+      try{
+        await loadUsers();
+        setStatus('Acesso de proprietário confirmado.');
+      }catch(err){
+        console.error('Erro ao carregar usuários:',err);
+        setStatus('Acesso confirmado, mas ocorreu um erro ao listar usuários: '+(err.message||err),'error');
+      }
+    }catch(error){
+      console.error('Erro ao verificar permissão:',error);
+      setAuthOpen(false);
+      setStatus('Não foi possível verificar as permissões no Firestore: '+(error.message||error),'error');
+    }
   });
 }
 loadBrandLogo();

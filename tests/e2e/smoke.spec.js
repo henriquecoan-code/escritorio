@@ -22,6 +22,7 @@ test('carrega o painel inicial', async ({ page, baseURL }) => {
   await expect(page).toHaveTitle(/Painel Inicial/i);
   await expect(page.locator('#home-panel')).toBeVisible();
   await expect(page.locator('a[href="OB_Dashboard_Rede.html"]')).toBeVisible();
+  await expect(page.locator('a[href="financeiro.html"]')).toBeVisible();
   await expect(page.locator('a[href="relacionamento.html"]')).toBeVisible();
 });
 
@@ -128,4 +129,20 @@ test('modal de novo registro abre e fecha', async ({ page, baseURL }) => {
   await page.click('#close-modal-x-btn');
   const modalClass = await page.locator('#overlay').getAttribute('class');
   expect(modalClass ?? '').not.toContain('open');
+});
+
+test('modal de cliente em relacionamento nao duplica opcao de instagram em minusculo', async ({ page, baseURL }) => {
+  await page.goto(`${baseURL}/relacionamento.html`);
+  await page.evaluate(() => {
+    document.getElementById('authOverlay')?.classList.remove('open');
+    if (typeof normalizeConfig === 'function' && typeof db !== 'undefined') {
+      db.config = normalizeConfig({
+        origens: ['Indicação', 'Tráfego pago', 'Instagran / Rede Social', 'Instagram / redes sociais', 'Cliente antigo']
+      });
+    }
+    if (typeof openCli === 'function') openCli();
+  });
+  const options = await page.locator('#cOrigem option').allTextContents();
+  const instagramOptions = options.filter(opt => opt.toLowerCase().includes('insta') || opt.toLowerCase().includes('rede social'));
+  expect(instagramOptions).toEqual(['Instagram / redes sociais']);
 });

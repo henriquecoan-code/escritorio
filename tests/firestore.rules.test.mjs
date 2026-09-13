@@ -20,19 +20,34 @@ afterAll(async () => {
   await testEnv.cleanup();
 });
 
+function authCtx(uid, email = `${uid}@example.com`) {
+  return testEnv.authenticatedContext(uid, { email }).firestore();
+}
+
 beforeEach(async () => {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
-    await setDoc(doc(db, 'meta', 'security'), { adminUids: ['admin-user'] });
+    await setDoc(doc(db, 'meta', 'security'), {
+      adminUids: ['admin-user'],
+      adminEmails: ['admin@example.com'],
+    });
     for (const uid of ['user-1', 'user-2', 'user-2b', 'user-3', 'user-4', 'user-6']) {
-      await setDoc(doc(db, 'admin_users', uid), {
+      const email = `${uid}@example.com`;
+      await setDoc(doc(db, 'admin_users', email), {
+        email,
         active: true,
-        panels: { dashboard: true, relacionamento: false, admin: false },
+        panels: { dashboard: true, financeiro: false, relacionamento: false, admin: false },
       });
     }
-    await setDoc(doc(db, 'admin_users', 'relationship-user'), {
+    await setDoc(doc(db, 'admin_users', 'relationship-user@example.com'), {
+      email: 'relationship-user@example.com',
       active: true,
-      panels: { dashboard: false, relacionamento: true, admin: false },
+      panels: { dashboard: false, financeiro: false, relacionamento: true, admin: false },
+    });
+    await setDoc(doc(db, 'admin_users', 'finance-user@example.com'), {
+      email: 'finance-user@example.com',
+      active: true,
+      panels: { dashboard: false, financeiro: true, relacionamento: false, admin: false },
     });
   });
 });
@@ -52,13 +67,13 @@ describe('Firestore Rules - dashboard', () => {
       });
     });
 
-    const userDb = testEnv.authenticatedContext('user-1').firestore();
+    const userDb = authCtx('user-1');
     await assertSucceeds(getDoc(doc(userDb, 'contratos', 'seed')));
   });
 
   // ── Create ───────────────────────────────────────────────────
   it('permite create com campos validos', async () => {
-    const userDb = testEnv.authenticatedContext('user-2').firestore();
+    const userDb = authCtx('user-2');
     await assertSucceeds(
       setDoc(doc(userDb, 'contratos', 'ok-1'), {
         uid: 'ok-1',
@@ -69,7 +84,7 @@ describe('Firestore Rules - dashboard', () => {
   });
 
   it('permite create com createdAt e updatedAt', async () => {
-    const userDb = testEnv.authenticatedContext('user-2b').firestore();
+    const userDb = authCtx('user-2b');
     const now = Date.now();
     await assertSucceeds(
       setDoc(doc(userDb, 'contratos', 'ok-1b'), {
@@ -82,7 +97,7 @@ describe('Firestore Rules - dashboard', () => {
   });
 
   it('nega create com campo nao permitido', async () => {
-    const userDb = testEnv.authenticatedContext('user-2').firestore();
+    const userDb = authCtx('user-2');
     await assertFails(
       setDoc(doc(userDb, 'contratos', 'bad-1'), {
         uid: 'bad-1',
@@ -111,7 +126,7 @@ describe('Firestore Rules - dashboard', () => {
       });
     });
 
-    const userDb = testEnv.authenticatedContext('user-3').firestore();
+    const userDb = authCtx('user-3');
     await assertSucceeds(
       updateDoc(doc(userDb, 'contratos', 'upd-1'), { cliente: 'Atualizado' })
     );
@@ -140,7 +155,7 @@ describe('Firestore Rules - dashboard', () => {
       });
     });
 
-    const userDb = testEnv.authenticatedContext('user-4').firestore();
+    const userDb = authCtx('user-4');
     await assertSucceeds(deleteDoc(doc(userDb, 'contratos', 'del-1')));
   });
 
@@ -164,7 +179,7 @@ describe('Firestore Rules - dashboard', () => {
       });
     });
 
-    const userDb = testEnv.authenticatedContext('admin-user').firestore();
+    const userDb = authCtx('admin-user', 'admin@example.com');
     await assertSucceeds(getDoc(doc(userDb, 'meta', 'security')));
   });
 
@@ -175,7 +190,7 @@ describe('Firestore Rules - dashboard', () => {
 
   it('protege os dados de relacionamento', async () => {
     const anonDb = testEnv.unauthenticatedContext().firestore();
-    const userDb = testEnv.authenticatedContext('relationship-user').firestore();
+    const userDb = authCtx('relationship-user', 'relationship-user@example.com');
     await assertFails(getDoc(doc(anonDb, 'relacionamento_clientes', 'client-1')));
     await assertSucceeds(setDoc(doc(userDb, 'relacionamento_clientes', 'client-1'), {
       id: 'client-1',
@@ -197,23 +212,35 @@ describe('Firestore Rules - dashboard', () => {
       });
     });
 
-    const relationshipDb = testEnv.authenticatedContext('relationship-user').firestore();
+    const relationshipDb = authCtx('relationship-user', 'relationship-user@example.com');
     await assertFails(getDoc(doc(relationshipDb, 'contratos', 'restricted-dashboard')));
   });
 
   it('isola o relacionamento do perfil de dashboard', async () => {
-    const dashboardDb = testEnv.authenticatedContext('user-1').firestore();
+    const dashboardDb = authCtx('user-1');
     await assertFails(getDoc(doc(dashboardDb, 'relacionamento_clientes', 'client-restricted')));
   });
 
+  it('protege os dados de financeiro/cobranca para usuario sem permissao', async () => {
+    const anonDb = testEnv.unauthenticatedContext().firestore();
+    const dashboardDb = authCtx('user-1');
+    const financeDb = authCtx('finance-user', 'finance-user@example.com');
+    await assertFails(getDoc(doc(anonDb, 'cobranca_propria_vista', 'rec-1')));
+    await assertFails(getDoc(doc(dashboardDb, 'cobranca_propria_vista', 'rec-1')));
+    await assertSucceeds(setDoc(doc(financeDb, 'cobranca_propria_vista', 'rec-1'), {
+      devedor: 'Devedor Teste',
+      valor: 1000,
+    }));
+  });
+
   it('permite ao administrador gerenciar preferencias de usuarios', async () => {
-    const adminDb = testEnv.authenticatedContext('admin-user').firestore();
-    await assertSucceeds(setDoc(doc(adminDb, 'admin_users', 'managed-user'), {
+    const adminDb = authCtx('admin-user', 'admin@example.com');
+    await assertSucceeds(setDoc(doc(adminDb, 'admin_users', 'managed@example.com'), {
       email: 'managed@example.com',
       active: true,
       panels: { dashboard: true, relacionamento: true, admin: false },
     }));
-    await assertSucceeds(getDoc(doc(adminDb, 'admin_users', 'managed-user')));
+    await assertSucceeds(getDoc(doc(adminDb, 'admin_users', 'managed@example.com')));
   });
 
   // ── Coleção arbitrária ───────────────────────────────────────
