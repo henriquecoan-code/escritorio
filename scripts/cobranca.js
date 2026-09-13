@@ -666,14 +666,21 @@ async function marcarPago(key,id,pi){
 // ══════════════════════════════════════════════════════════════
 //  MODAL FORMS
 // ══════════════════════════════════════════════════════════════
-var ADV=function(){return S.config.advogados.map(function(a){return '<option value="'+esc(a)+'">'+esc(a)+'</option>';}).join('');};
+var ADV=function(){
+  var advs = (S && S.config && Array.isArray(S.config.advogados)) ? S.config.advogados : (DEF && DEF.config && Array.isArray(DEF.config.advogados) ? DEF.config.advogados : []);
+  return advs.map(function(a){return '<option value="'+esc(a)+'">'+esc(a)+'</option>';}).join('');
+};
 var SEL=function(opts,val){return opts.map(function(o){return '<option value="'+esc(o)+'"'+(val===o?' selected':'')+'>'+esc(o)+'</option>';}).join('');};
 
 function buildForm(tipo,r){
   r=r||{};
   var isCliente=tipo==='clientes_vista'||tipo==='clientes_parc';
   var isParc=tipo==='propria_parc'||tipo==='clientes_parc';
-  var j=S.config.juros,cm=S.config.correcao,hon=S.config.honorarios;
+  var cfg=(S&&S.config)?S.config:(DEF&&DEF.config?DEF.config:{});
+  var j=cfg.juros!==undefined?cfg.juros:1;
+  var cm=cfg.correcao!==undefined?cfg.correcao:5;
+  var hon=cfg.honorarios!==undefined?cfg.honorarios:30;
+  var vParcVal = (r && r.parcelas && r.parcelas.length > 0 && r.parcelas[0].valor) ? Number(r.parcelas[0].valor).toFixed(2) : '';
   var html='';
 
   // tipo pagamento toggle (apenas para abertura, não edição de carteira)
@@ -687,7 +694,7 @@ function buildForm(tipo,r){
   if(isCliente) html+='<div class="ff full"><label>Cliente credor</label><input id="f-credor" value="'+esc(r.credor||'')+'"></div>';
 
   html+='<div class="modal-sec">Valores</div>';
-  html+='<div class="ff"><label>Valor original (R$) *</label><input id="f-valor" type="number" value="'+(r.valor||'')+'" min="0" step="0.01" oninput="recalcModal()"></div>';
+  html+='<div class="ff"><label>Valor original (R$) *</label><input id="f-valor" type="number" value="'+(r.valor||'')+'" min="0" step="0.01" oninput="syncParcelamento(\'valor\')"></div>';
 
   if(!isParc){
     html+='<div class="ff"><label>Valor recebido (R$)</label><input id="f-recebido" type="number" value="'+(r.recebido||'')+'" min="0" step="0.01" oninput="recalcModal()"></div>';
@@ -696,11 +703,11 @@ function buildForm(tipo,r){
     html+='<div class="ff"><label>Juros mensais (%)</label><input id="f-juros" type="number" value="'+(r.juros_custom||j)+'" min="0" step="0.1" oninput="recalcModal()"></div>';
     html+='<div class="ff"><label>Correção monetária anual (%)</label><input id="f-cm" type="number" value="'+(r.cm_custom||cm)+'" min="0" step="0.1" oninput="recalcModal()"></div>';
   } else {
-    html+='<div class="ff"><label>Nº de parcelas</label><input id="f-nparc" type="number" value="'+(r._nparc||3)+'" min="1" max="120" oninput="recalcModal()"></div>';
-    html+='<div class="ff"><label>Ou: valor de cada parcela (R$)</label><input id="f-vparc" type="number" value="" min="0" step="0.01" placeholder="Deixe em branco para calcular" oninput="recalcModal()"></div>';
+    html+='<div class="ff"><label>Nº de parcelas</label><input id="f-nparc" type="number" value="'+(r._nparc||3)+'" min="1" max="120" oninput="syncParcelamento(\'nparc\')"></div>';
+    html+='<div class="ff"><label>Ou: valor de cada parcela (R$)</label><input id="f-vparc" type="number" value="'+vParcVal+'" min="0" step="0.01" placeholder="Deixe em branco para calcular" oninput="syncParcelamento(\'vparc\')"></div>';
     html+='<div class="ff"><label>1ª parcela em</label><input id="f-data1" type="date" value="'+(r._data1||today())+'" oninput="recalcModal()"></div>';
-    html+='<div class="ff"><label>Juros mensais (%)</label><input id="f-juros" type="number" value="'+(r.juros_custom||j)+'" min="0" step="0.1" oninput="recalcModal()"></div>';
-    html+='<div class="ff"><label>Correção monetária anual (%)</label><input id="f-cm" type="number" value="'+(r.cm_custom||cm)+'" min="0" step="0.1" oninput="recalcModal()"></div>';
+    html+='<div class="ff"><label>Juros mensais (%)</label><input id="f-juros" type="number" value="'+(r.juros_custom||j)+'" min="0" step="0.1" oninput="syncParcelamento(\'juros\')"></div>';
+    html+='<div class="ff"><label>Correção monetária anual (%)</label><input id="f-cm" type="number" value="'+(r.cm_custom||cm)+'" min="0" step="0.1" oninput="syncParcelamento(\'cm\')"></div>';
   }
 
   if(isCliente){
@@ -717,44 +724,108 @@ function buildForm(tipo,r){
 }
 
 function openModal(toOverride){
-  var page=toOverride||document.getElementById('btn-new').dataset.page||'propria';
-  var tipo=page==='clientes'?'clientes_vista':'propria_vista';
-  if(toOverride==='acordos') tipo='acordos';
-  if(toOverride==='judicial') tipo='judicial';
-  document.getElementById('m-tipo').value=tipo;
-  document.getElementById('m-id').value='';
-  var lbls={propria_vista:'Carteira Própria — À Vista',propria_parc:'Carteira Própria — Parcelado',clientes_vista:'Clientes Externos — À Vista',clientes_parc:'Clientes Externos — Parcelado',acordos:'Acordo de Loja',judicial:'Título Judicial'};
-  document.getElementById('m-title').textContent='Novo Lançamento — '+(lbls[tipo]||'');
-  if(tipo==='acordos') document.getElementById('m-body').innerHTML=buildFormAcordos();
-  else if(tipo==='judicial') document.getElementById('m-body').innerHTML=buildFormJudicial();
-  else document.getElementById('m-body').innerHTML=buildForm(tipo);
-  document.getElementById('mbg').classList.add('open');
-  recalcModal();
-  setTimeout(function(){var f=document.getElementById('f-devedor');if(f)f.focus();},60);
+  try {
+    var btnNew=document.getElementById('btn-new');
+    var page=toOverride||(btnNew&&btnNew.dataset?btnNew.dataset.page:'')||'propria';
+    var tipo=page==='clientes'?'clientes_vista':'propria_vista';
+    if(toOverride==='acordos') tipo='acordos';
+    if(toOverride==='judicial') tipo='judicial';
+    var mTipo=document.getElementById('m-tipo'); if(mTipo) mTipo.value=tipo;
+    var mId=document.getElementById('m-id'); if(mId) mId.value='';
+    var lbls={propria_vista:'Carteira Própria — À Vista',propria_parc:'Carteira Própria — Parcelado',clientes_vista:'Clientes Externos — À Vista',clientes_parc:'Clientes Externos — Parcelado',acordos:'Acordo de Loja',judicial:'Título Judicial'};
+    var mTitle=document.getElementById('m-title'); if(mTitle) mTitle.textContent='Novo Lançamento — '+(lbls[tipo]||'');
+    var mBody=document.getElementById('m-body');
+    if(mBody){
+      if(tipo==='acordos') mBody.innerHTML=buildFormAcordos();
+      else if(tipo==='judicial') mBody.innerHTML=buildFormJudicial();
+      else mBody.innerHTML=buildForm(tipo);
+    }
+    var mbg=document.getElementById('mbg'); if(mbg) mbg.classList.add('open');
+    try { syncParcelamento('init'); } catch(e0) { console.error('Erro syncParcelamento:', e0); }
+    setTimeout(function(){var f=document.getElementById('f-devedor');if(f&&typeof f.focus==='function')f.focus();},60);
+  } catch(err) {
+    console.error('Erro em openModal:', err);
+    var mbgErr=document.getElementById('mbg'); if(mbgErr) mbgErr.classList.add('open');
+  }
 }
 
 function switchTipoModal(isParc,tipoBase){
-  var cart=tipoBase.indexOf('clientes')===0?'clientes':'propria';
-  var novoTipo=cart+'_'+(isParc?'parc':'vista');
-  document.getElementById('m-tipo').value=novoTipo;
-  var lbls={propria_vista:'Carteira Própria — À Vista',propria_parc:'Carteira Própria — Parcelado',clientes_vista:'Clientes Externos — À Vista',clientes_parc:'Clientes Externos — Parcelado'};
-  document.getElementById('m-title').textContent='Novo Lançamento — '+(lbls[novoTipo]||'');
-  var dv=document.getElementById('f-devedor')&&document.getElementById('f-devedor').value||'';
-  var cr=document.getElementById('f-credor')&&document.getElementById('f-credor').value||'';
-  document.getElementById('m-body').innerHTML=buildForm(novoTipo,{devedor:dv,credor:cr});
-  if(dv) document.getElementById('f-devedor').value=dv;
-  if(cr&&document.getElementById('f-credor')) document.getElementById('f-credor').value=cr;
+  try {
+    var cart=tipoBase.indexOf('clientes')===0?'clientes':'propria';
+    var novoTipo=cart+'_'+(isParc?'parc':'vista');
+    var mTipo=document.getElementById('m-tipo'); if(mTipo) mTipo.value=novoTipo;
+    var lbls={propria_vista:'Carteira Própria — À Vista',propria_parc:'Carteira Própria — Parcelado',clientes_vista:'Clientes Externos — À Vista',clientes_parc:'Clientes Externos — Parcelado'};
+    var mTitle=document.getElementById('m-title'); if(mTitle) mTitle.textContent='Novo Lançamento — '+(lbls[novoTipo]||'');
+    var dv=document.getElementById('f-devedor')&&document.getElementById('f-devedor').value||'';
+    var cr=document.getElementById('f-credor')&&document.getElementById('f-credor').value||'';
+    var mBody=document.getElementById('m-body'); if(mBody) mBody.innerHTML=buildForm(novoTipo,{devedor:dv,credor:cr});
+    if(dv&&document.getElementById('f-devedor')) document.getElementById('f-devedor').value=dv;
+    if(cr&&document.getElementById('f-credor')) document.getElementById('f-credor').value=cr;
+    try { syncParcelamento('init'); } catch(e0) { console.error('Erro syncParcelamento:', e0); }
+  } catch(err) {
+    console.error('Erro em switchTipoModal:', err);
+  }
+}
+
+function syncParcelamento(src){
+  var elValor = document.getElementById('f-valor');
+  var elNparc = document.getElementById('f-nparc');
+  var elVparc = document.getElementById('f-vparc');
+  var elJuros = document.getElementById('f-juros');
+
+  if(elValor && elNparc && elVparc){
+    var valor = parseFloat(elValor.value || 0);
+    var nParc = parseInt(elNparc.value || 3) || 3;
+    var j = parseFloat((elJuros || {}).value || (typeof S !== 'undefined' && S && S.config ? S.config.juros : 1));
+    if(isNaN(j)) j = 0;
+    var jm = j / 100;
+
+    if(src === 'vparc'){
+      var vParc = parseFloat(elVparc.value || 0);
+      if(vParc > 0 && valor > 0){
+        var n = 1;
+        if(jm > 0){
+          if(vParc > valor * jm){
+            n = Math.round(Math.log(vParc / (vParc - valor * jm)) / Math.log(1 + jm));
+          } else {
+            n = Math.round(valor / vParc);
+          }
+        } else {
+          n = Math.round(valor / vParc);
+        }
+        if(isNaN(n) || n < 1) n = 1;
+        if(n > 120) n = 120;
+        elNparc.value = n;
+      }
+    } else if(src === 'init'){
+      if(!elVparc.value && valor > 0 && nParc > 0){
+        var fatorInit = (nParc > 1 && jm > 0) ? (jm * Math.pow(1 + jm, nParc)) / (Math.pow(1 + jm, nParc) - 1) : (1 / nParc);
+        var valCalcInit = (nParc > 1 && jm > 0) ? (valor * fatorInit) : (valor / nParc);
+        elVparc.value = valCalcInit.toFixed(2);
+      }
+    } else {
+      if(valor > 0 && nParc > 0){
+        var fator = (nParc > 1 && jm > 0) ? (jm * Math.pow(1 + jm, nParc)) / (Math.pow(1 + jm, nParc) - 1) : (1 / nParc);
+        var valCalc = (nParc > 1 && jm > 0) ? (valor * fator) : (valor / nParc);
+        elVparc.value = valCalc.toFixed(2);
+      } else if(!valor) {
+        elVparc.value = '';
+      }
+    }
+  }
   recalcModal();
 }
 
 function recalcModal(){
   var preview=document.getElementById('calc-rows');
   if(!preview)return;
-  var tipo=document.getElementById('m-tipo').value;
+  var tipoEl=document.getElementById('m-tipo');
+  var tipo=tipoEl?tipoEl.value:'propria_vista';
+  var cfg=(S&&S.config)?S.config:(DEF&&DEF.config?DEF.config:{});
   var valor=parseFloat((document.getElementById('f-valor')||{}).value||0);
-  var j=parseFloat((document.getElementById('f-juros')||{}).value||S.config.juros);
-  var cm=parseFloat((document.getElementById('f-cm')||{}).value||S.config.correcao);
-  var hon=parseFloat((document.getElementById('f-honorarios')||{}).value||S.config.honorarios)/100;
+  var j=parseFloat((document.getElementById('f-juros')||{}).value||cfg.juros||1);
+  var cm=parseFloat((document.getElementById('f-cm')||{}).value||cfg.correcao||5);
+  var hon=parseFloat((document.getElementById('f-honorarios')||{}).value||cfg.honorarios||30)/100;
   var isParc=tipo.slice(-4)==='parc';
   var isCliente=tipo.indexOf('clientes')===0;
   var rows='';
@@ -804,7 +875,7 @@ function editRec(key,id){
   if(key==='acordos') document.getElementById('m-body').innerHTML=buildFormAcordos(r);
   else if(key==='judicial') document.getElementById('m-body').innerHTML=buildFormJudicial(r);
   else document.getElementById('m-body').innerHTML=buildForm(key,r);
-  recalcModal();
+  syncParcelamento('init');
   setTimeout(function(){var s=document.getElementById('f-responsavel');if(s&&r.responsavel)s.value=r.responsavel;},15);
   document.getElementById('mbg').classList.add('open');
 }
