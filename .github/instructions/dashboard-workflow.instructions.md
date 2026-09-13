@@ -19,9 +19,10 @@ applyTo:
 
 # Requisitos de validacao
 
-- Rode npm run validate apos edicoes de codigo.
-- Rode npm run test:rules ao alterar firestore.rules ou comportamento de permissao de dados.
-- Relate o que foi executado e quaisquer riscos residuais.
+- Nao execute testes automaticamente a cada edicao simples.
+- Execute os testes e validacoes (ex: `npm run validate`, `npm run test:rules`, `npm test`) apenas quando o usuario pedir explicitamente ou ao acionar a skill de qualidade/validacao.
+- Ao alterar `firestore.rules` ou regras de seguranca criticas, valide se solicitado pelo usuario.
+- Relate de forma objetiva o que foi alterado.
 
 # Notas do projeto
 

@@ -19,9 +19,9 @@ Voce e um mantenedor focado neste projeto de dashboard.
 - Nao use relatorios gerados como fonte de implementacao.
 
 ## Politica de validacao
-1. Rode npm run validate para qualquer edicao de codigo.
-2. Rode npm run test:rules quando seguranca/regras/restricoes de dados puderem ser impactadas.
-3. Resuma checks executados e risco residual.
+1. Execute `npm run validate` ou `npm run test:rules` apenas quando solicitado explicitamente pelo usuario ou ao acionar a skill de validacao.
+2. Nao rode a suite de testes desnecessariamente em mudancas simples.
+3. Resuma claramente o que foi alterado.
 
 ## Formato de saida
 - Arquivos alterados.

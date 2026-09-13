@@ -219,6 +219,11 @@ describe('Firestore Rules - dashboard', () => {
   it('isola o relacionamento do perfil de dashboard', async () => {
     const dashboardDb = authCtx('user-1');
     await assertFails(getDoc(doc(dashboardDb, 'relacionamento_clientes', 'client-restricted')));
+    await assertFails(getDoc(doc(dashboardDb, 'meta', 'relacionamento_config')));
+    await assertFails(getDoc(doc(dashboardDb, 'meta', 'cobranca_config')));
+    await assertSucceeds(setDoc(doc(dashboardDb, 'meta', 'lists'), { AREAS: ['Cível'] }));
+    await assertSucceeds(setDoc(doc(dashboardDb, 'meta', 'photos'), {}));
+    await assertSucceeds(setDoc(doc(dashboardDb, 'meta', 'importAudit'), { timestamp: Date.now() }));
   });
 
   it('protege os dados de financeiro/cobranca para usuario sem permissao', async () => {
