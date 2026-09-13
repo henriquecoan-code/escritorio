@@ -18,17 +18,20 @@ escritorio/
 ├── firebase-config.public.js
 ├── firebase.json
 ├── firestore.rules
+├── financeiro.html
 ├── HISTORICO_MELHORIAS.md
 ├── README.md
 ├── .gitignore
 ├── package.json
 ├── playwright.config.js
 ├── scripts/
+│   ├── cobranca.js
 │   ├── dashboard.js
 │   ├── import-firestore.html
 │   ├── relacionamento.js
 │   └── theme.js
 ├── styles/
+│   ├── cobranca.css
 │   ├── dashboard.css
 │   └── relacionamento.css
 └── tests/
@@ -68,6 +71,14 @@ Depois acesse:
 http://localhost:8000/index.html
 ```
 
+A área de Cobrança e Gestão Financeira fica disponível em:
+
+```text
+http://localhost:8000/Financeiro.html
+```
+
+Ela exige o mesmo login do Firebase e usa as coleções de cobrança (`cobranca_propria_vista`, `cobranca_propria_parc`, `cobranca_clientes_vista`, `cobranca_clientes_parc`, `cobranca_acordos`, `cobranca_judicial` e `meta/cobranca_config`).
+
 A área independente de Comercial e Relacionamento fica disponível em:
 
 ```text
@@ -95,6 +106,31 @@ Os dados são mantidos exclusivamente no Firestore:
 - `meta/relacionamento_config`: SDRs, serviços, áreas, tipos e origens.
 
 O `localStorage` não é usado para clientes, interações ou configurações. O backup manual é feito por JSON dentro da própria página. A restauração mostra a quantidade de registros, pede confirmação e envia os dados em lotes de até 450 operações, com indicação de progresso.
+
+## Módulo de Gestão de Cobrança (`Financeiro.html` — branch `cobranca`)
+
+A página de controle financeiro e gestão de cobranças atua sobre a Carteira Própria, Clientes Externos (Honorários O&B), Acordos de Lojas e Títulos Judiciais:
+
+- `Financeiro.html`: estrutura do dashboard financeiro e modais de lançamento.
+- `scripts/cobranca.js`: lógica de negócio, sincronização em tempo real de parcelas, cálculos de juros/correção e persistência no Firebase.
+- `styles/cobranca.css`: estilização responsiva do painel e modais do módulo financeiro.
+
+### Funcionalidades e Trabalhos Realizados
+
+1. **Sincronização Dinâmica e Bi-direcional de Parcelamento**:
+   - Atualização automática em tempo real entre os campos **Valor original** (`#f-valor`), **Nº de parcelas** (`#f-nparc`) e **Valor de cada parcela** (`#f-vparc`) no modal de lançamento (carteiras próprias e externas).
+   - Cálculo automático do valor de cada parcela utilizando a fórmula de juros compostos (PMT) com base na taxa informada em **Juros mensais (%)**.
+   - Ao alterar o **Valor de cada parcela**, o número de parcelas é recalculado e ajustado automaticamente mantendo o valor original fixo.
+   - Ao alterar **Valor original**, **Nº de parcelas** ou **Juros mensais**, o valor de cada parcela é recalculado instantaneamente.
+   - Atualização automática da caixa de prévia do cálculo (`#calc-rows`).
+
+2. **Resiliência e Estabilidade do Modal de Lançamento**:
+   - Proteções defensivas (`try/catch`) e guardas de verificação no DOM na função de abertura e alternância de modalidades (`openModal` e `switchTipoModal`).
+   - Fallbacks seguros para configurações do sistema (`S.config`) e lista de advogados caso os dados ainda estejam sendo carregados do Firebase.
+
+3. **Persistência no Cloud Firestore e Fila Offline**:
+   - Coleções exclusivas no Firestore: `cobranca_propria_vista`, `cobranca_propria_parc`, `cobranca_clientes_vista`, `cobranca_clientes_parc`, `cobranca_acordos`, `cobranca_judicial` e `meta/cobranca_config`.
+   - Suporte a fila de saída offline (*outbox* em IndexedDB) para garantir que gravações efetuadas sem sinal de internet sejam sincronizadas automaticamente assim que a conexão for reestabelecida.
 
 ### Backup do dashboard principal
 
