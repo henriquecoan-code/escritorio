@@ -17,9 +17,19 @@ async function bypassAuthGuard(page) {
   });
 }
 
-test('carrega a pagina principal', async ({ page, baseURL }) => {
+test('carrega o painel inicial', async ({ page, baseURL }) => {
   await page.goto(`${baseURL}/index.html`);
-  await expect(page).toHaveTitle(/Oliveira\s*&\s*Benedet/i);
+  await expect(page).toHaveTitle(/Painel Inicial/i);
+  await expect(page.locator('#home-panel')).toBeVisible();
+  await expect(page.locator('a[href="OB_Dashboard_Rede.html"]')).toBeVisible();
+  await expect(page.locator('a[href="financeiro.html"]')).toBeVisible();
+  await expect(page.locator('a[href="relacionamento.html"]')).toBeVisible();
+});
+
+test('carrega o dashboard pela rota OB_Dashboard_Rede', async ({ page, baseURL }) => {
+  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
+  await expect(page).toHaveURL(/index\.html\?view=dashboard/);
+  await expect(page).toHaveTitle(/Oliveira\s*&\s*Benedet.*Dashboard/i);
   await expect(page.locator('#app')).toBeVisible();
   await expect(page.locator('#auth-forgot-btn')).toHaveText('Esqueci minha senha');
 });
@@ -31,8 +41,15 @@ test('carrega a pagina independente de relacionamento', async ({ page, baseURL }
   await expect(page.locator('#authOverlay')).toBeVisible();
 });
 
+test('carrega a pagina de administracao protegida', async ({ page, baseURL }) => {
+  await page.goto(`${baseURL}/admin.html`);
+  await expect(page).toHaveTitle(/Administração/i);
+  await expect(page.locator('#admin-auth-overlay')).toBeVisible();
+  await expect(page.locator('#admin-auth-form')).toBeVisible();
+});
+
 test('navega entre abas principais', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/index.html`);
+  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
   await disableAuthOverlay(page);
 
   await page.click('#tab-reg');
@@ -49,14 +66,14 @@ test('sem erro de runtime no carregamento', async ({ page, baseURL }) => {
   const pageErrors = [];
   page.on('pageerror', (error) => pageErrors.push(String(error)));
 
-  await page.goto(`${baseURL}/index.html`);
+  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
   await page.waitForTimeout(1200);
 
   expect(pageErrors).toEqual([]);
 });
 
 test('alternancia de tema claro/escuro persiste', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/index.html`);
+  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
   await disableAuthOverlay(page);
 
   // Tema inicial: escuro (sem classe 'light' no <html>)
@@ -80,7 +97,7 @@ test('alternancia de tema claro/escuro persiste', async ({ page, baseURL }) => {
 });
 
 test('campo de busca esta visivel e aceita entrada', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/index.html`);
+  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
   await disableAuthOverlay(page);
 
   await page.click('#tab-reg');
@@ -93,14 +110,14 @@ test('campo de busca esta visivel e aceita entrada', async ({ page, baseURL }) =
 });
 
 test('barra de sincronizacao esta presente no rodape', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/index.html`);
+  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
   await disableAuthOverlay(page);
 
   await expect(page.locator('#sync-bar')).toBeVisible();
 });
 
 test('modal de novo registro abre e fecha', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/index.html`);
+  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
   await disableAuthOverlay(page);
   await bypassAuthGuard(page);
 
@@ -112,4 +129,20 @@ test('modal de novo registro abre e fecha', async ({ page, baseURL }) => {
   await page.click('#close-modal-x-btn');
   const modalClass = await page.locator('#overlay').getAttribute('class');
   expect(modalClass ?? '').not.toContain('open');
+});
+
+test('modal de cliente em relacionamento nao duplica opcao de instagram em minusculo', async ({ page, baseURL }) => {
+  await page.goto(`${baseURL}/relacionamento.html`);
+  await page.evaluate(() => {
+    document.getElementById('authOverlay')?.classList.remove('open');
+    if (typeof normalizeConfig === 'function' && typeof db !== 'undefined') {
+      db.config = normalizeConfig({
+        origens: ['Indicação', 'Tráfego pago', 'Instagran / Rede Social', 'Instagram / redes sociais', 'Cliente antigo']
+      });
+    }
+    if (typeof openCli === 'function') openCli();
+  });
+  const options = await page.locator('#cOrigem option').allTextContents();
+  const instagramOptions = options.filter(opt => opt.toLowerCase().includes('insta') || opt.toLowerCase().includes('rede social'));
+  expect(instagramOptions).toEqual(['Instagram / redes sociais']);
 });

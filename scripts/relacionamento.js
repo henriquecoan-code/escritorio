@@ -20,10 +20,34 @@ const DEF={
     origens:['Indicação','Tráfego pago','Instagram / redes sociais','Cliente antigo','Balcão / espontâneo','Prospecção ativa','Convênio / parceria']
   }
 };
+function isInstagramOrigem(str){
+  if(typeof str!=='string')return false;
+  const s=str.trim().toLowerCase();
+  return s.includes('insta')||s.includes('rede social')||s.includes('redes sociais');
+}
 function normalizeConfig(config){
   const normalized={...structuredClone(DEF.config),...(config||{})};
-  normalized.origens=[...(normalized.origens||[])];
-  if(!normalized.origens.includes('Instagram / redes sociais'))normalized.origens.push('Instagram / redes sociais');
+  const canonicalInstagram='Instagram / redes sociais';
+  const rawOrigens=Array.isArray(normalized.origens)?normalized.origens:[];
+  let hasInstagram=false;
+  const cleanedOrigens=[];
+  for(const o of rawOrigens){
+    if(typeof o!=='string')continue;
+    const trimmed=o.trim();
+    if(!trimmed)continue;
+    if(isInstagramOrigem(trimmed)){
+      if(!hasInstagram){
+        cleanedOrigens.push(canonicalInstagram);
+        hasInstagram=true;
+      }
+    }else if(!cleanedOrigens.some(item=>item.toLowerCase()===trimmed.toLowerCase())){
+      cleanedOrigens.push(trimmed);
+    }
+  }
+  if(!hasInstagram){
+    cleanedOrigens.push(canonicalInstagram);
+  }
+  normalized.origens=cleanedOrigens;
   return normalized;
 }
 const FIREBASE_CFG=window.OB_FIREBASE_CONFIG||null;
@@ -276,6 +300,7 @@ function tipos(){return db.config.tipos||[];}
 function tipoOf(id){return tipos().find(t=>t.id===id);}
 function tipoLabel(id){const t=tipoOf(id);return t?t.label:(id||'—');}
 function tipoChip(id){const t=tipoOf(id);const c=TIPO_COLORS[(t&&t.color)||'neutral']||TIPO_COLORS.neutral;return `<span class="chip" style="border-color:${c[0]};color:${c[1]};background:${c[2]}">${esc(tipoLabel(id))}</span>`;}
+function escJsSQ(s){return String(s??'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/[\r\n]/g,c=>c==='\r'?'\\r':'\\n');}
 function parseD(s){if(!s)return null;const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
 function todayISO(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function fmtD(s){const d=parseD(s);if(!d)return '—';return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});}
@@ -482,7 +507,11 @@ function openCli(id,returnToInter=false){
     document.getElementById('cNome').value=c.nome;
     document.getElementById('cTel').value=c.tel||'';
     document.getElementById('cNasc').value=c.nasc||'';
-    document.getElementById('cOrigem').value=c.origem||'';
+    let origVal=c.origem||'';
+    if(origVal&&isInstagramOrigem(origVal)&&origVal!=='Instagram / redes sociais'){
+      origVal='Instagram / redes sociais';
+    }
+    document.getElementById('cOrigem').value=origVal;
     document.getElementById('cObs').value=c.obs||'';
     setPill('proc',c.proc?1:0);
     if(c.proc){document.getElementById('areaWrap').style.display='block';document.getElementById('cArea').value=c.area||'';}
@@ -675,7 +704,7 @@ function renderSdrComparativo(I){
   </div>`;
   const rows=data.map((m,idx)=>{
     const medal=idx===0?'🥇 ':idx===1?'🥈 ':idx===2?'🥉 ':'';
-    return `<tr style="cursor:pointer" onclick="document.getElementById('sdrPick').value='${esc(m.sdr)}';renderSdr()">
+    return `<tr style="cursor:pointer" onclick="document.getElementById('sdrPick').value='${escJsSQ(m.sdr)}';renderSdr()">
       <td><div class="cli-name">${medal}${esc(m.sdr)}</div></td>
       <td>${m.contatos}</td>
       <td><span style="color:var(--g)">${m.conex}</span> <span style="color:var(--t3)">· ${m.taxaConex}%</span></td>
@@ -766,7 +795,7 @@ function renderAcoes(){
   });
   document.getElementById('quentes').innerHTML=quentes.length?quentes.slice(0,15).map(i=>{
     const c=cliById(i.clienteId);
-    return `<div class="spot"><div class="av">${esc((c?.nome||'?')[0])}</div><div class="info"><div class="n">${esc(c?.nome||'Cliente')}</div><div class="m">Interesse em <b>${esc(i.servico||'serviço')}</b> · ${fmtDL(i.data)} · ${esc(i.sdr||'')}</div></div><button class="rowbtn" onclick="openInter('${i.id}')">Atualizar</button>${c?.tel?`<a class="wabtn" style="margin-left:8px" href="${waLink(c.tel,'Olá '+(c.nome.split(' ')[0])+'! Retomando nossa conversa sobre '+(i.servico||'os serviços')+'.')}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div>`;
+    return `<div class="spot"><div class="av">${esc((c?.nome||'?')[0])}</div><div class="info"><div class="n">${esc(c?.nome||'Cliente')}</div><div class="m">Interesse em <b>${esc(i.servico||'serviço')}</b> · ${fmtDL(i.data)} · ${esc(i.sdr||'')}</div></div><button class="rowbtn" onclick="openInter('${escJsSQ(i.id)}')">Atualizar</button>${c?.tel?`<a class="wabtn" style="margin-left:8px" href="${waLink(c.tel,'Olá '+(c.nome.split(' ')[0])+'! Retomando nossa conversa sobre '+(i.servico||'os serviços')+'.')}" target="_blank" rel="noopener">WhatsApp</a>`:''}</div>`;
   }).join(''):emptyMini('Quando um cliente demonstrar interesse, ele aparece aqui para acompanhamento');
 }
 
@@ -840,7 +869,7 @@ function renderInter(){
       <td>${esc(i.sdr||'—')}</td>
       <td>${res}</td>
       <td><div style="display:flex;gap:5px;flex-wrap:wrap">${sinais.join('')||'<span style="color:var(--muted)">—</span>'}</div></td>
-      <td style="white-space:nowrap"><button class="rowbtn" onclick="openInter('${i.id}')">Editar</button> <button class="rowbtn danger" onclick="delInter('${i.id}')">×</button></td>
+      <td style="white-space:nowrap"><button class="rowbtn" onclick="openInter('${escJsSQ(i.id)}')">Editar</button> <button class="rowbtn danger" onclick="delInter('${escJsSQ(i.id)}')">×</button></td>
     </tr>`;
   }).join('');
 }
@@ -915,9 +944,9 @@ function renderCli(){
       <td>${sit}</td>
       <td style="white-space:nowrap">
         ${c.tel?`<a class="rowbtn" href="${waLink(c.tel,msg)}" target="_blank" rel="noopener">Wpp</a> `:''}
-        <button class="rowbtn" onclick="openInter();setTimeout(()=>{document.getElementById('iCliente').value='${c.id}'},30)">+Contato</button>
-        <button class="rowbtn" onclick="openCli('${c.id}')">Editar</button>
-        <button class="rowbtn danger" onclick="delCli('${c.id}')">×</button>
+        <button class="rowbtn" onclick="openInter();setTimeout(()=>{document.getElementById('iCliente').value='${escJsSQ(c.id)}'},30)">+Contato</button>
+        <button class="rowbtn" onclick="openCli('${escJsSQ(c.id)}')">Editar</button>
+        <button class="rowbtn danger" onclick="delCli('${escJsSQ(c.id)}')">×</button>
       </td>
     </tr>`;
   }).join('');
@@ -938,8 +967,13 @@ function drawTags(key,el){
 }
 function addTag(key,inputId){
   const inp=document.getElementById(inputId);const v=inp.value.trim();
-  if(!v)return;if((db.config[key]||[]).includes(v)){toast('Já existe');return;}
-  (db.config[key]=db.config[key]||[]).push(v);inp.value='';persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();
+  if(!v)return;
+  const currentList=db.config[key]||[];
+  if(currentList.some(item=>item.toLowerCase()===v.toLowerCase())||(key==='origens'&&isInstagramOrigem(v)&&currentList.some(isInstagramOrigem))){
+    toast('Já existe');
+    return;
+  }
+  (db.config[key]=currentList).push(v);inp.value='';persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();
 }
 function rmTag(key,idx){db.config[key].splice(idx,1);persistConfig().catch(()=>toast('Não foi possível salvar no Firebase'));renderCfg();afterConfigChange();}
 

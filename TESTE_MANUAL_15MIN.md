@@ -15,7 +15,7 @@ Objetivo: validar rapidamente os fluxos criticos que ainda nao estao totalmente 
 
 ### 1) Login e logout (2 min)
 
-1. Abra `http://localhost:8000/OB_Dashboard_Rede.html`.
+1. Abra `http://localhost:8000/index.html` e escolha **Dashboard** no painel inicial.
 2. Tente login com senha invalida.
 3. Tente login com credenciais validas.
 4. Faça logout.

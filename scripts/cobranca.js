@@ -327,7 +327,9 @@ function nav(page, btn){
   var t=T[page]||['',''];
   document.getElementById('pg-title').textContent=t[0];
   document.getElementById('pg-sub').textContent=t[1];
-  document.getElementById('ptabs').style.display=page==='dashboard'?'flex':'none';
+  var showPtabs=page==='dashboard'?'flex':'none';
+  var ptabs=document.getElementById('ptabs'); if(ptabs) ptabs.style.display=showPtabs;
+  var pcw=document.getElementById('per-custom-wrap'); if(pcw) pcw.style.display=showPtabs;
   var bn=document.getElementById('btn-new');
   bn.style.display=(page==='propria'||page==='clientes')?'flex':'none';
   bn.dataset.page=page;
@@ -342,7 +344,24 @@ function renderCurrentPage(){
   if(curPage==='judicial'){renderKpiJudicial();renderJudicial();renderChartJudicial();}
   if(curPage==='config') renderConfig();
 }
-function setPer(p,btn){periodo=p;document.querySelectorAll('.ptab').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');renderDash();}
+function setPer(p,btn){
+  periodo=p;
+  document.querySelectorAll('.ptab').forEach(function(b){b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  var elIni=document.getElementById('per-ini'), elFim=document.getElementById('per-fim');
+  if(elIni) elIni.value='';
+  if(elFim) elFim.value='';
+  renderDash();
+}
+function setCustomPer(){
+  var elIni=document.getElementById('per-ini'), elFim=document.getElementById('per-fim');
+  var ini=elIni?elIni.value:'', fim=elFim?elFim.value:'';
+  if(ini || fim){
+    periodo='custom';
+    document.querySelectorAll('.ptab').forEach(function(b){b.classList.remove('active');});
+  }
+  renderDash();
+}
 function setSub(cart,sub,btn){
   document.querySelectorAll('#pg-'+cart+' .stab').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
@@ -375,6 +394,15 @@ function byPer(list){
     if(periodo==='semana') return (now-d)/864e5<=7;
     if(periodo==='mes') return d.getFullYear()===y&&d.getMonth()===m;
     if(periodo==='ano') return d.getFullYear()===y;
+    if(periodo==='custom'){
+      var ini=document.getElementById('per-ini')?document.getElementById('per-ini').value:'';
+      var fim=document.getElementById('per-fim')?document.getElementById('per-fim').value:'';
+      var ds=(lk||lkDia)?(lk||lkDia).slice(0,10):'';
+      if(!ds) return true;
+      if(ini && ds < ini) return false;
+      if(fim && ds > fim) return false;
+      return true;
+    }
     return true;
   });
 }

@@ -41,6 +41,11 @@ body{background:var(--ink);color:var(--tx);font-family:'DM Sans',sans-serif;disp
 .ptab{padding:4px 13px;font-size:11.5px;font-weight:500;border:none;background:transparent;cursor:pointer;border-radius:5px;color:var(--tx3);font-family:'DM Sans',sans-serif;transition:all .12s}
 .ptab:hover{color:var(--tx2)}
 .ptab.active{background:var(--ink2);color:var(--teal);border:1px solid var(--rim2)}
+.per-custom-wrap{display:flex;align-items:center;gap:6px;background:var(--ink3);padding:3px 10px;border-radius:var(--rs);border:1px solid var(--rim);transition:border-color .12s}
+.per-custom-wrap:focus-within{border-color:var(--teal)}
+.per-date-input{background:transparent;border:none;color:var(--tx2);font-size:11.5px;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer;padding:1px 0;width:98px}
+.per-date-input::-webkit-calendar-picker-indicator{filter:invert(0.85);cursor:pointer}
+.per-date-input:focus{color:var(--teal)}
 .btn{padding:6px 16px;border-radius:var(--rs);font-size:12px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;border:none;transition:all .12s;white-space:nowrap}
 .btn-teal{background:var(--teal);color:#07111f;font-weight:600;letter-spacing:.02em}
 .btn-teal:hover{background:var(--teal2)}

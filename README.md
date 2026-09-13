@@ -13,6 +13,7 @@ Dashboard interno da Oliveira & Benedet para gestão e visualização de contrat
 
 ```text
 escritorio/
+├── admin.html
 ├── index.html
 ├── OB_Dashboard_Rede.html
 ├── firebase-config.public.js
@@ -25,13 +26,21 @@ escritorio/
 ├── package.json
 ├── playwright.config.js
 ├── scripts/
+<<<<<<< HEAD
+│   ├── admin.js
+=======
 │   ├── cobranca.js
+>>>>>>> origin/main
 │   ├── dashboard.js
 │   ├── import-firestore.html
 │   ├── relacionamento.js
 │   └── theme.js
 ├── styles/
+<<<<<<< HEAD
+│   ├── admin.css
+=======
 │   ├── cobranca.css
+>>>>>>> origin/main
 │   ├── dashboard.css
 │   └── relacionamento.css
 └── tests/
@@ -57,7 +66,7 @@ escritorio/
 
 ## Como abrir o dashboard
 
-Como o projeto é estático, basta abrir `index.html` ou `relacionamento.html` no navegador, ou servir a pasta com qualquer servidor estático.
+Como o projeto é estático, basta abrir `index.html` para acessar o painel inicial, ou servir a pasta com qualquer servidor estático.
 
 Se quiser usar um servidor local simples no Windows:
 
@@ -69,6 +78,12 @@ Depois acesse:
 
 ```text
 http://localhost:8000/index.html
+```
+
+O dashboard de contratos fica disponível em:
+
+```text
+http://localhost:8000/OB_Dashboard_Rede.html
 ```
 
 A área de Cobrança e Gestão Financeira fica disponível em:
@@ -84,6 +99,10 @@ A área independente de Comercial e Relacionamento fica disponível em:
 ```text
 http://localhost:8000/relacionamento.html
 ```
+
+A área de administração do proprietário fica disponível em `admin.html`. As contas são criadas no Firebase Console; a página administra os perfis em `admin_users` identificados por e-mail, com os painéis permitidos em `panels.dashboard`, `panels.financeiro`, `panels.relacionamento` e `panels.admin`. Para liberar o primeiro proprietário, configure seu e-mail em `meta/security.adminEmails` (ou seu UID em `meta/security.adminUids`) no Firebase Console.
+
+O cabeçalho administrativo usa o mesmo logo e as mesmas dimensões responsivas do painel inicial. Seus estilos ficam centralizados em `styles/admin.css`; mantenha novas regras visuais da página nessa folha, em vez de incluí-las em `admin.html`.
 
 Ela exige o mesmo login do Firebase e usa as coleções `relacionamento_clientes` e `relacionamento_interacoes`, além do documento `meta/relacionamento_config`. Os dados comerciais não são mantidos no `localStorage`; use os botões de backup JSON para exportar ou restaurar dados manualmente.
 
