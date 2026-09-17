@@ -94,9 +94,11 @@ A área independente de Comercial e Relacionamento fica disponível em:
 http://localhost:8000/relacionamento.html
 ```
 
-A área de administração do proprietário fica disponível em `admin.html`. As contas são criadas no Firebase Console; a página administra os perfis em `admin_users` identificados por e-mail, com os painéis permitidos em `panels.dashboard`, `panels.financeiro`, `panels.relacionamento` e `panels.admin`. Para liberar o primeiro proprietário, configure seu e-mail em `meta/security.adminEmails` (ou seu UID em `meta/security.adminUids`) no Firebase Console.
+A área de administração do proprietário fica disponível em `admin.html`. Depois de entrar como proprietário, use **Novo usuário** para informar email, senha inicial, nome e painéis permitidos. O formulário cria a conta no Firebase Authentication e o perfil correspondente em `admin_users`, identificado por e-mail, com os painéis em `panels.dashboard`, `panels.financeiro`, `panels.relacionamento` e `panels.admin`. Para liberar o primeiro proprietário, configure seu e-mail em `meta/security.adminEmails` (ou seu UID em `meta/security.adminUids`) no Firebase Console.
 
-O cabeçalho administrativo usa o mesmo logo e as mesmas dimensões responsivas do painel inicial. Seus estilos ficam centralizados em `styles/admin.css`; mantenha novas regras visuais da página nessa folha, em vez de incluí-las em `admin.html`.
+Ao editar um usuário, o campo de senha pode ficar vazio para manter a senha atual. O botão **Excluir usuário** remove o perfil de acesso em `admin_users`, bloqueando o acesso aos painéis; a conta correspondente do Firebase Authentication deve ser removida pelo Console ou por uma função administrativa quando necessário.
+
+O cabeçalho administrativo usa o mesmo logo e as mesmas dimensões responsivas do painel inicial. Seus estilos ficam em `styles/admin.css` e `styles/admin-form.css`; mantenha novas regras visuais da página nessas folhas, em vez de incluí-las em `admin.html`.
 
 Ela exige o mesmo login do Firebase e usa as coleções `relacionamento_clientes` e `relacionamento_interacoes`, além do documento `meta/relacionamento_config`. Os dados comerciais não são mantidos no `localStorage`; use os botões de backup JSON para exportar ou restaurar dados manualmente.
 
