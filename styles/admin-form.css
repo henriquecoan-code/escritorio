@@ -1,0 +1,28 @@
+.admin-form-panel input[type="password"] {
+  width: 100%;
+  border: 1px solid var(--b);
+  border-radius: 6px;
+  background: var(--d2);
+  color: var(--t);
+  padding: 10px 11px;
+  outline: none;
+}
+
+.admin-form-panel input[type="password"]:focus {
+  border-color: var(--g);
+}
+
+.admin-button.danger {
+  border-color: rgba(232, 115, 90, 0.45);
+  color: var(--rose);
+}
+
+.admin-button.danger:hover:not(:disabled) {
+  border-color: var(--rose);
+  background: rgba(232, 115, 90, 0.08);
+}
+
+.admin-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}

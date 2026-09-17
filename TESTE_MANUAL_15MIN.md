@@ -26,6 +26,22 @@ Resultado esperado:
 - Com login valido, o dashboard carrega normalmente.
 - Apos logout, a tela volta a exigir autenticacao.
 
+### 1.1) Cadastro de usuario pelo painel administrativo (2 min)
+
+1. Abra `http://localhost:8000/admin.html` e entre com uma conta de proprietário.
+2. Clique em **Novo usuário**.
+3. Informe email, senha inicial com pelo menos 6 caracteres e marque os painéis permitidos.
+4. Salve o acesso e entre em uma janela anônima usando o email e a senha cadastrados.
+5. Confirme que o usuário acessa somente os painéis permitidos.
+6. Volte ao painel administrativo, edite o usuário e confirme que deixar a nova senha vazia mantém a senha atual.
+7. Clique em **Excluir usuário**, confirme a operação e verifique que o perfil deixa de aparecer na lista.
+
+Resultado esperado:
+
+- O novo usuário consegue autenticar com as credenciais informadas.
+- As permissões dos painéis são respeitadas.
+- A exclusão remove o acesso em `admin_users`; a conta do Firebase Authentication permanece até ser removida administrativamente.
+
 ### 2) CRUD ponta a ponta (4 min)
 
 1. Com login valido, abra Registros.

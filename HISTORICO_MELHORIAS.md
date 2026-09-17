@@ -6,6 +6,14 @@
 
 ## Atualizacao complementar (Junho 2026)
 
+## Administracao de usuarios (Setembro 2026)
+
+- O painel `admin.html` passou a criar contas diretamente no Firebase Authentication com email e senha inicial.
+- O mesmo cadastro grava as permissões de painéis no documento correspondente de `admin_users`.
+- A edição mantém a senha atual quando o campo de nova senha fica vazio.
+- O botão de exclusão remove o perfil de acesso em `admin_users`, com confirmação; a remoção da conta de Authentication continua sendo uma operação administrativa separada.
+- Os estilos do formulário administrativo foram centralizados em `styles/admin-form.css`, mantendo campos e painéis com o padrão visual arredondado do projeto.
+
 ### Backup automatico (GitHub Actions)
 
 - Workflow dedicado para backup diario/manual do Firestore
