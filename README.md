@@ -1,6 +1,6 @@
-# OB Dashboard Rede
+# OB Painel Comercial
 
-Dashboard interno da Oliveira & Benedet para gestão e visualização de contratos, com frontend estático em HTML/CSS/JS e backend em Firebase.
+Painel Comercial interno da Oliveira & Benedet para gestão e visualização de contratos, com frontend estático em HTML/CSS/JS e backend em Firebase.
 
 ## Tecnologias
 
@@ -30,12 +30,14 @@ escritorio/
 │   ├── cobranca.js
 │   ├── dashboard.js
 │   ├── import-firestore.html
+│   ├── password-eye.js
 │   ├── relacionamento.js
 │   └── theme.js
 ├── styles/
 │   ├── admin.css
 │   ├── cobranca.css
 │   ├── dashboard.css
+│   ├── auth.css
 │   └── relacionamento.css
 └── tests/
     ├── e2e/
@@ -58,7 +60,7 @@ escritorio/
 4. Configure `firebase-config.public.js` com as credenciais web do seu projeto.
 5. Publique as regras de `firestore.rules`.
 
-## Como abrir o dashboard
+## Como abrir o painel Comercial
 
 Como o projeto é estático, basta abrir `index.html` para acessar o painel inicial, ou servir a pasta com qualquer servidor estático.
 
@@ -74,7 +76,7 @@ Depois acesse:
 http://localhost:8000/index.html
 ```
 
-O dashboard de contratos fica disponível em:
+O painel Comercial de contratos fica disponível em:
 
 ```text
 http://localhost:8000/OB_Dashboard_Rede.html
@@ -97,6 +99,8 @@ http://localhost:8000/relacionamento.html
 A área de administração do proprietário fica disponível em `admin.html`. Depois de entrar como proprietário, use **Novo usuário** para informar email, senha inicial, nome e painéis permitidos. O formulário cria a conta no Firebase Authentication e o perfil correspondente em `admin_users`, identificado por e-mail, com os painéis em `panels.dashboard`, `panels.financeiro`, `panels.relacionamento` e `panels.admin`. Para liberar o primeiro proprietário, configure seu e-mail em `meta/security.adminEmails` (ou seu UID em `meta/security.adminUids`) no Firebase Console.
 
 Ao editar um usuário, o campo de senha pode ficar vazio para manter a senha atual. O botão **Excluir usuário** remove o perfil de acesso em `admin_users`, bloqueando o acesso aos painéis; a conta correspondente do Firebase Authentication deve ser removida pelo Console ou por uma função administrativa quando necessário.
+
+Os modais de login usam a mesma identidade visual em todas as áreas. Os campos de senha possuem o botão **password-eye** para mostrar ou ocultar a senha; a implementação compartilhada fica em `scripts/password-eye.js` e os estilos comuns em `styles/auth.css`.
 
 O cabeçalho administrativo usa o mesmo logo e as mesmas dimensões responsivas do painel inicial. Seus estilos ficam em `styles/admin.css` e `styles/admin-form.css`; mantenha novas regras visuais da página nessas folhas, em vez de incluí-las em `admin.html`.
 
@@ -147,7 +151,7 @@ A página de controle financeiro e gestão de cobranças atua sobre a Carteira P
    - Coleções exclusivas no Firestore: `cobranca_propria_vista`, `cobranca_propria_parc`, `cobranca_clientes_vista`, `cobranca_clientes_parc`, `cobranca_acordos`, `cobranca_judicial` e `meta/cobranca_config`.
    - Suporte a fila de saída offline (*outbox* em IndexedDB) para garantir que gravações efetuadas sem sinal de internet sejam sincronizadas automaticamente assim que a conexão for reestabelecida.
 
-### Backup do dashboard principal
+### Backup do painel Comercial
 
 O `index.html` também possui o grid **Backup & dados** em Configurações. Esse backup inclui:
 
@@ -160,7 +164,7 @@ A restauração consulta os contratos atuais, remove os que não estão no arqui
 
 ## Login e permissões
 
-- O dashboard exige autenticação via Firebase Auth.
+- O painel Comercial exige autenticação via Firebase Auth.
 - Leitura é permitida para usuário autenticado.
 - No estado atual, create, update e delete estão liberados para usuário autenticado.
 - O controle por admin em `meta/security.adminUids` permanece reservado para endurecimento futuro das regras, quando o acesso for ampliado para mais pessoas.

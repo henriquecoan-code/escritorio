@@ -12,6 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <link rel="stylesheet" href="styles/dashboard.css">
+<link rel="stylesheet" href="styles/auth.css">
 </head>
 <body>
 
@@ -28,7 +29,7 @@
     <div class="home-links">
         <a class="home-link home-link-primary" href="OB_Dashboard_Rede.html">
             <span class="home-link-icon" aria-hidden="true">&#128202;</span>
-            <span><strong>Dashboard</strong><small>Contratos, registros e indicadores</small></span>
+            <span><strong>Comercial</strong><small>Contratos, registros e indicadores</small></span>
             <span class="home-arrow" aria-hidden="true">&#8594;</span>
         </a>
         <a class="home-link" href="financeiro.html">
@@ -49,9 +50,9 @@
     </div>
 </main>
 
-<div class="home-auth-overlay open" id="home-auth-overlay">
-    <div class="home-auth-box">
-        <img class="home-auth-logo" id="home-auth-logo" alt="Oliveira &amp; Benedet">
+<div class="home-auth-overlay auth-overlay open" id="home-auth-overlay">
+    <div class="home-auth-box auth-card">
+        <img class="home-auth-logo auth-logo" id="home-auth-logo" alt="Oliveira &amp; Benedet">
         <div class="auth-title">Acesso ao Painel Inicial</div>
         <div class="auth-sub">Entre com email e senha para continuar.</div>
         <form id="home-auth-form">
@@ -225,8 +226,8 @@
 </div>
 
 <div class="auth-overlay" id="auth-overlay">
-    <div class="auth-box home-auth-box">
-        <img class="home-auth-logo" id="auth-logo" alt="Oliveira &amp; Benedet">
+    <div class="auth-box home-auth-box auth-card">
+        <img class="home-auth-logo auth-logo" id="auth-logo" alt="Oliveira &amp; Benedet">
         <div class="auth-title">Acesso ao Dashboard</div>
         <div class="auth-sub">Entre com email e senha para continuar.</div>
         <form id="auth-form">
@@ -249,5 +250,6 @@
 <script src="scripts/home.js"></script>
 <script src="scripts/dashboard.js"></script>
 <script src="scripts/theme.js"></script>
+<script src="scripts/password-eye.js"></script>
 </body>
 </html>

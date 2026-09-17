@@ -38,7 +38,10 @@ function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2
 //  AUTH / SYNC UI
 // ══════════════════════════════════════════════════════════════
 function createFirebaseUI(){
-  document.body.insertAdjacentHTML('beforeend','<div class="auth-overlay" id="authOverlay"><div class="auth-box"><h2>Acesso à Cobrança</h2><p>Entre com seu email e senha para acessar os dados.</p><input id="authEmail" type="email" placeholder="Email"><input id="authPassword" type="password" placeholder="Senha"><button class="btn btn-teal" id="authLogin">Entrar</button><button class="auth-forgot" id="authForgot" type="button">Esqueci minha senha</button><div class="auth-error" id="authError"></div></div></div><div class="sync-bar" id="syncBar"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Conectando...</span><span id="syncDetail"></span><button class="btn btn-ghost btn-sm" id="syncNow">Atualizar</button></div>');
+  document.body.insertAdjacentHTML('beforeend','<div class="auth-overlay open" id="authOverlay"><div class="auth-box auth-card"><h2>Acesso à Cobrança</h2><p>Entre com seu email e senha para acessar os dados.</p><input class="auth-input" id="authEmail" type="email" placeholder="Email"><input class="auth-input" id="authPassword" type="password" placeholder="Senha"><button class="btn btn-teal auth-submit" id="authLogin">Entrar</button><button class="auth-forgot" id="authForgot" type="button">Esqueci minha senha</button><div class="auth-error" id="authError"></div></div></div><div class="sync-bar" id="syncBar"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Conectando...</span><span id="syncDetail"></span><button class="btn btn-ghost btn-sm" id="syncNow">Atualizar</button></div>');
+  var authBox=document.querySelector('#authOverlay .auth-box');
+  var pageLogo=document.querySelector('.sb-logo img');
+  if(authBox&&pageLogo){var authLogo=document.createElement('img');authLogo.className='auth-logo';authLogo.alt='Oliveira & Benedet';authLogo.src=pageLogo.src;authBox.prepend(authLogo);}
   document.getElementById('authLogin').addEventListener('click',login);
   document.getElementById('authPassword').addEventListener('keydown',function(e){if(e.key==='Enter')login();});
   document.getElementById('authForgot').addEventListener('click',forgotPassword);
