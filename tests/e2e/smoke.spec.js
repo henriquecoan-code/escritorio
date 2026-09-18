@@ -34,6 +34,27 @@ test('carrega o dashboard pela rota OB_Dashboard_Rede', async ({ page, baseURL }
   await expect(page.locator('#auth-forgot-btn')).toHaveText('Esqueci minha senha');
 });
 
+test('olho da senha alterna tipo do campo e rotulo acessivel', async ({ page, baseURL }) => {
+  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
+  await page.evaluate(() => {
+    document.getElementById('auth-overlay')?.classList.add('open');
+  });
+
+  const passwordInput = page.locator('#auth-password');
+  const passwordEye = page.locator('#auth-form .password-eye');
+
+  await expect(passwordInput).toHaveAttribute('type', 'password');
+  await expect(passwordEye).toHaveAttribute('aria-label', 'Mostrar senha');
+
+  await passwordEye.click();
+  await expect(passwordInput).toHaveAttribute('type', 'text');
+  await expect(passwordEye).toHaveAttribute('aria-label', 'Ocultar senha');
+
+  await passwordEye.click();
+  await expect(passwordInput).toHaveAttribute('type', 'password');
+  await expect(passwordEye).toHaveAttribute('aria-label', 'Mostrar senha');
+});
+
 test('carrega a pagina independente de relacionamento', async ({ page, baseURL }) => {
   await page.goto(`${baseURL}/relacionamento.html`);
   await expect(page).toHaveTitle(/Oliveira\s*&\s*Benedet\s*-\s*Relacionamento/i);
