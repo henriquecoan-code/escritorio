@@ -77,10 +77,10 @@
 .auth-error,
 .auth-err{min-height:20px;margin-top:10px;color:var(--rose,#E8735A);font-size:12px;}
 .auth-mark{margin:0 auto 18px;}
-.password-field{position:relative;width:100%;}
-.password-field>input{padding-right:42px!important;}
-.password-eye{position:absolute;top:50%;right:8px;width:26px;height:26px;padding:0;border:0;background:transparent;color:var(--t3,#6E6A88);transform:translateY(-50%);cursor:pointer;}
-.password-eye svg{display:block;width:19px;height:19px;margin:auto;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.7;}
+.password-field{position:relative;display:block;width:100%;margin-top:9px;}
+.password-field>input{display:block;width:100%;padding-right:42px!important;}
+.password-eye{position:absolute;top:50%;right:10px;width:26px;height:26px;padding:0;border:0;background:transparent;color:var(--t3,#6E6A88);transform:translateY(-50%);cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:0;}
+.password-eye svg{display:block;width:19px;height:19px;margin:0;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.7;}
 .password-eye .eye-slash{opacity:0;transition:opacity .15s ease;}
 .password-eye:hover,.password-eye:focus-visible{color:var(--g,#C9A84C);}
 .password-eye:focus-visible{outline:1px solid currentColor;outline-offset:2px;border-radius:4px;}
