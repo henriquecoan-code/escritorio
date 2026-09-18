@@ -35,13 +35,10 @@ test('carrega o dashboard pela rota OB_Dashboard_Rede', async ({ page, baseURL }
 });
 
 test('olho da senha alterna tipo do campo e rotulo acessivel', async ({ page, baseURL }) => {
-  await page.goto(`${baseURL}/OB_Dashboard_Rede.html`);
-  await page.evaluate(() => {
-    document.getElementById('auth-overlay')?.classList.add('open');
-  });
+  await page.goto(`${baseURL}/index.html`);
 
-  const passwordInput = page.locator('#auth-password');
-  const passwordEye = page.locator('#auth-form .password-eye');
+  const passwordInput = page.locator('#home-auth-password');
+  const passwordEye = page.locator('#home-auth-form .password-eye');
 
   await expect(passwordInput).toHaveAttribute('type', 'password');
   await expect(passwordEye).toHaveAttribute('aria-label', 'Mostrar senha');
