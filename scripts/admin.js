@@ -1,6 +1,6 @@
 const ADMIN_SECURITY_DOC='security';
 const ADMIN_USERS_COLLECTION='admin_users';
-const PANEL_LABELS={dashboard:'Dashboard',financeiro:'Financeiro',relacionamento:'Relacionamento',admin:'Administração'};
+const PANEL_LABELS={dashboard:'Comercial',financeiro:'Financeiro',relacionamento:'Relacionamento',admin:'Administração'};
 let adminAuth=null;
 let adminDb=null;
 let adminUser=null;
@@ -13,7 +13,10 @@ async function loadBrandLogo(){
     const response=await fetch('scripts/dashboard.js');
     if(!response.ok)return;
     const match=(await response.text()).match(/const LOGO_B64\s*=\s*'([^']+)'/);
-    if(match)byId('admin-logo').src=match[1];
+    if(match){
+      byId('admin-logo').src=match[1];
+      byId('admin-auth-logo').src=match[1];
+    }
   }catch(error){console.warn('Não foi possível carregar o logo.',error);}
 }
 function setStatus(message,type=''){const el=byId('admin-status');el.textContent=message;el.className=`admin-status ${type}`;}

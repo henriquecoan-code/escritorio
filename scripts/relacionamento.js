@@ -66,7 +66,10 @@ let pendingOperations=new Map();
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 
 function createFirebaseUI(){
-  document.body.insertAdjacentHTML('beforeend',`<div class="auth-overlay" id="authOverlay"><div class="auth-box"><h2>Acesso ao relacionamento</h2><p>Entre com seu email e senha para acessar a carteira.</p><input id="authEmail" type="email" placeholder="Email"><input id="authPassword" type="password" placeholder="Senha"><button class="btn primary" id="authLogin">Entrar</button><button class="auth-forgot" id="authForgot" type="button">Esqueci minha senha</button><div class="auth-error" id="authError"></div></div></div><div class="sync-bar" id="syncBar"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Conectando...</span><span id="syncDetail"></span><button class="btn sm" id="syncNow">Atualizar</button></div>`);
+  document.body.insertAdjacentHTML('beforeend',`<div class="auth-overlay open" id="authOverlay"><div class="auth-box auth-card"><h2>Acesso ao relacionamento</h2><p>Entre com seu email e senha para acessar a carteira.</p><input class="auth-input" id="authEmail" type="email" placeholder="Email"><input class="auth-input" id="authPassword" type="password" placeholder="Senha"><button class="btn primary auth-submit" id="authLogin">Entrar</button><button class="auth-forgot" id="authForgot" type="button">Esqueci minha senha</button><div class="auth-error" id="authError"></div></div></div><div class="sync-bar" id="syncBar"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">Conectando...</span><span id="syncDetail"></span><button class="btn sm" id="syncNow">Atualizar</button></div>`);
+  const authBox=document.querySelector('#authOverlay .auth-box');
+  const pageLogo=document.querySelector('.ob-logo');
+  if(authBox&&pageLogo){const authLogo=document.createElement('img');authLogo.className='auth-logo';authLogo.alt='Oliveira & Benedet';authLogo.src=pageLogo.src;authBox.prepend(authLogo);}
   document.getElementById('authLogin').addEventListener('click',login);
   document.getElementById('authPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
   document.getElementById('authForgot').addEventListener('click',forgotPassword);
