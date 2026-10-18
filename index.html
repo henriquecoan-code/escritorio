@@ -6,7 +6,6 @@
 <meta name="robots" content="noindex, nofollow">
 <script src="scripts/auth-hint.js"></script>
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' https: data: blob:; img-src 'self' https: data: blob:; style-src 'self' 'unsafe-inline' https:; script-src 'self' https: 'sha256-vvt4KWwuNr51XfE5m+hzeNEGhiOfZzG97ccfqGsPwvE='; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.gstatic.com https://*.firebaseapp.com; font-src 'self' https: data:;">
-<meta http-equiv="X-Frame-Options" content="DENY">
 <meta http-equiv="X-Content-Type-Options" content="nosniff">
 <title>Oliveira &amp; Benedet &#8212; Painel Inicial</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,7 +19,7 @@
 
 <main id="home-panel" class="home-panel">
     <header class="home-head">
-        <a class="home-logo-link" href="index.html" aria-label="Voltar ao painel inicial"><img id="home-logo" class="home-logo" alt="Oliveira &amp; Benedet"></a>
+        <a class="home-logo-link" href="index.html" aria-label="Voltar ao painel inicial"><img src="assets/logo.png" id="home-logo" class="home-logo" alt="Oliveira &amp; Benedet"></a>
         <div class="home-head-right">
             <span class="home-footer">Acesso interno</span>
             <span class="home-session"><span id="home-auth-user"></span><button class="auth-forgot" id="home-auth-logout" type="button" hidden>Sair</button></span>
@@ -54,7 +53,7 @@
 
 <div class="home-auth-overlay auth-overlay open" id="home-auth-overlay">
     <div class="home-auth-box auth-card">
-        <img class="home-auth-logo auth-logo" id="home-auth-logo" alt="Oliveira &amp; Benedet">
+        <img src="assets/logo.png" class="home-auth-logo auth-logo" id="home-auth-logo" alt="Oliveira &amp; Benedet">
         <div class="auth-title">Acesso ao Painel Inicial</div>
         <div class="auth-sub">Entre com email e senha para continuar.</div>
         <form id="home-auth-form">
@@ -70,7 +69,7 @@
 <div id="app" class="route-hidden" style="opacity:1;transition:opacity .5s ease .1s">
 
     <header class="hd">
-        <a class="hd-logo-link" href="index.html" aria-label="Voltar ao painel inicial"><img id="hd-logo" class="hd-logo" alt="Oliveira &amp; Benedet"></a>
+        <a class="hd-logo-link" href="index.html" aria-label="Voltar ao painel inicial"><img src="assets/logo.png" id="hd-logo" class="hd-logo" alt="Oliveira &amp; Benedet"></a>
         <div class="hd-right">
             <div class="chip" id="period-chip">2026</div>
             <span id="ts"></span>
@@ -229,7 +228,7 @@
 
 <div class="auth-overlay" id="auth-overlay">
     <div class="auth-box home-auth-box auth-card">
-        <img class="home-auth-logo auth-logo" id="auth-logo" alt="Oliveira &amp; Benedet">
+        <img src="assets/logo.png" class="home-auth-logo auth-logo" id="auth-logo" alt="Oliveira &amp; Benedet">
         <div class="auth-title">Acesso ao Dashboard</div>
         <div class="auth-sub">Entre com email e senha para continuar.</div>
         <form id="auth-form">
