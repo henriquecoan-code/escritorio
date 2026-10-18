@@ -14,7 +14,7 @@
 <body>
 <main class="admin-shell">
   <header class="admin-head">
-    <a class="admin-brand" href="index.html" aria-label="Voltar ao painel inicial"><img class="admin-logo" id="admin-logo" alt="Oliveira &amp; Benedet"></a>
+    <a class="admin-brand" href="index.html" aria-label="Voltar ao painel inicial"><img src="assets/logo.png" class="admin-logo" id="admin-logo" alt="Oliveira &amp; Benedet"></a>
     <div class="admin-session"><span id="admin-user"></span><button class="admin-link" id="admin-logout" type="button" hidden>Sair</button></div>
   </header>
 
@@ -34,7 +34,7 @@
       <div class="panel-head"><div><p class="eyebrow">Preferências</p><h2 id="editor-title">Novo usuário</h2></div></div>
       <form id="user-form">
         <input id="user-email" type="email" placeholder="Email do usuário (ex: usuario@escritorio.com)" required>
-        <input id="user-password" type="password" placeholder="Senha inicial (mínimo 6 caracteres)" minlength="6" autocomplete="new-password">
+        <input id="user-password" type="password" placeholder="Senha inicial (mínimo 8 caracteres)" minlength="8" autocomplete="new-password">
         <input id="user-name" type="text" placeholder="Nome de exibição" maxlength="80">
         <label class="toggle-row"><input id="user-active" type="checkbox" checked><span>Usuário ativo</span></label>
         <fieldset><legend>Painéis permitidos</legend>
@@ -51,7 +51,7 @@
 
 <div class="admin-auth-overlay auth-overlay open" id="admin-auth-overlay">
   <div class="admin-auth-box auth-card">
-    <img class="auth-logo" id="admin-auth-logo" alt="Oliveira &amp; Benedet">
+    <img src="assets/logo.png" class="auth-logo" id="admin-auth-logo" alt="Oliveira &amp; Benedet">
     <div class="auth-title">Acesso à Administração</div>
     <div class="auth-sub">Entre com email e senha para continuar.</div>
     <form id="admin-auth-form">

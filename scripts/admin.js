@@ -8,17 +8,6 @@ let secondaryAuthApp=null;
 let users=[];
 
 const byId=id=>document.getElementById(id);
-async function loadBrandLogo(){
-  try{
-    const response=await fetch('scripts/dashboard.js');
-    if(!response.ok)return;
-    const match=(await response.text()).match(/const LOGO_B64\s*=\s*'([^']+)'/);
-    if(match){
-      byId('admin-logo').src=match[1];
-      byId('admin-auth-logo').src=match[1];
-    }
-  }catch(error){console.warn('Não foi possível carregar o logo.',error);}
-}
 function setStatus(message,type=''){const el=byId('admin-status');el.textContent=message;el.className=`admin-status ${type}`;}
 function authMessage(error){
   if(error?.code==='auth/invalid-credential')return 'Email ou senha incorretos.';
@@ -46,7 +35,7 @@ function openEditor(email=''){
   byId('user-email').value=user.email||email;byId('user-email').readOnly=!!email;
   byId('user-password').value='';
   byId('user-password').required=!email;
-  byId('user-password').placeholder=email?'Nova senha (deixe vazio para manter)':'Senha inicial (mínimo 6 caracteres)';
+  byId('user-password').placeholder=email?'Nova senha (deixe vazio para manter)':'Senha inicial (mínimo 8 caracteres)';
   byId('delete-user').disabled=!email;
   byId('user-name').value=user.displayName||'';byId('user-active').checked=user.active!==false;
   byId('access-dashboard').checked=!!user.panels?.dashboard;byId('access-financeiro').checked=!!user.panels?.financeiro;byId('access-relacionamento').checked=!!user.panels?.relacionamento;byId('access-admin').checked=!!user.panels?.admin;
@@ -91,7 +80,7 @@ async function saveUser(event){
   if(!email){setStatus('Informe o email do usuário.','error');return;}
   const password=byId('user-password').value;
   const isNew=!byId('user-email').readOnly;
-  if(isNew&&password.length<6){setStatus('Informe uma senha inicial com pelo menos 6 caracteres.','error');return;}
+  if(isNew&&password.length<8){setStatus('Informe uma senha inicial com pelo menos 8 caracteres.','error');return;}
   const data={email:email,displayName:byId('user-name').value.trim(),active:byId('user-active').checked,panels:{dashboard:byId('access-dashboard').checked,financeiro:byId('access-financeiro').checked,relacionamento:byId('access-relacionamento').checked,admin:byId('access-admin').checked},updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
   try{
     if(isNew)data.uid=await createAuthUser(email,password);
@@ -99,7 +88,7 @@ async function saveUser(event){
     closeEditor();await loadUsers();setStatus(isNew?'Usuário criado. Ele já pode entrar com o email e a senha informados.':'Acesso salvo.','ok');
   }catch(error){
     console.error(error);
-    const message=error?.code==='auth/email-already-in-use'?'Este email já possui uma conta no Firebase Authentication. Use outro email ou edite o acesso existente.':error?.code==='auth/weak-password'?'A senha precisa ter pelo menos 6 caracteres.':'Não foi possível criar o usuário e salvar este acesso.';
+    const message=error?.code==='auth/email-already-in-use'?'Este email já possui uma conta no Firebase Authentication. Use outro email ou edite o acesso existente.':error?.code==='auth/weak-password'?'A senha precisa ter pelo menos 8 caracteres.':'Não foi possível criar o usuário e salvar este acesso.';
     setStatus(message,'error');
   }
 }
@@ -163,5 +152,4 @@ function startAdmin(){
     }
   });
 }
-loadBrandLogo();
 if(typeof firebase==='undefined'||!window.OB_FIREBASE_CONFIG){setAuthOpen(true);setAuthError('Firebase não está configurado.');}else{startAdmin();}
