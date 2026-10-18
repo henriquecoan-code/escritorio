@@ -50,7 +50,7 @@
       try{await auth.sendPasswordResetEmail(email);showError('Enviamos um link de recuperação para seu email.');}
       catch(error){showError(authError(error));}
     });
-    logoutBtn.addEventListener('click',()=>auth.signOut());
+    logoutBtn.addEventListener('click',async()=>{await auth.signOut();await window.OBFirestoreCache?.clearAndReload(firebase.firestore(app));});
     auth.onAuthStateChanged(async user=>{
       const signedIn=!!user;
       setLocked(!signedIn);

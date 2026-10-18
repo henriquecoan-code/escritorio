@@ -108,7 +108,7 @@ function startAdmin(){
   adminAuth=firebase.auth(app);adminDb=firebase.firestore(app);
   byId('admin-auth-form').addEventListener('submit',async event=>{event.preventDefault();setAuthError('');try{await adminAuth.signInWithEmailAndPassword(byId('admin-auth-email').value.trim(),byId('admin-auth-password').value);}catch(error){setAuthError(authMessage(error));}});
   byId('admin-auth-forgot').addEventListener('click',async()=>{try{await adminAuth.sendPasswordResetEmail(byId('admin-auth-email').value.trim());setAuthError('Enviamos um link de recuperação para seu email.');}catch(error){setAuthError(authMessage(error));}});
-  byId('admin-logout').addEventListener('click',()=>adminAuth.signOut());
+  byId('admin-logout').addEventListener('click',async()=>{await adminAuth.signOut();await window.OBFirestoreCache?.clearAndReload(adminDb);});
   byId('new-user').addEventListener('click',()=>openEditor());byId('delete-user').addEventListener('click',deleteUser);byId('cancel-user').addEventListener('click',closeEditor);byId('user-form').addEventListener('submit',saveUser);
   adminAuth.onAuthStateChanged(async user=>{
     adminUser=user||null;byId('admin-user').textContent=user?.email||'';byId('admin-logout').hidden=!user;
