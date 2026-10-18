@@ -85,3 +85,8 @@
 .password-eye:hover,.password-eye:focus-visible{color:var(--g,#C9A84C);}
 .password-eye:focus-visible{outline:1px solid currentColor;outline-offset:2px;border-radius:4px;}
 .password-eye.is-visible .eye-slash{opacity:1;}
+
+/* Sessão provável (scripts/auth-hint.js): esconde o login até o Firebase confirmar */
+.auth-pending .auth-overlay,
+.auth-pending .home-auth-overlay,
+.auth-pending .admin-auth-overlay{display:none !important;}

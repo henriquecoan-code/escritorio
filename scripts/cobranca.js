@@ -45,7 +45,7 @@ function createFirebaseUI(){
   document.getElementById('authLogin').addEventListener('click',login);
   document.getElementById('authPassword').addEventListener('keydown',function(e){if(e.key==='Enter')login();});
   document.getElementById('authForgot').addEventListener('click',forgotPassword);
-  document.getElementById('syncNow').addEventListener('click',loadFromFirebase);
+  document.getElementById('syncNow').addEventListener('click',syncNow);
   document.getElementById('authLogout').addEventListener('click',logout);
 }
 function setSync(state,label,detail){
@@ -87,7 +87,8 @@ async function forgotPassword(){
 }
 async function logout(){
   if(!fbAuth)return;
-  try{await fbAuth.signOut();}catch(e){toast('Não foi possível sair da conta','err');}
+  try{await fbAuth.signOut();}catch(e){toast('Não foi possível sair da conta','err');return;}
+  if(window.OBFirestoreCache)await window.OBFirestoreCache.clearAndReload(fbDb);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -195,24 +196,10 @@ function syncErrorDetail(error){
   return 'Não foi possível sincronizar. Verifique sua conexão e tente novamente.';
 }
 
-async function loadFromFirebase(){
+// Reabre os listeners em vez de reler as coleções: com cache local, só o que mudou é cobrado.
+function syncNow(){
   if(!currentUser)return;
-  setSync('loading','Carregando Firebase...');
-  try{
-    var promises=DATA_KEYS.map(function(k){return fbDb.collection(COLLECTIONS[k]).get();});
-    promises.push(fbDb.collection('meta').doc(CONFIG_DOC).get());
-    var results=await Promise.all(promises);
-    var configSnap=results[results.length-1];
-    var hasRemote=configSnap.exists;
-    DATA_KEYS.forEach(function(k,i){if(!results[i].empty)hasRemote=true;});
-    if(hasRemote){
-      DATA_KEYS.forEach(function(k,i){S[k]=results[i].docs.map(function(d){return d.data();});});
-      S.config=Object.assign({},structuredClone(DEF.config),(configSnap.exists?configSnap.data():{}));
-    }
-    applyQueuedOperations();
-    firebaseReady=true;renderAll();setSync('ok','Tempo real',syncSummary());
-    await retryQueuedOperations();
-  }catch(e){console.error(e);setSync('error','Erro no Firebase',syncErrorDetail(e));toast(syncErrorDetail(e),'err');}
+  startRealtime();
 }
 
 async function startRealtime(){
@@ -240,11 +227,13 @@ function initFirebase(){
   try{
     var app=firebase.apps.length?firebase.app():firebase.initializeApp(FIREBASE_CFG);
     fbDb=firebase.firestore(app);fbAuth=firebase.auth(app);
+    if(window.OBFirestoreCache)window.OBFirestoreCache.enable(fbDb);
     fbAuth.onAuthStateChanged(function(user){
       currentUser=user||null;
       refreshAuthUI();
       if(currentUser){firebaseReady=true;setAuth(false);startRealtime();}
       else{firebaseReady=false;Object.keys(unsub).forEach(function(k){if(unsub[k])unsub[k]();});unsub={};setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
+      if(window.OBAuthHint)window.OBAuthHint.update(user);
     });
   }catch(e){console.error(e);setSync('error','Erro ao iniciar Firebase');setAuth(true,'Não foi possível iniciar o Firebase.');}
 }

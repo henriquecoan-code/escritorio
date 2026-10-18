@@ -73,7 +73,7 @@ function createFirebaseUI(){
   document.getElementById('authLogin').addEventListener('click',login);
   document.getElementById('authPassword').addEventListener('keydown',e=>{if(e.key==='Enter')login();});
   document.getElementById('authForgot').addEventListener('click',forgotPassword);
-  document.getElementById('syncNow').addEventListener('click',loadFromFirebase);
+  document.getElementById('syncNow').addEventListener('click',syncNow);
   document.getElementById('authLogout').addEventListener('click',logout);
 }
 
@@ -124,7 +124,8 @@ async function forgotPassword(){
 async function logout(){
   if(!fbAuth)return;
   try{await fbAuth.signOut();}
-  catch(e){toast('Não foi possível sair da conta');}
+  catch(e){toast('Não foi possível sair da conta');return;}
+  await window.OBFirestoreCache?.clearAndReload(fbDb);
 }
 
 function openOutbox(){
@@ -237,25 +238,10 @@ function syncErrorDetail(error){
   return 'Não foi possível sincronizar. Verifique sua conexão e tente novamente.';
 }
 
-async function loadFromFirebase(){
+// Reabre os listeners em vez de reler as coleções: com cache local, só o que mudou é cobrado.
+function syncNow(){
   if(!currentUser)return;
-  setSync('loading','Carregando Firebase...');
-  try{
-    const [clientesSnap,interacoesSnap,configSnap]=await Promise.all([
-      fbDb.collection(CLIENTES_COLLECTION).get(),
-      fbDb.collection(INTERACOES_COLLECTION).get(),
-      fbDb.collection('meta').doc(CONFIG_DOC).get()
-    ]);
-    const hasRemote=!clientesSnap.empty||!interacoesSnap.empty||configSnap.exists;
-    if(hasRemote){
-      db.clientes=clientesSnap.docs.map(d=>d.data());
-      db.interacoes=interacoesSnap.docs.map(d=>d.data());
-      db.config=normalizeConfig(configSnap.exists?configSnap.data():{});
-    }
-    applyQueuedOperations();
-    firebaseReady=true;renderAll();setSync('ok','Tempo real',`${db.clientes.length} clientes · ${db.interacoes.length} interações`);
-    await retryQueuedOperations();
-  }catch(e){console.error(e);setSync('error','Erro no Firebase',syncErrorDetail(e));toast(syncErrorDetail(e));}
+  startRealtime();
 }
 
 async function startRealtime(){
@@ -278,11 +264,13 @@ function initFirebase(){
   try{
     const app=firebase.apps.length?firebase.app():firebase.initializeApp(FIREBASE_CFG);
     fbDb=firebase.firestore(app);fbAuth=firebase.auth(app);
+    window.OBFirestoreCache?.enable(fbDb);
     fbAuth.onAuthStateChanged(user=>{
       currentUser=user||null;
       refreshAuthUI();
       if(currentUser){firebaseReady=true;setAuth(false);startRealtime();}
       else{firebaseReady=false;[unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
+      window.OBAuthHint?.update(user);
     });
   }catch(e){console.error(e);setSync('error','Erro ao iniciar Firebase');setAuth(true,'Não foi possível iniciar o Firebase.');}
 }
