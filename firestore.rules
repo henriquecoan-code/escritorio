@@ -53,7 +53,7 @@ service cloud.firestore {
     match /contratos/{docId} {
       allow read:   if canAccess('dashboard');
       allow create: if canAccess('dashboard') && validContrato(request.resource.data);
-      allow update: if canAccess('dashboard');
+      allow update: if canAccess('dashboard') && validContrato(request.resource.data);
       allow delete: if canAccess('dashboard');
     }
 

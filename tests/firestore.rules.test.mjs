@@ -132,6 +132,37 @@ describe('Firestore Rules - dashboard', () => {
     );
   });
 
+  it('nega update com campo nao permitido', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'contratos', 'upd-bad'), {
+        uid: 'upd-bad',
+        cliente: 'Original',
+      });
+    });
+
+    const userDb = authCtx('user-3');
+    await assertFails(
+      updateDoc(doc(userDb, 'contratos', 'upd-bad'), { campoProibido: 'valor' })
+    );
+  });
+
+  it('permite regravar contrato inteiro com set ao editar', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'contratos', 'upd-set'), {
+        uid: 'upd-set',
+        cliente: 'Original',
+      });
+    });
+
+    const userDb = authCtx('user-3');
+    await assertSucceeds(
+      setDoc(doc(userDb, 'contratos', 'upd-set'), {
+        uid: 'upd-set', cliente: 'Editado', etapa: 2, docsPendentes: [],
+        dtChegada: '01/10/2026', createdAt: Date.now(), updatedAt: Date.now(),
+      })
+    );
+  });
+
   it('nega update para usuario anonimo', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'contratos', 'upd-anon'), {
