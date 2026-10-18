@@ -905,6 +905,7 @@ function init(){
         setSyncStatus('err','Login necessario','Entre com email e senha para carregar os dados');
         setAuthOverlay(true);
       }
+      window.OBAuthHint?.update(user);
     });
     return;
   }

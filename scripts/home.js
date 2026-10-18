@@ -54,6 +54,7 @@
     auth.onAuthStateChanged(async user=>{
       const signedIn=!!user;
       setLocked(!signedIn);
+      window.OBAuthHint?.update(user);
       userEl.textContent=signedIn?(user.email||'Usuário autenticado'):'';
       logoutBtn.hidden=!signedIn;
       const adminLink=document.getElementById('home-admin-link');

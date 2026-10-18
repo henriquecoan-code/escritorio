@@ -270,6 +270,7 @@ function initFirebase(){
       refreshAuthUI();
       if(currentUser){firebaseReady=true;setAuth(false);startRealtime();}
       else{firebaseReady=false;[unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
+      window.OBAuthHint?.update(user);
     });
   }catch(e){console.error(e);setSync('error','Erro ao iniciar Firebase');setAuth(true,'Não foi possível iniciar o Firebase.');}
 }

@@ -117,8 +117,12 @@ function startAdmin(){
       renderUsers();
       closeEditor();
       setAuthOpen(true);
+      window.OBAuthHint?.update(null);
       return;
     }
+    // Logado: fecha o login já; a checagem de proprietário abaixo mostra o resultado na página.
+    setAuthOpen(false);
+    window.OBAuthHint?.update(user);
     const currentUserEmail=(user.email||'').toLowerCase().trim();
     const denyOwner=()=>{
       users=[];
