@@ -1,0 +1,22 @@
+# GitHub Pages (Jekyll): arquivos internos que ficam no repositório mas não são publicados.
+exclude:
+  - README.md
+  - HISTORICO_MELHORIAS.md
+  - REGRAS_CARDS_TEMPO.md
+  - TESTE_MANUAL_15MIN.md
+  - firestore.rules
+  - firebase.json
+  - package.json
+  - package-lock.json
+  - playwright.config.js
+  - tests
+  - scripts/import-firestore.html
+  - scripts/firestore-backup.mjs
+  - scripts/install-git-hooks.mjs
+  - scripts/run-smoke-local.mjs
+  - scripts/serve.mjs
+  - scripts/restore-firestore-backup.ps1
+  - node_modules
+  - playwright-report
+  - test-results
+  - firestore-debug.log

@@ -73,7 +73,8 @@ async function createAuthUser(email,password){
   }
   const secondaryAuth=firebase.auth(secondaryAuthApp);
   try{
-    await secondaryAuth.createUserWithEmailAndPassword(email,password);
+    const credential=await secondaryAuth.createUserWithEmailAndPassword(email,password);
+    return credential.user.uid;
   }finally{
     await secondaryAuth.signOut().catch(()=>{});
   }
@@ -93,7 +94,7 @@ async function saveUser(event){
   if(isNew&&password.length<6){setStatus('Informe uma senha inicial com pelo menos 6 caracteres.','error');return;}
   const data={email:email,displayName:byId('user-name').value.trim(),active:byId('user-active').checked,panels:{dashboard:byId('access-dashboard').checked,financeiro:byId('access-financeiro').checked,relacionamento:byId('access-relacionamento').checked,admin:byId('access-admin').checked},updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
   try{
-    if(isNew)await createAuthUser(email,password);
+    if(isNew)data.uid=await createAuthUser(email,password);
     await adminDb.collection(ADMIN_USERS_COLLECTION).doc(email).set(data,{merge:true});
     closeEditor();await loadUsers();setStatus(isNew?'Usuário criado. Ele já pode entrar com o email e a senha informados.':'Acesso salvo.','ok');
   }catch(error){
@@ -118,8 +119,20 @@ function startAdmin(){
       setAuthOpen(true);
       return;
     }
+    const currentUserEmail=(user.email||'').toLowerCase().trim();
+    const denyOwner=()=>{
+      users=[];
+      renderUsers();
+      closeEditor();
+      setAuthOpen(false);
+      setStatus(`A conta logada (${currentUserEmail}) não possui permissão de proprietário. Verifique se o e-mail está em meta/security -> adminEmails.`,'error');
+      byId('new-user').disabled=true;
+    };
     try{
-      const security=await adminDb.collection('meta').doc(ADMIN_SECURITY_DOC).get();
+      // meta/security só é legível por proprietários; para os demais a leitura é negada.
+      let security;
+      try{security=await adminDb.collection('meta').doc(ADMIN_SECURITY_DOC).get();}
+      catch(error){if(error?.code==='permission-denied'){denyOwner();return;}throw error;}
       const securityData=security.data()||{};
       const adminUids=Array.isArray(securityData.adminUids)?securityData.adminUids:[];
       let adminEmails=[];
@@ -128,17 +141,8 @@ function startAdmin(){
       }else if(typeof securityData.adminEmails==='string'){
         adminEmails=[securityData.adminEmails.toLowerCase().trim()];
       }
-      const currentUserEmail=(user.email||'').toLowerCase().trim();
       const isOwner=adminUids.includes(user.uid)||(currentUserEmail&&adminEmails.includes(currentUserEmail));
-      if(!isOwner){
-        users=[];
-        renderUsers();
-        closeEditor();
-        setAuthOpen(false);
-        setStatus(`A conta logada (${currentUserEmail}) não possui permissão de proprietário. Verifique se o e-mail está em meta/security -> adminEmails.`,'error');
-        byId('new-user').disabled=true;
-        return;
-      }
+      if(!isOwner){denyOwner();return;}
       byId('new-user').disabled=false;
       setAuthOpen(false);
       try{

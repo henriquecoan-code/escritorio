@@ -85,7 +85,7 @@ http://localhost:8000/OB_Dashboard_Rede.html
 A área de Cobrança e Gestão Financeira fica disponível em:
 
 ```text
-http://localhost:8000/Financeiro.html
+http://localhost:8000/financeiro.html
 ```
 
 Ela exige o mesmo login do Firebase e usa as coleções de cobrança (`cobranca_propria_vista`, `cobranca_propria_parc`, `cobranca_clientes_vista`, `cobranca_clientes_parc`, `cobranca_acordos`, `cobranca_judicial` e `meta/cobranca_config`).
@@ -97,6 +97,10 @@ http://localhost:8000/relacionamento.html
 ```
 
 A área de administração do proprietário fica disponível em `admin.html`. Depois de entrar como proprietário, use **Novo usuário** para informar email, senha inicial, nome e painéis permitidos. O formulário cria a conta no Firebase Authentication e o perfil correspondente em `admin_users`, identificado por e-mail, com os painéis em `panels.dashboard`, `panels.financeiro`, `panels.relacionamento` e `panels.admin`. Para liberar o primeiro proprietário, configure seu e-mail em `meta/security.adminEmails` (ou seu UID em `meta/security.adminUids`) no Firebase Console.
+
+Usuários criados por **Novo usuário** têm o `uid` da conta gravado no perfil; as regras só aceitam o acesso vindo dessa conta. Perfis antigos, sem `uid`, continuam valendo pelo e-mail. O documento `meta/security` só pode ser lido por proprietários.
+
+Arquivos internos (documentação, regras, testes, ferramentas de importação/backup) ficam no repositório mas não são publicados no GitHub Pages — veja `exclude` em `_config.yml`.
 
 Ao editar um usuário, o campo de senha pode ficar vazio para manter a senha atual. O botão **Excluir usuário** remove o perfil de acesso em `admin_users`, bloqueando o acesso aos painéis; a conta correspondente do Firebase Authentication deve ser removida pelo Console ou por uma função administrativa quando necessário.
 
@@ -126,11 +130,11 @@ Os dados são mantidos exclusivamente no Firestore:
 
 O `localStorage` não é usado para clientes, interações ou configurações. O backup manual é feito por JSON dentro da própria página. A restauração mostra a quantidade de registros, pede confirmação e envia os dados em lotes de até 450 operações, com indicação de progresso.
 
-## Módulo de Gestão de Cobrança (`Financeiro.html` — branch `cobranca`)
+## Módulo de Gestão de Cobrança (`financeiro.html` — branch `cobranca`)
 
 A página de controle financeiro e gestão de cobranças atua sobre a Carteira Própria, Clientes Externos (Honorários O&B), Acordos de Lojas e Títulos Judiciais:
 
-- `Financeiro.html`: estrutura do dashboard financeiro e modais de lançamento.
+- `financeiro.html`: estrutura do dashboard financeiro e modais de lançamento.
 - `scripts/cobranca.js`: lógica de negócio, sincronização em tempo real de parcelas, cálculos de juros/correção e persistência no Firebase.
 - `styles/cobranca.css`: estilização responsiva do painel e modais do módulo financeiro.
 
