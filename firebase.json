@@ -6,9 +6,21 @@
     "public": ".",
     "ignore": [
       "firebase.json",
+      "firestore.rules",
+      "package.json",
+      "package-lock.json",
+      "playwright.config.js",
+      "_config.yml",
       "**/.*",
       "**/node_modules/**",
-      "*.md"
+      "*.md",
+      "*.log",
+      "tests/**",
+      "playwright-report/**",
+      "test-results/**",
+      "scripts/import-firestore.html",
+      "scripts/*.mjs",
+      "scripts/*.ps1"
     ]
   }
 }

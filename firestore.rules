@@ -26,11 +26,17 @@ service cloud.firestore {
         );
     }
 
+    // Perfis criados pelo admin guardam o uid da conta; perfis antigos sem uid seguem valendo pelo email.
+    function profileOwnedByCaller(profile) {
+      return !('uid' in profile) || profile.uid == request.auth.uid;
+    }
+
     function canAccess(panel) {
       return isAdmin()
         || (signedIn()
           && userEmail() != ''
           && exists(/databases/$(database)/documents/admin_users/$(userEmail()))
+          && profileOwnedByCaller(get(/databases/$(database)/documents/admin_users/$(userEmail())).data)
           && get(/databases/$(database)/documents/admin_users/$(userEmail())).data.active == true
           && get(/databases/$(database)/documents/admin_users/$(userEmail())).data.panels[panel] == true);
     }
@@ -96,7 +102,7 @@ service cloud.firestore {
     }
 
     match /meta/security {
-      allow read: if signedIn();
+      allow read: if isAdmin();
       allow write: if isAdmin();
     }
 

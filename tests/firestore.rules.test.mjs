@@ -188,6 +188,42 @@ describe('Firestore Rules - dashboard', () => {
     await assertFails(getDoc(doc(anonDb, 'meta', 'security')));
   });
 
+  it('nega leitura de meta/security para usuario comum', async () => {
+    const userDb = authCtx('user-1');
+    await assertFails(getDoc(doc(userDb, 'meta', 'security')));
+  });
+
+  // ── Perfil vinculado ao uid ──────────────────────────────────
+  it('permite acesso quando o uid do perfil confere', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'admin_users', 'bound@example.com'), {
+        email: 'bound@example.com',
+        uid: 'bound-user',
+        active: true,
+        panels: { dashboard: true },
+      });
+      await setDoc(doc(ctx.firestore(), 'contratos', 'bound-seed'), { uid: 'bound-seed', cliente: 'X' });
+    });
+
+    const userDb = authCtx('bound-user', 'bound@example.com');
+    await assertSucceeds(getDoc(doc(userDb, 'contratos', 'bound-seed')));
+  });
+
+  it('nega acesso a outra conta com o mesmo email do perfil', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'admin_users', 'bound@example.com'), {
+        email: 'bound@example.com',
+        uid: 'bound-user',
+        active: true,
+        panels: { dashboard: true },
+      });
+      await setDoc(doc(ctx.firestore(), 'contratos', 'bound-seed'), { uid: 'bound-seed', cliente: 'X' });
+    });
+
+    const intruderDb = authCtx('intruder', 'bound@example.com');
+    await assertFails(getDoc(doc(intruderDb, 'contratos', 'bound-seed')));
+  });
+
   it('protege os dados de relacionamento', async () => {
     const anonDb = testEnv.unauthenticatedContext().firestore();
     const userDb = authCtx('relationship-user', 'relationship-user@example.com');
