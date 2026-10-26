@@ -12,8 +12,8 @@ const COLLECTIONS={
 const CONFIG_DOC='cobranca_config';
 const DATA_KEYS=Object.keys(COLLECTIONS);
 const DEF={
-  config:{nome:'Oliveira & Benedet',honorarios:30,juros:1,correcao:5,
-          advogados:['Sandra','Valdirlei','Liandra','Jaime','Camilla','Matheus']},
+  config:{nome:'Oliveira & Benedet',honorarios:30,juros:1,correcao:5,juros_atraso:2,
+          advogados:['Sandra','Valdirlei','Liandra','Jaime','Camilla','Matheus','Letícia','Larissa']},
   propria_vista:[],
   propria_parc:[],
   clientes_vista:[],
@@ -23,7 +23,7 @@ const DEF={
 };
 const FIREBASE_CFG=window.OB_FIREBASE_CONFIG||null;
 var S=structuredClone(DEF);
-var periodo='dia', curPage='dashboard', opSubCart='propria';
+var periodo='dia', curPage='dashboard', opSubCart='propria', opMainTab='carteiras', opAcordoSub='administrativos';
 var charts={};
 
 var fbDb=null, fbAuth=null, currentUser=null, firebaseReady=false;
@@ -315,7 +315,7 @@ function nav(page, btn){
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   if(btn) btn.classList.add('active');
   document.getElementById('pg-'+page).classList.add('active');
-  var T={dashboard:['Dashboard','Visão geral consolidada'],propria:['Carteira Própria','Lançamentos e controle — à vista e parcelado'],clientes:['Clientes Externos','Cobranças com honorários — à vista e parcelado'],operadora:['Painel da Operadora','Acompanhamento de acordos por devedor'],acordos:['Acordos — Lojas','Renegociações comerciais'],judicial:['Títulos Judiciais','Processos ativos com controle de entradas'],config:['Configurações','Parâmetros do sistema']};
+  var T={dashboard:['Dashboard','Visão geral consolidada'],propria:['Carteira Própria','Lançamentos e controle — à vista e parcelado'],clientes:['Clientes Externos','Cobranças com honorários — à vista e parcelado'],operadora:['Painel da Operadora','Acompanhamento de acordos por devedor'],acordos:['Acordos Administrativos','Acordos extrajudiciais com controle de parcelas'],judicial:['Acordos Judiciais','Acordos em processos com controle de parcelas'],config:['Configurações','Parâmetros do sistema']};
   var t=T[page]||['',''];
   document.getElementById('pg-title').textContent=t[0];
   document.getElementById('pg-sub').textContent=t[1];
@@ -331,7 +331,7 @@ function renderCurrentPage(){
   if(curPage==='dashboard') renderDash();
   if(curPage==='propria'){renderTbl('propria','vista');renderTbl('propria','parcelado');}
   if(curPage==='clientes'){renderTbl('clientes','vista');renderTbl('clientes','parcelado');}
-  if(curPage==='operadora') renderOperadora();
+  if(curPage==='operadora'){if(opMainTab==='acordos')renderOperadoraAcordos();else renderOperadora();}
   if(curPage==='acordos'){renderKpiAcordos();renderAcordos();renderChartAcordos();}
   if(curPage==='judicial'){renderKpiJudicial();renderJudicial();renderChartJudicial();}
   if(curPage==='config') renderConfig();
@@ -362,9 +362,23 @@ function setSub(cart,sub,btn){
 }
 function setOpSub(cart,btn){
   opSubCart=cart;
-  document.querySelectorAll('#pg-operadora .stab').forEach(function(b){b.classList.remove('active');});
+  document.querySelectorAll('#op-panel-carteiras .stab').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active');
   renderOperadora();
+}
+function setOpMainTab(tab,btn){
+  opMainTab=tab;
+  document.querySelectorAll('#op-main-tabs .stab').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  document.getElementById('op-panel-carteiras').style.display=tab==='carteiras'?'':'none';
+  document.getElementById('op-panel-acordos').style.display=tab==='acordos'?'':'none';
+  renderCurrentPage();
+}
+function setOpAcordoSub(sub,btn){
+  opAcordoSub=sub;
+  document.querySelectorAll('#op-panel-acordos .stab').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+  renderOperadoraAcordos();
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -443,6 +457,9 @@ function renderDash(){
     '<div class="fat-card"><div class="fc-label">Receita — carteira própria</div><div class="fc-val">'+R(pRecTot)+'</div><div class="fc-sub">'+pPct+'% do faturamento</div><div class="fc-bar"><div class="fc-fill" style="width:'+pPct+'%;background:var(--teal)"></div></div></div>'+
     '<div class="fat-card"><div class="fc-label">Receita — honorários '+S.config.honorarios+'%</div><div class="fc-val">'+R(cHonTot)+'</div><div class="fc-sub">'+hPct+'% do faturamento</div><div class="fc-bar"><div class="fc-fill" style="width:'+hPct+'%;background:var(--rose)"></div></div></div>';
 
+  document.getElementById('kpi-adm').innerHTML=kpisAcordo('acordos');
+  document.getElementById('kpi-jd').innerHTML=kpisAcordo('judicial');
+
   renderChartDash();
 }
 
@@ -472,6 +489,9 @@ function renderChartDash(){
     return cv+cp;
   });
   mkChart('chartDashH','bar',{labels:labels,datasets:[{label:'Honorários',data:honMes,backgroundColor:'rgba(251,113,133,0.7)',borderRadius:3}]});
+  var adm=serieAcordo(S.acordos,months), jud=serieAcordo(S.judicial,months);
+  mkChart('chartAcordosAdm','bar',{labels:labels,datasets:[{label:'Acordado',data:adm.acordado,backgroundColor:'rgba(245,158,11,0.6)',borderRadius:3},{label:'Recebido',data:adm.recebido,backgroundColor:'rgba(63,185,80,0.8)',borderRadius:3}]});
+  mkChart('chartAcordosJud','bar',{labels:labels,datasets:[{label:'Acordado',data:jud.acordado,backgroundColor:'rgba(188,140,255,0.6)',borderRadius:3},{label:'Recebido',data:jud.recebido,backgroundColor:'rgba(63,185,80,0.8)',borderRadius:3}]});
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -574,30 +594,116 @@ function renderOperadora(){
 }
 
 // ══════════════════════════════════════════════════════════════
-//  ACORDOS / JUDICIAL
+//  ACORDOS — ADMINISTRATIVOS (S.acordos) E JUDICIAIS (S.judicial)
 // ══════════════════════════════════════════════════════════════
-function renderKpiAcordos(){
-  var list=S.acordos;
-  var tot=list.reduce(function(a,r){return a+Number(r.valor_acordado||0);},0);
-  var rec=list.reduce(function(a,r){return a+Number(r.recebido||0);},0);
-  var atr=list.filter(function(r){return r.situacao==='Em atraso'||r.situacao==='Quebrado';}).length;
-  var ati=list.filter(function(r){return r.situacao!=='Cumprido'&&r.situacao!=='Arquivado';}).length;
-  document.getElementById('kpi-ac').innerHTML=kpiHTML('Total acordado',R(tot),'em renegociações','amber','amber')+kpiHTML('Total recebido',R(rec),(tot>0?((rec/tot)*100).toFixed(1):0)+'% recuperado','green','green',tot>0?(rec/tot)*100:0)+kpiHTML('Acordos ativos',ati,'em andamento','blue','blue')+kpiHTML('Em atraso/Quebrado',atr,'atenção requerida','red','red');
+// Registros antigos guardavam "parcelas" como texto e o recebido digitado à mão
+// (ou a lista "pagamentos" no judicial). Eles continuam contando pelo valor antigo
+// até serem reeditados, quando o cronograma de parcelas é gerado.
+var TIPOS_PARCELA=['Normal contrato','Somente honorários','Somente cliente'];
+var FASES_JUD=['Citação','Instrução','Sentença','Recurso','Execução','Acordo','Arquivado'];
+var SIT_ACORDO={acordos:['Ativo','Cumprido','Inadimplente','Cancelado'],judicial:['Ativo','Cumprido','Inadimplente','Arquivado']};
+
+function acParcs(r){return Array.isArray(r.parcelas)?r.parcelas:[];}
+function acValor(r){return Number(r.valor_acordado||r.valor||0);}
+function parcPago(p){return p.sit==='Pago'?Number(p.pago||p.valor||0):0;}
+function acRecebido(r){return acParcs(r).reduce(function(a,p){return a+parcPago(p);},0)+acRecAnterior(r);}
+// Saldo = parcelas ainda em aberto (juros de atraso pagos não abatem as parcelas seguintes)
+function acRecAnterior(r){return Array.isArray(r.parcelas)?Number(r.recebido_anterior||0):Number(r.recebido||0);}
+function acSaldo(r){
+  if(!Array.isArray(r.parcelas)) return Math.max(0,acValor(r)-acRecebido(r));
+  return r.parcelas.reduce(function(a,p){return a+(p.sit==='Pago'?0:Number(p.valor||0));},0);
 }
+function acProx(r){return acParcs(r).find(function(p){return p.sit!=='Pago';})||null;}
+function parcVencida(p){return !!(p&&p.sit!=='Pago'&&diasAtraso(p.venc,p.sit));}
+function acParcAtraso(r){
+  if(!Array.isArray(r.parcelas)) return (r.situacao==='Em atraso'||r.situacao==='Quebrado')?1:0;
+  return r.parcelas.filter(parcVencida).length;
+}
+function acAtivo(r){return ['Cumprido','Arquivado','Cancelado'].indexOf(r.situacao)<0;}
+function acFiltroSit(r,sit){return !sit||(sit==='Em atraso'?acParcAtraso(r)>0:r.situacao===sit);}
+function acBusca(r,busca){
+  if(!busca)return true;
+  var b=busca.toLowerCase();
+  return [r.devedor,r.credor,r.numero,r.documento].some(function(v){return (v||'').toLowerCase().indexOf(b)>=0;});
+}
+
+function gerarParcAcordo(n,vParc,honTotal,honPct,tipo,data1){
+  var parcs=[];
+  for(var i=0;i<n;i++){
+    var d=new Date(data1+'T00:00:00');
+    d.setMonth(d.getMonth()+i);
+    parcs.push({num:i+1,venc:d.toISOString().slice(0,10),valor:Number(vParc)||0,hon_valor:(Number(honTotal)||0)/n,hon_pct:Number(honPct)||0,tipo:tipo||TIPOS_PARCELA[0],sit:'Em aberto',pago:0});
+  }
+  return parcs;
+}
+
+function kpisAcordo(key){
+  var list=S[key]||[], isJud=key==='judicial';
+  var tot=list.reduce(function(a,r){return a+acValor(r);},0);
+  var rec=list.reduce(function(a,r){return a+acRecebido(r);},0);
+  var ati=list.filter(acAtivo).length;
+  var atr=list.reduce(function(a,r){return a+acParcAtraso(r);},0);
+  var pagas=0,totParc=0,vinc=0;
+  list.forEach(function(r){acParcs(r).forEach(function(p){totParc++;if(p.sit==='Pago')pagas++;else if(!parcVencida(p))vinc++;});});
+  var tx=tot>0?(rec/tot)*100:0;
+  return kpiHTML('Total acordado',R(tot),isJud?'valor em acordos judiciais':'valor em acordos adm.',isJud?'purple':'amber')+
+    kpiHTML('Total recebido',R(rec),tx.toFixed(1)+'% recuperado','green','green',tx)+
+    kpiHTML(isJud?'Processos ativos':'Acordos ativos',ati,'em andamento','blue')+
+    kpiHTML('Parcelas em atraso',atr,'atenção requerida','red')+
+    kpiHTML('Parcelas pagas',pagas+'/'+totParc,vinc+' vincendas','teal');
+}
+
+// Valores por mês: acordado pela data de lançamento, recebido pela data de pagamento de cada parcela
+function serieAcordo(list,months){
+  function noMes(ds,o){if(!ds)return false;var d=new Date(String(ds).slice(0,10)+'T00:00:00');return d.getFullYear()===o.y&&d.getMonth()===o.m;}
+  return {
+    acordado:months.map(function(o){return list.filter(function(r){return noMes(r.lancamento,o);}).reduce(function(a,r){return a+acValor(r);},0);}),
+    recebido:months.map(function(o){
+      return list.reduce(function(sum,r){
+        if(!Array.isArray(r.parcelas)){
+          if(Array.isArray(r.pagamentos)) return sum+r.pagamentos.filter(function(p){return noMes(p.data,o);}).reduce(function(a,p){return a+Number(p.valor||0);},0);
+          return sum+(noMes(r.lancamento,o)?Number(r.recebido||0):0);
+        }
+        return sum+r.parcelas.filter(function(p){return p.sit==='Pago'&&noMes(p.data_pgto,o);}).reduce(function(a,p){return a+parcPago(p);},0);
+      },0);
+    })
+  };
+}
+
+function linhaAcordo(key,r){
+  var isJud=key==='judicial';
+  var parcs=acParcs(r), prox=acProx(r);
+  var pagas=parcs.filter(function(p){return p.sit==='Pago';}).length;
+  var atraso=parcVencida(prox)||(!parcs.length&&acParcAtraso(r)>0);
+  var tipo=r.tipo_parcela||TIPOS_PARCELA[0];
+  var tipoCor=tipo==='Somente honorários'?'purple':tipo==='Somente cliente'?'blue':'teal';
+  var proxHtml=prox?'<div style="font-size:11px">'+fD(prox.venc)+'</div>'+(atraso?atrH(diasAtraso(prox.venc,prox.sit)):''):(parcs.length?'<span style="color:var(--green)">Quitado</span>':'<span class="dim">—</span>');
+  return '<tr class="'+(atraso?'row-atraso':'')+'" style="cursor:pointer" onclick="verAcordo(\''+key+'\',\''+r.id+'\')" title="Clique para ver as parcelas">'+
+    (isJud?'<td style="color:var(--purple);font-size:11px;font-weight:600">'+esc(r.numero||'—')+'</td>':'')+
+    '<td><b>'+esc(r.devedor||'—')+'</b>'+(r.credor?'<div style="font-size:10px;color:var(--tx3)">'+esc(r.credor)+'</div>':'')+'</td>'+
+    '<td>'+R(acValor(r))+'</td>'+
+    '<td class="pos">'+R(acRecebido(r))+'</td>'+
+    '<td class="warn">'+R(acSaldo(r))+'</td>'+
+    '<td class="dim">'+(parcs.length?pagas+'/'+parcs.length+'x':esc(typeof r.parcelas==='string'&&r.parcelas?r.parcelas:'—'))+'</td>'+
+    '<td>'+proxHtml+'</td>'+
+    '<td><span class="tag tag-'+tipoCor+'" style="font-size:9px">'+esc(tipo)+'</span></td>'+
+    '<td class="dim">'+Number(r.honorarios||S.config.honorarios)+'%</td>'+
+    (isJud?'<td>'+pillSit(r.fase||'—')+'</td>':'')+
+    '<td>'+pillSit(r.situacao||'Ativo')+'</td>'+
+    '<td class="dim">'+esc(r.responsavel||'—')+'</td>'+
+    '<td onclick="event.stopPropagation()"><button class="row-ab" onclick="editRec(\''+key+'\',\''+r.id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+r.id+'\')">Excluir</button></td>'+
+    '</tr>';
+}
+
+function renderKpiAcordos(){document.getElementById('kpi-ac').innerHTML=kpisAcordo('acordos');}
 function renderAcordos(){
   var bl=(document.getElementById('f-ac-b')||{}).value||'';
   var sl=(document.getElementById('f-ac-s')||{}).value||'';
-  var list=S.acordos.slice();
-  if(bl)list=list.filter(function(r){return (r.devedor||'').toLowerCase().indexOf(bl.toLowerCase())>=0;});
-  if(sl)list=list.filter(function(r){return r.situacao===sl;});
+  var list=S.acordos.filter(function(r){return acBusca(r,bl)&&acFiltroSit(r,sl);});
   document.getElementById('cnt-ac').textContent=list.length+' registro'+(list.length!==1?'s':'');
   var tb=document.getElementById('tb-ac');
-  if(!list.length){tb.innerHTML=EROW(12);return;}
-  tb.innerHTML=list.map(function(r){
-    var id=r.id;
-    var dias=diasAtraso(r.prox_venc,r.situacao);
-    return '<tr><td><b>'+esc(r.devedor)+'</b></td><td class="dim" style="font-size:11px">'+esc(r.documento||'—')+'</td><td class="dim">'+R(r.valor_original)+'</td><td style="color:var(--amber)">'+R(r.valor_acordado)+'</td><td>'+pillSit(r.tipo_pgto==='parcelado'?'Parcelado':'À vista')+'</td><td class="dim">'+esc(r.parcelas||'—')+'</td><td class="pos">'+R(r.recebido)+'</td><td class="dim">'+fD(r.prox_venc)+'</td><td>'+atrH(dias)+'</td><td>'+pillSit(r.situacao)+'</td><td class="dim">'+esc(r.responsavel||'—')+'</td><td><button class="row-ab" onclick="editRec(\'acordos\',\''+id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\'acordos\',\''+id+'\')">Excluir</button></td></tr>';
-  }).join('');
+  if(!list.length){tb.innerHTML=EROW(11);return;}
+  tb.innerHTML=list.map(function(r){return linhaAcordo('acordos',r);}).join('');
 }
 function renderChartAcordos(){
   var months=getMonths(),labels=months.map(function(x){return x.label;});
@@ -606,49 +712,200 @@ function renderChartAcordos(){
   var cntO=JSON.parse(JSON.stringify(baseOpt()));
   cntO.scales.y.ticks.callback=function(v){return v;};
   mkChart('chartAc','bar',{labels:labels,datasets:[{label:'Celebrados',data:cel,backgroundColor:'rgba(245,158,11,0.6)',borderRadius:3},{label:'Cumpridos',data:cum,backgroundColor:'rgba(63,185,80,0.8)',borderRadius:3}]},cntO);
-  mkChart('chartAcV','bar',{labels:labels,datasets:[{label:'Acordado',data:mSum(S.acordos,'valor_acordado',months),backgroundColor:'rgba(245,158,11,0.6)',borderRadius:3},{label:'Recebido',data:mSum(S.acordos,'recebido',months),backgroundColor:'rgba(63,185,80,0.8)',borderRadius:3}]});
+  var s=serieAcordo(S.acordos,months);
+  mkChart('chartAcV','bar',{labels:labels,datasets:[{label:'Acordado',data:s.acordado,backgroundColor:'rgba(245,158,11,0.6)',borderRadius:3},{label:'Recebido',data:s.recebido,backgroundColor:'rgba(63,185,80,0.8)',borderRadius:3}]});
 }
-function renderKpiJudicial(){
-  var list=S.judicial;
-  var tc=list.reduce(function(a,r){return a+Number(r.valor||0);},0);
-  var tr=list.reduce(function(a,r){return a+Number(r.recebido||0);},0);
-  var at=list.filter(function(r){return r.situacao!=='Arquivado';}).length;
-  var ex=list.filter(function(r){return r.fase==='Execução';}).length;
-  document.getElementById('kpi-j').innerHTML=kpiHTML('Carteira judicial',R(tc),'total em processos','purple','purple')+kpiHTML('Total recebido',R(tr),(tc>0?((tr/tc)*100).toFixed(1):0)+'% recuperado','green','green',tc>0?(tr/tc)*100:0)+kpiHTML('Processos ativos',at,'em andamento','blue','blue')+kpiHTML('Em execução',ex,'fase avançada','rose','rose');
-}
+function renderKpiJudicial(){document.getElementById('kpi-j').innerHTML=kpisAcordo('judicial');}
 function renderJudicial(){
   var bl=(document.getElementById('f-jud-b')||{}).value||'';
   var ff=(document.getElementById('f-jud-f')||{}).value||'';
-  var list=S.judicial.slice();
-  if(bl)list=list.filter(function(r){return (r.devedor||'').toLowerCase().indexOf(bl.toLowerCase())>=0||(r.numero||'').indexOf(bl)>=0;});
-  if(ff)list=list.filter(function(r){return r.fase===ff;});
+  var list=S.judicial.filter(function(r){return acBusca(r,bl)&&(!ff||r.fase===ff);});
   document.getElementById('cnt-j').textContent=list.length+' registro'+(list.length!==1?'s':'');
   var tb=document.getElementById('tb-j');
-  if(!list.length){tb.innerHTML=EROW(10);return;}
-  tb.innerHTML=list.map(function(r){
-    var id=r.id,pgts=r.pagamentos||[],ult=pgts.length?pgts[pgts.length-1]:null;
-    return '<tr><td style="color:var(--purple);font-size:11px;font-weight:600">'+esc(r.numero||'—')+'</td><td><b>'+esc(r.devedor)+'</b></td><td>'+R(r.valor)+'</td><td class="pos">'+R(r.recebido)+'</td><td>'+pillSit(r.fase||'—')+'</td><td class="dim">'+fD(r.prox_mov)+'</td><td>'+(ult?'<span style="color:var(--teal)">'+R(ult.valor)+'</span> <span class="dim">'+fD(ult.data)+'</span>':'<span class="dim">—</span>')+'<button class="row-ab" style="margin-left:6px;font-size:10px" onclick="addPgtoJud(\''+id+'\')">+Pgto</button></td><td class="dim">'+esc(r.responsavel||'—')+'</td><td>'+pillSit(r.situacao||'—')+'</td><td><button class="row-ab" onclick="editRec(\'judicial\',\''+id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\'judicial\',\''+id+'\')">Excluir</button></td></tr>';
-  }).join('');
+  if(!list.length){tb.innerHTML=EROW(13);return;}
+  tb.innerHTML=list.map(function(r){return linhaAcordo('judicial',r);}).join('');
 }
 function renderChartJudicial(){
   var months=getMonths(),labels=months.map(function(x){return x.label;});
-  var recMes=months.map(function(o){var t=0;S.judicial.forEach(function(r){(r.pagamentos||[]).forEach(function(p){if(!p.data)return;var d=new Date(p.data);if(d.getFullYear()===o.y&&d.getMonth()===o.m)t+=Number(p.valor||0);});});return t;});
-  mkChart('chartJud','bar',{labels:labels,datasets:[{label:'Recebido',data:recMes,backgroundColor:'rgba(188,140,255,0.7)',borderRadius:3}]});
-  var fases=['Citação','Instrução','Sentença','Recurso','Execução','Acordo','Arquivado'];
-  var fc=fases.map(function(f){return S.judicial.filter(function(r){return r.fase===f;}).length;});
-  mkChart('chartJudF','doughnut',{labels:fases,datasets:[{data:fc,backgroundColor:['rgba(88,166,255,0.8)','rgba(63,185,80,0.8)','rgba(245,158,11,0.8)','rgba(192,122,42,0.8)','rgba(251,113,133,0.8)','rgba(188,140,255,0.8)','rgba(94,94,94,0.5)'],borderColor:'rgba(0,0,0,0.3)',borderWidth:1}]},{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'right',labels:{color:'#9a9590',font:{size:10},boxWidth:8}}}});
+  mkChart('chartJud','bar',{labels:labels,datasets:[{label:'Recebido',data:serieAcordo(S.judicial,months).recebido,backgroundColor:'rgba(188,140,255,0.7)',borderRadius:3}]});
+  var fc=FASES_JUD.map(function(f){return S.judicial.filter(function(r){return r.fase===f;}).length;});
+  mkChart('chartJudF','doughnut',{labels:FASES_JUD,datasets:[{data:fc,backgroundColor:['rgba(88,166,255,0.8)','rgba(63,185,80,0.8)','rgba(245,158,11,0.8)','rgba(192,122,42,0.8)','rgba(251,113,133,0.8)','rgba(188,140,255,0.8)','rgba(94,94,94,0.5)'],borderColor:'rgba(0,0,0,0.3)',borderWidth:1}]},{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,position:'right',labels:{color:'#9a9590',font:{size:10},boxWidth:8}}}});
 }
-async function addPgtoJud(id){
-  var valor=prompt('Valor recebido (R$):');if(!valor||isNaN(parseFloat(valor)))return;
-  var data=prompt('Data (AAAA-MM-DD):')||today();
-  var r=S.judicial.find(function(x){return x.id===id;});
+
+// ── Detalhe do acordo (modal com parcelas) ──
+function verAcordo(key,id){
+  var r=S[key].find(function(x){return x.id===id;});
   if(!r)return;
-  if(!r.pagamentos)r.pagamentos=[];
-  r.pagamentos.push({valor:parseFloat(valor),data:data});
-  r.recebido=(Number(r.recebido)||0)+parseFloat(valor);
-  renderJudicial();renderKpiJudicial();toast('Pagamento registrado: '+R(parseFloat(valor)),'ok');
-  await persistDocuments('judicial',[r]);
+  var isJud=key==='judicial';
+  var hon=Number(r.honorarios||S.config.honorarios);
+  var honCalc=r.hon_calc||acValor(r)*(hon/100);
+  var box=function(t,c){return '<div class="acd-box"><div class="acd-lbl">'+t+'</div>'+c+'</div>';};
+  var html='<div class="modal-title">'+(isJud?'Acordo Judicial — '+esc(r.numero||'s/n'):'Acordo Administrativo — '+esc(r.devedor||''))+'</div>';
+  html+='<div class="acd-grid">';
+  html+=box('Devedor','<div style="font-weight:600">'+esc(r.devedor||'—')+'</div>'+(r.credor?'<div class="acd-sub">Credor: '+esc(r.credor)+'</div>':'')+(r.documento?'<div class="acd-sub">CNPJ/CPF: '+esc(r.documento)+'</div>':''));
+  html+=box('Valores','<div>Acordado: <b style="color:var(--teal)">'+R(acValor(r))+'</b></div><div>Recebido: <b style="color:var(--green)">'+R(acRecebido(r))+'</b></div><div>Saldo: <b style="color:var(--amber)">'+R(acSaldo(r))+'</b></div>');
+  html+=box('Honorários','<div><b style="color:var(--purple)">'+hon+'%</b> = '+R(honCalc)+'</div><div class="acd-sub">'+esc(r.tipo_parcela||TIPOS_PARCELA[0])+'</div>');
+  html+=box(isJud?'Fase / Situação':'Situação','<div>'+(isJud?pillSit(r.fase||'—')+' ':'')+pillSit(r.situacao||'Ativo')+'</div><div class="acd-sub" style="margin-top:4px">Operador: '+esc(r.responsavel||'—')+'</div>');
+  html+='</div>';
+  if(r.obs) html+='<div class="acd-obs">'+esc(r.obs)+'</div>';
+  html+='<div class="modal-sec">Parcelas</div>';
+  var parcs=acParcs(r);
+  if(parcs.length){
+    html+='<div style="overflow:auto;max-height:280px"><table><thead><tr><th>Nº</th><th>Vencimento</th><th>Valor</th><th>Honorários</th><th>Tipo</th><th>Situação</th><th>Pago</th><th></th></tr></thead><tbody>';
+    parcs.forEach(function(p,pi){
+      var atr=parcVencida(p);
+      var opts=TIPOS_PARCELA.map(function(t){return '<option'+((p.tipo||TIPOS_PARCELA[0])===t?' selected':'')+'>'+t+'</option>';}).join('');
+      html+='<tr class="'+(atr?'row-atraso':'')+'"><td class="dim">'+p.num+'ª</td><td class="dim">'+fD(p.venc)+(atr?' '+atrH(diasAtraso(p.venc,p.sit)):'')+'</td><td>'+R(p.valor)+'</td><td style="color:var(--purple)">'+R(p.hon_valor||0)+'</td>'+
+        '<td><select class="input-fi acd-sel" onchange="editTipoParc(\''+key+'\',\''+id+'\','+pi+',this.value)">'+opts+'</select></td>'+
+        '<td>'+pillSit(p.sit||'Em aberto')+'</td>'+
+        '<td class="pos">'+(p.sit==='Pago'?R(p.pago||p.valor)+(p.data_pgto?'<div class="acd-sub">'+fD(p.data_pgto)+'</div>':''):'<span class="dim">—</span>')+'</td>'+
+        '<td>'+(p.sit==='Pago'?'':'<button class="row-ab" onclick="marcarPagoAcordo(\''+key+'\',\''+id+'\','+pi+')">Marcar pago</button>')+'</td></tr>';
+    });
+    html+='</tbody></table></div>';
+  } else {
+    html+='<div class="dim" style="font-size:12px;padding:8px 0">Acordo sem cronograma de parcelas. Clique em Editar e salve para gerar as parcelas.</div>';
+  }
+  html+='<div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Fechar</button><button class="btn btn-teal" onclick="editRec(\''+key+'\',\''+id+'\')">Editar</button></div>';
+  showModalHTML(html);
 }
+async function marcarPagoAcordo(key,id,pi){
+  var r=S[key].find(function(x){return x.id===id;});
+  if(!r||!acParcs(r)[pi])return;
+  var p=r.parcelas[pi];
+  var base=Number(p.valor||0), sugerido=base, juros=0;
+  var dias=diasAtraso(p.venc,p.sit);
+  if(dias){
+    var taxa=Number(S.config.juros_atraso!==undefined?S.config.juros_atraso:2);
+    juros=base*(taxa/100)*Math.ceil(dias/30);
+    if(juros>0&&confirm('Parcela em atraso há '+dias+' dia(s). Aplicar juros de '+taxa+'%/mês?\nJuros: '+R(juros)+' — Total: '+R(base+juros))) sugerido=base+juros;
+    else juros=0;
+  }
+  var v=prompt('Valor recebido (R$):',sugerido.toFixed(2));
+  if(v===null)return;
+  var pago=parseFloat(String(v).replace(',','.'));
+  p.pago=isNaN(pago)?sugerido:pago;
+  p.sit='Pago';
+  p.data_pgto=today();
+  if(juros>0)p.juros_atraso=juros;else delete p.juros_atraso;
+  if(r.parcelas.every(function(x){return x.sit==='Pago';})) r.situacao='Cumprido';
+  renderCurrentPage();
+  toast('Pagamento registrado!','ok');
+  verAcordo(key,id);
+  await persistDocuments(key,[r]);
+}
+async function editTipoParc(key,id,pi,tipo){
+  var r=S[key].find(function(x){return x.id===id;});
+  if(!r||!acParcs(r)[pi])return;
+  r.parcelas[pi].tipo=tipo;
+  await persistDocuments(key,[r]);
+}
+
+// ── Formulário de acordo ──
+function buildFormAcordo(key,r){
+  r=r||{};
+  var isJud=key==='judicial';
+  var cfg=S.config||DEF.config;
+  var parcs=acParcs(r);
+  var nparc=r.nparc||parcs.length||parseInt(r.parcelas)||1;
+  var temPago=parcs.some(function(p){return p.sit==='Pago';});
+  var anterior=acRecAnterior(r);
+  var sits=SIT_ACORDO[key].slice();
+  if(r.situacao&&sits.indexOf(r.situacao)<0) sits.unshift(r.situacao);
+  var inp=function(id,lbl,val,extra,full){return '<div class="ff'+(full?' full':'')+'"><label>'+lbl+'</label><input id="'+id+'" value="'+esc(String(val===undefined||val===null?'':val))+'" '+(extra||'')+'></div>';};
+  var num='type="number" min="0" step="0.01"';
+  var h='';
+  if(isJud){
+    h+='<div class="modal-sec">Processo</div>';
+    h+=inp('f-numero','Nº do processo',r.numero,'',true);
+    h+=inp('f-devedor','Devedor *',r.devedor);
+    h+=inp('f-credor','Credor',r.credor);
+  } else {
+    h+='<div class="modal-sec">Devedor</div>';
+    h+=inp('f-devedor','Loja / Devedor *',r.devedor,'',true);
+    h+=inp('f-documento','CNPJ / CPF',r.documento);
+    h+=inp('f-credor','Credor / Fornecedor',r.credor);
+  }
+  h+='<div class="modal-sec">Valores do acordo</div>';
+  h+=isJud?inp('f-valor-cob','Valor da cobrança (R$)',r.valor_cobranca||(r.valor_acordado?'':r.valor)||'',num):inp('f-valor-orig','Valor original (R$)',r.valor_original||'',num);
+  h+=inp('f-valor-acordado','Valor acordado (R$) *',r.valor_acordado||(isJud?'':r.valor)||'',num+' oninput="recalcAcordo()"');
+  h+=inp('f-nparc','Nº de parcelas',nparc,'type="number" min="1" max="120" oninput="recalcAcordo()"');
+  h+=inp('f-vparc','Valor por parcela (R$)',r.vparc||'',num+' placeholder="Calculado automaticamente"');
+  h+=inp('f-honorarios','Honorários (%)',r.honorarios||cfg.honorarios,'type="number" min="0" max="100" step="0.1" oninput="recalcAcordo()"');
+  h+=inp('f-hon-calc','Honorários calculados (R$)',r.hon_calc||'',num);
+  h+=inp('f-data1','1ª parcela em',r.data1||r.prox_venc||today(),'type="date"');
+  h+='<div class="ff"><label>Tipo de parcela</label><select id="f-tipo-parcela">'+SEL(TIPOS_PARCELA,r.tipo_parcela||TIPOS_PARCELA[0])+'</select></div>';
+  h+='<input type="hidden" id="f-rec-ant" value="'+anterior+'">';
+  if(anterior>0&&!temPago) h+='<div class="ff full acd-sub" style="color:var(--amber)">'+R(anterior)+' já recebido antes do controle por parcelas: as parcelas são geradas sobre o saldo restante.</div>';
+  if(temPago) h+='<div class="ff full acd-sub" style="color:var(--amber)">Este acordo já tem parcelas pagas: alterar valor, nº de parcelas ou datas não refaz o cronograma.</div>';
+  h+='<div class="modal-sec">Controle</div>';
+  if(isJud) h+='<div class="ff"><label>Fase processual</label><select id="f-fase">'+SEL(FASES_JUD,r.fase||'Execução')+'</select></div>';
+  h+='<div class="ff"><label>Operador</label><select id="f-responsavel">'+ADV(r.responsavel)+'</select></div>';
+  h+='<div class="ff"><label>Situação</label><select id="f-situacao">'+SEL(sits,r.situacao||'Ativo')+'</select></div>';
+  h+='<div class="ff full"><label>Observações</label><textarea id="f-obs">'+esc(r.obs||'')+'</textarea></div>';
+  return h;
+}
+function recalcAcordo(){
+  var v=gf('f-valor-acordado'), n=parseInt(gv('f-nparc'))||1;
+  var hon=parseFloat(gv('f-honorarios'));if(isNaN(hon))hon=S.config.honorarios;
+  var hc=document.getElementById('f-hon-calc');
+  if(hc&&hc!==document.activeElement) hc.value=v?(v*hon/100).toFixed(2):'';
+  var vp=document.getElementById('f-vparc');
+  if(vp) vp.placeholder=v?(Math.max(0,v-gf('f-rec-ant'))/n).toFixed(2):'Calculado automaticamente';
+}
+function lerFormAcordo(key,ex){
+  var isJud=key==='judicial';
+  var vAc=gf('f-valor-acordado');
+  var n=Math.max(1,Math.min(120,parseInt(gv('f-nparc'))||1));
+  var anterior=ex?acRecAnterior(ex):0;
+  var vParc=gf('f-vparc')||(Math.max(0,vAc-anterior)/n);
+  var hon=parseFloat(gv('f-honorarios'));if(isNaN(hon))hon=S.config.honorarios;
+  var honCalc=gf('f-hon-calc')||(vAc*hon/100);
+  var data1=gv('f-data1')||today();
+  var tipoParc=gv('f-tipo-parcela')||TIPOS_PARCELA[0];
+  var rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor_acordado:vAc,nparc:n,vparc:vParc,honorarios:hon,hon_calc:honCalc,data1:data1,tipo_parcela:tipoParc,responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex&&ex.lancamento?ex.lancamento:today(),criado_em:ex&&ex.criado_em?ex.criado_em:today()};
+  if(isJud){rec.numero=gv('f-numero').trim();rec.valor_cobranca=gf('f-valor-cob');rec.fase=gv('f-fase');}
+  else{rec.documento=gv('f-documento').trim();rec.valor_original=gf('f-valor-orig');}
+  // Cronograma: gerado no cadastro e refeito na edição só enquanto nenhuma parcela foi paga
+  var exParcs=ex?acParcs(ex):[];
+  var temPago=exParcs.some(function(p){return p.sit==='Pago';});
+  var mudou=!ex||!Array.isArray(ex.parcelas)||['valor_acordado','nparc','vparc','hon_calc','data1','tipo_parcela'].some(function(k){return String(ex[k])!==String(rec[k]);});
+  rec.parcelas=(temPago||!mudou)?exParcs:gerarParcAcordo(n,vParc,honCalc,hon,tipoParc,data1);
+  if(anterior>0) rec.recebido_anterior=anterior;
+  if(ex&&Array.isArray(ex.pagamentos)&&ex.pagamentos.length) rec.pagamentos=ex.pagamentos;
+  return rec;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  PAINEL DA OPERADORA — ACORDOS
+// ══════════════════════════════════════════════════════════════
+function renderOperadoraAcordos(){
+  var grid=document.getElementById('op-ac-grid');
+  if(!grid)return;
+  var busca=(document.getElementById('op-ac-search')||{}).value||'';
+  var sitF=(document.getElementById('op-ac-sit')||{}).value||'';
+  var key=opAcordoSub==='judiciais'?'judicial':'acordos', isJud=key==='judicial';
+  var list=(S[key]||[]).filter(function(r){return acBusca(r,busca)&&acFiltroSit(r,sitF);});
+  if(!list.length){grid.innerHTML='<div style="grid-column:1/-1"><div class="empty"><div class="empty-ic">🤝</div><div class="empty-t">Nenhum acordo encontrado</div><div class="empty-s">Ajuste os filtros ou lance acordos</div></div></div>';return;}
+  var cor=isJud?'var(--purple)':'var(--amber)';
+  grid.innerHTML=list.map(function(r){
+    var parcs=acParcs(r), prox=acProx(r), atraso=parcVencida(prox);
+    var pagas=parcs.filter(function(p){return p.sit==='Pago';}).length;
+    var vAc=acValor(r), vRec=acRecebido(r);
+    var prog=vAc>0?Math.min(100,(vRec/vAc)*100):0;
+    var head='<div class="ac-head"><div><div class="ac-devedor">'+esc(r.devedor||'—')+'</div>'+(isJud&&r.numero?'<div class="ac-credor">Proc.: '+esc(r.numero)+'</div>':'')+(r.credor?'<div class="ac-credor">Credor: '+esc(r.credor)+'</div>':'')+'</div><div style="text-align:right">'+pillSit(r.situacao||'Ativo')+'<div style="font-size:9px;color:var(--tx3);margin-top:3px">'+(isJud?'Judicial':'Administrativo')+'</div></div></div>';
+    var body='<div class="ac-body">';
+    body+='<div class="ac-row"><span class="ac-key">Acordado</span><span class="ac-val" style="color:'+cor+'">'+R(vAc)+'</span></div>';
+    body+='<div class="ac-row"><span class="ac-key">Recebido</span><span class="ac-val" style="color:var(--green)">'+R(vRec)+'</span></div>';
+    body+='<div class="ac-row"><span class="ac-key">Saldo</span><span class="ac-val" style="color:var(--amber)">'+R(acSaldo(r))+'</span></div>';
+    body+='<div class="ac-row"><span class="ac-key">Operador</span><span class="ac-val">'+esc(r.responsavel||'—')+'</span></div>';
+    if(atraso) body+='<div class="ac-row"><span class="ac-key" style="color:var(--red)">Parcela em atraso</span><span class="ac-val">'+fD(prox.venc)+' '+atrH(diasAtraso(prox.venc,prox.sit))+'</span></div>';
+    if(parcs.length) body+='<div class="parc-progress"><div class="parc-label"><span>Parcelas pagas</span><span>'+pagas+'/'+parcs.length+'</span></div><div class="parc-track"><div class="parc-fill" style="width:'+prog.toFixed(0)+'%;background:'+cor+'"></div></div></div>';
+    body+='<div class="ac-row" style="margin-top:6px"><button class="row-ab" onclick="verAcordo(\''+key+'\',\''+r.id+'\')">Ver parcelas</button><button class="row-ab" onclick="editRec(\''+key+'\',\''+r.id+'\')">Editar</button></div>';
+    body+='</div>';
+    return '<div class="ac-card'+(atraso?' ac-atraso':'')+'">'+head+body+'</div>';
+  }).join('');
+}
+
 
 // ══════════════════════════════════════════════════════════════
 //  VER PARCELAS (modal extra)
@@ -661,10 +918,7 @@ function verParcelas(key,id){
     html+='<tr><td class="dim">'+p.num+'ª</td><td class="dim">'+fD(p.venc)+'</td><td>'+R(p.valor)+'</td><td class="pos">'+(p.pago>0?R(p.pago):'<span class="dim">—</span>')+'</td><td>'+pillSit(p.sit)+'</td><td><button class="row-ab" onclick="marcarPago(\''+key+'\',\''+id+'\','+pi+')">Marcar pago</button></td></tr>';
   });
   html+='</tbody></table></div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Fechar</button></div>';
-  document.getElementById('m-body').innerHTML='';
-  document.getElementById('m-title').innerHTML='';
-  document.querySelector('.modal').innerHTML=html;
-  document.getElementById('mbg').classList.add('open');
+  showModalHTML(html);
 }
 async function marcarPago(key,id,pi){
   var r=S[key].find(function(x){return x.id===id;});
@@ -686,9 +940,17 @@ async function marcarPago(key,id,pi){
 // ══════════════════════════════════════════════════════════════
 //  MODAL FORMS
 // ══════════════════════════════════════════════════════════════
-var ADV=function(){
-  var advs = (S && S.config && Array.isArray(S.config.advogados)) ? S.config.advogados : (DEF && DEF.config && Array.isArray(DEF.config.advogados) ? DEF.config.advogados : []);
-  return advs.map(function(a){return '<option value="'+esc(a)+'">'+esc(a)+'</option>';}).join('');
+// O modal de lançamento é substituído pelas telas de parcelas; resetModal restaura o formulário original.
+var MODAL_HTML=document.querySelector('.modal').innerHTML;
+function resetModal(){var m=document.querySelector('.modal');m.classList.remove('modal-wide');if(!document.getElementById('m-body'))m.innerHTML=MODAL_HTML;}
+function showModalHTML(html){var m=document.querySelector('.modal');m.innerHTML=html;m.classList.add('modal-wide');document.getElementById('mbg').classList.add('open');}
+
+// Mantém o operador já gravado no registro mesmo que ele tenha sido removido da lista
+var ADV=function(atual){
+  var nomes=(Array.isArray(S.config.advogados)?S.config.advogados:DEF.config.advogados).slice();
+  if(atual&&nomes.indexOf(atual)<0) nomes.unshift(atual);
+  if(!nomes.length) return '<option value="">Nenhum operador cadastrado</option>';
+  return nomes.map(function(a){return '<option value="'+esc(a)+'"'+(a===atual?' selected':'')+'>'+esc(a)+'</option>';}).join('');
 };
 var SEL=function(opts,val){return opts.map(function(o){return '<option value="'+esc(o)+'"'+(val===o?' selected':'')+'>'+esc(o)+'</option>';}).join('');};
 
@@ -737,7 +999,7 @@ function buildForm(tipo,r){
   html+='<div class="calc-box" id="calc-preview"><div class="calc-box-title">Prévia do cálculo</div><div id="calc-rows"><div style="font-size:11px;color:var(--tx3)">Preencha os valores acima para ver a prévia</div></div></div>';
 
   html+='<div class="modal-sec">Controle</div>';
-  html+='<div class="ff"><label>Responsável</label><select id="f-responsavel">'+ADV()+'</select></div>';
+  html+='<div class="ff"><label>Operador</label><select id="f-responsavel">'+ADV(r.responsavel)+'</select></div>';
   html+='<div class="ff"><label>Situação</label><select id="f-situacao">'+SEL(['Em aberto','Em dia','Em atraso','Negociação','Recebido','Inadimplente','Judicial'],r.situacao||'Em aberto')+'</select></div>';
   html+='<div class="ff full"><label>Observações</label><textarea id="f-obs">'+esc(r.obs||'')+'</textarea></div>';
   return html;
@@ -745,6 +1007,7 @@ function buildForm(tipo,r){
 
 function openModal(toOverride){
   try {
+    resetModal();
     var btnNew=document.getElementById('btn-new');
     var page=toOverride||(btnNew&&btnNew.dataset?btnNew.dataset.page:'')||'propria';
     var tipo=page==='clientes'?'clientes_vista':'propria_vista';
@@ -752,12 +1015,11 @@ function openModal(toOverride){
     if(toOverride==='judicial') tipo='judicial';
     var mTipo=document.getElementById('m-tipo'); if(mTipo) mTipo.value=tipo;
     var mId=document.getElementById('m-id'); if(mId) mId.value='';
-    var lbls={propria_vista:'Carteira Própria — À Vista',propria_parc:'Carteira Própria — Parcelado',clientes_vista:'Clientes Externos — À Vista',clientes_parc:'Clientes Externos — Parcelado',acordos:'Acordo de Loja',judicial:'Título Judicial'};
+    var lbls={propria_vista:'Carteira Própria — À Vista',propria_parc:'Carteira Própria — Parcelado',clientes_vista:'Clientes Externos — À Vista',clientes_parc:'Clientes Externos — Parcelado',acordos:'Acordo Administrativo',judicial:'Acordo Judicial'};
     var mTitle=document.getElementById('m-title'); if(mTitle) mTitle.textContent='Novo Lançamento — '+(lbls[tipo]||'');
     var mBody=document.getElementById('m-body');
     if(mBody){
-      if(tipo==='acordos') mBody.innerHTML=buildFormAcordos();
-      else if(tipo==='judicial') mBody.innerHTML=buildFormJudicial();
+      if(tipo==='acordos'||tipo==='judicial') mBody.innerHTML=buildFormAcordo(tipo);
       else mBody.innerHTML=buildForm(tipo);
     }
     var mbg=document.getElementById('mbg'); if(mbg) mbg.classList.add('open');
@@ -875,25 +1137,16 @@ function recalcModal(){
   preview.innerHTML=rows;
 }
 
-function buildFormAcordos(r){
-  r=r||{};
-  return '<div class="modal-sec">Loja / Devedor</div><div class="ff full"><label>Nome *</label><input id="f-devedor" value="'+esc(r.devedor||'')+'"></div><div class="ff"><label>CNPJ/CPF</label><input id="f-documento" value="'+esc(r.documento||'')+'"></div><div class="modal-sec">Valores do Acordo</div><div class="ff"><label>Valor original (R$)</label><input id="f-valor-orig" type="number" value="'+(r.valor_original||'')+'" min="0" step="0.01"></div><div class="ff"><label>Valor acordado (R$) *</label><input id="f-valor" type="number" value="'+(r.valor_acordado||'')+'" min="0" step="0.01"></div><div class="ff"><label>Recebido até hoje (R$)</label><input id="f-recebido" type="number" value="'+(r.recebido||'')+'" min="0" step="0.01"></div><div class="ff"><label>Tipo</label><select id="f-tipo-pgto"><option value="vista"'+(r.tipo_pgto==='vista'?' selected':'')+'>&Agrave; vista</option><option value="parcelado"'+(r.tipo_pgto==='parcelado'?' selected':'')+'>Parcelado</option></select></div><div class="ff"><label>Parcelas (ex: 3x R$500)</label><input id="f-parcelas" value="'+esc(r.parcelas||'')+'"></div><div class="ff"><label>Próx. vencimento</label><input id="f-prox-venc" type="date" value="'+(r.prox_venc||'')+'"></div><div class="modal-sec">Controle</div><div class="ff"><label>Responsável</label><select id="f-responsavel">'+ADV()+'</select></div><div class="ff"><label>Situação</label><select id="f-situacao">'+SEL(['Em dia','Em atraso','Renegociado','Cumprido','Quebrado'],r.situacao||'Em dia')+'</select></div><div class="ff full"><label>Observações</label><textarea id="f-obs">'+esc(r.obs||'')+'</textarea></div>';
-}
-function buildFormJudicial(r){
-  r=r||{};
-  return '<div class="modal-sec">Processo</div><div class="ff full"><label>Nº do Processo *</label><input id="f-numero" value="'+esc(r.numero||'')+'"></div><div class="ff full"><label>Devedor *</label><input id="f-devedor" value="'+esc(r.devedor||'')+'"></div><div class="modal-sec">Valores</div><div class="ff"><label>Valor da causa (R$)</label><input id="f-valor" type="number" value="'+(r.valor||'')+'" min="0" step="0.01"></div><div class="ff"><label>Total recebido (R$)</label><input id="f-recebido" type="number" value="'+(r.recebido||'')+'" min="0" step="0.01"></div><div class="modal-sec">Controle</div><div class="ff"><label>Fase atual</label><select id="f-fase">'+SEL(['Citação','Instrução','Sentença','Recurso','Execução','Acordo','Arquivado'],r.fase||'Citação')+'</select></div><div class="ff"><label>Próx. movimentação</label><input id="f-prox-mov" type="date" value="'+(r.prox_mov||'')+'"></div><div class="ff"><label>Responsável</label><select id="f-responsavel">'+ADV()+'</select></div><div class="ff"><label>Situação</label><select id="f-situacao">'+SEL(['Ativo','Acordo','Suspenso','Arquivado'],r.situacao||'Ativo')+'</select></div><div class="ff full"><label>Observações</label><textarea id="f-obs">'+esc(r.obs||'')+'</textarea></div>';
-}
-
 function editRec(key,id){
   var found=S[key].find(function(x){return x.id===id;});
   if(!found)return;
+  resetModal();
   var r=Object.assign({},found,{_editing:true});
   document.getElementById('m-tipo').value=key;
   document.getElementById('m-id').value=id;
-  var lbls={propria_vista:'Carteira Própria — À Vista',propria_parc:'Carteira Própria — Parcelado',clientes_vista:'Clientes Externos — À Vista',clientes_parc:'Clientes Externos — Parcelado',acordos:'Acordo de Loja',judicial:'Título Judicial'};
+  var lbls={propria_vista:'Carteira Própria — À Vista',propria_parc:'Carteira Própria — Parcelado',clientes_vista:'Clientes Externos — À Vista',clientes_parc:'Clientes Externos — Parcelado',acordos:'Acordo Administrativo',judicial:'Acordo Judicial'};
   document.getElementById('m-title').textContent='Editar — '+(lbls[key]||'');
-  if(key==='acordos') document.getElementById('m-body').innerHTML=buildFormAcordos(r);
-  else if(key==='judicial') document.getElementById('m-body').innerHTML=buildFormJudicial(r);
+  if(key==='acordos'||key==='judicial') document.getElementById('m-body').innerHTML=buildFormAcordo(key,r);
   else document.getElementById('m-body').innerHTML=buildForm(key,r);
   syncParcelamento('init');
   setTimeout(function(){var s=document.getElementById('f-responsavel');if(s&&r.responsavel)s.value=r.responsavel;},15);
@@ -909,12 +1162,9 @@ async function salvar(){
   var tipo=gv('m-tipo'), id=gv('m-id');
   var list=S[tipo], ex=id?list.find(function(r){return r.id===id;}):null;
   var rec={};
-  if(tipo==='acordos'){
-    if(!gv('f-devedor').trim()){toast('Informe a loja/devedor.','err');return;}
-    rec={devedor:gv('f-devedor').trim(),documento:gv('f-documento').trim(),valor_original:gf('f-valor-orig'),valor_acordado:gf('f-valor'),recebido:gf('f-recebido'),tipo_pgto:gv('f-tipo-pgto'),parcelas:gv('f-parcelas').trim(),prox_venc:gv('f-prox-venc'),responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex?ex.lancamento:today(),criado_em:ex?ex.criado_em:today()};
-  } else if(tipo==='judicial'){
-    if(!gv('f-devedor').trim()){toast('Informe o devedor.','err');return;}
-    rec={numero:gv('f-numero').trim(),devedor:gv('f-devedor').trim(),valor:gf('f-valor'),recebido:gf('f-recebido'),fase:gv('f-fase'),prox_mov:gv('f-prox-mov'),responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex?ex.lancamento:today(),criado_em:ex?ex.criado_em:today(),pagamentos:ex?ex.pagamentos:[]};
+  if(tipo==='acordos'||tipo==='judicial'){
+    if(!gv('f-devedor').trim()||!gf('f-valor-acordado')){toast('Informe devedor e valor acordado.','err');return;}
+    rec=lerFormAcordo(tipo,ex);
   } else if(tipo.slice(-5)==='vista'){
     if(!gv('f-devedor').trim()||!gf('f-valor')){toast('Informe devedor e valor.','err');return;}
     rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor:gf('f-valor'),recebido:gf('f-recebido'),data_pgto:gv('f-data-pgto'),lancamento:gv('f-lanc')||today(),criado_em:ex?ex.criado_em:today(),juros_custom:gf('f-juros'),cm_custom:gf('f-cm'),honorarios:gf('f-honorarios')||S.config.honorarios,responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim()};
@@ -937,8 +1187,7 @@ async function salvar(){
   closeModal();
   toast('Lançamento salvo!','ok');
   if(tipo.indexOf('propria')===0||tipo.indexOf('clientes')===0){renderTbl(tipo.split('_')[0],tipo.split('_')[1]);renderDash();}
-  if(tipo==='acordos'){renderKpiAcordos();renderAcordos();}
-  if(tipo==='judicial'){renderKpiJudicial();renderJudicial();}
+  if(tipo==='acordos'||tipo==='judicial')renderCurrentPage();
   await persistDocuments(tipo,[rec]);
 }
 
@@ -948,8 +1197,7 @@ async function delRec(key,id){
   if(idx<0)return;
   S[key].splice(idx,1);
   if(key.indexOf('propria')===0||key.indexOf('clientes')===0){renderTbl(key.split('_')[0],key.split('_')[1]);renderDash();}
-  if(key==='acordos'){renderKpiAcordos();renderAcordos();}
-  if(key==='judicial'){renderKpiJudicial();renderJudicial();}
+  if(key==='acordos'||key==='judicial')renderCurrentPage();
   toast('Excluído.','ok');
   await deleteDocuments(key,[id]);
 }
@@ -962,14 +1210,17 @@ function renderConfig(){
   document.getElementById('cfg-hon').value=S.config.honorarios||30;
   document.getElementById('cfg-juros').value=S.config.juros||1;
   document.getElementById('cfg-cm').value=S.config.correcao||5;
+  document.getElementById('cfg-juratr').value=S.config.juros_atraso!==undefined?S.config.juros_atraso:2;
   var el=document.getElementById('adv-list');
-  el.innerHTML=S.config.advogados.map(function(a,i){return '<div class="cfg-row" style="padding:6px 0"><div class="cfg-lbl">'+esc(a)+'</div><button class="row-ab del" onclick="removeAdv('+i+')">Remover</button></div>';}).join('')||'<div style="font-size:11px;color:var(--tx3);padding:6px 0">Nenhum advogado cadastrado.</div>';
+  el.innerHTML=S.config.advogados.map(function(a,i){return '<div class="cfg-row" style="padding:6px 0"><div class="cfg-lbl">'+esc(a)+'</div><button class="row-ab del" onclick="removeAdv('+i+')">Remover</button></div>';}).join('')||'<div style="font-size:11px;color:var(--tx3);padding:6px 0">Nenhum operador cadastrado.</div>';
 }
 async function saveCfg(){
   S.config.nome=gv('cfg-nome').trim()||'Oliveira & Benedet';
   S.config.honorarios=Math.min(100,Math.max(0,parseFloat(document.getElementById('cfg-hon').value)||30));
   S.config.juros=Math.max(0,parseFloat(document.getElementById('cfg-juros').value)||1);
   S.config.correcao=Math.max(0,parseFloat(document.getElementById('cfg-cm').value)||5);
+  var juratr=parseFloat(document.getElementById('cfg-juratr').value);
+  S.config.juros_atraso=isNaN(juratr)?2:Math.max(0,juratr);
   renderConfig();renderDash();toast('Configurações salvas!','ok');
   await persistConfig();
 }

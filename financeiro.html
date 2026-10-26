@@ -46,11 +46,11 @@
     </button>
     <button class="nb" onclick="nav('acordos',this)">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="12" height="12" rx="1"/><path d="M5 8l2 2 4-4"/></svg>
-      Acordos &mdash; Lojas
+      Acordos Administrativos
     </button>
     <button class="nb" onclick="nav('judicial',this)">
       <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1l2 4h4l-3.1 2.6 1.2 4.4L8 10l-4.1 2 1.2-4.4L2 5h4z"/></svg>
-      T&iacute;tulos Judiciais
+      Acordos Judiciais
     </button>
 
     <div class="sb-sec">Sistema</div>
@@ -117,6 +117,27 @@
       </div>
     </div>
     <hr class="dv">
+    <div class="sh"><div class="sh-bar" style="background:var(--amber)"></div><div class="sh-title">Acordos Administrativos</div><div class="sh-line"></div></div>
+    <div class="kpi-grid cols-5" id="kpi-adm"></div>
+    <hr class="dv">
+    <div class="sh"><div class="sh-bar" style="background:var(--purple)"></div><div class="sh-title">Acordos Judiciais</div><div class="sh-line"></div></div>
+    <div class="kpi-grid cols-5" id="kpi-jd"></div>
+    <hr class="dv">
+    <div class="chart-row-2">
+      <div class="chart-card">
+        <div class="cc-title">Acordos administrativos</div>
+        <div class="cc-sub">Acordado vs recebido por m&ecirc;s</div>
+        <div class="cc-leg"><div class="cc-li"><div class="cc-sq" style="background:#f59e0b"></div>Acordado</div><div class="cc-li"><div class="cc-sq" style="background:#3fb950"></div>Recebido</div></div>
+        <div class="cw"><canvas id="chartAcordosAdm"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="cc-title">Acordos judiciais</div>
+        <div class="cc-sub">Acordado vs recebido por m&ecirc;s</div>
+        <div class="cc-leg"><div class="cc-li"><div class="cc-sq" style="background:#bc8cff"></div>Acordado</div><div class="cc-li"><div class="cc-sq" style="background:#3fb950"></div>Recebido</div></div>
+        <div class="cw"><canvas id="chartAcordosJud"></canvas></div>
+      </div>
+    </div>
+    <hr class="dv">
     <div class="sh"><div class="sh-bar" style="background:var(--amber)"></div><div class="sh-title">Faturamento Consolidado</div><div class="sh-line"></div></div>
     <div class="fat-strip" id="fat-strip"></div>
   </div>
@@ -132,7 +153,7 @@
       <div class="tbl-wrap">
         <div class="tbl-top"><div class="tbl-top-t">Registros</div><div class="tbl-filters"><input class="input-fi" id="f-pv-b" placeholder="Buscar devedor..." oninput="renderTbl('propria','vista')" style="width:180px"><span id="cnt-pv" style="font-size:11px;color:var(--tx3)"></span></div></div>
         <div style="overflow-x:auto"><table>
-          <thead><tr><th>Devedor</th><th>Valor cobrado</th><th>Valor pago</th><th>Atualiz. c/ juros</th><th>Data pagamento</th><th>Dias atraso</th><th>Honor. O&amp;B</th><th>Respons&aacute;vel</th><th>Situa&ccedil;&atilde;o</th><th>A&ccedil;&otilde;es</th></tr></thead>
+          <thead><tr><th>Devedor</th><th>Valor cobrado</th><th>Valor pago</th><th>Atualiz. c/ juros</th><th>Data pagamento</th><th>Dias atraso</th><th>Honor. O&amp;B</th><th>Operador</th><th>Situa&ccedil;&atilde;o</th><th>A&ccedil;&otilde;es</th></tr></thead>
           <tbody id="tb-pv"></tbody>
         </table></div>
       </div>
@@ -142,7 +163,7 @@
       <div class="tbl-wrap">
         <div class="tbl-top"><div class="tbl-top-t">Registros</div><div class="tbl-filters"><input class="input-fi" id="f-pp-b" placeholder="Buscar devedor..." oninput="renderTbl('propria','parcelado')" style="width:180px"><span id="cnt-pp" style="font-size:11px;color:var(--tx3)"></span></div></div>
         <div style="overflow-x:auto"><table>
-          <thead><tr><th>Devedor</th><th>Valor original</th><th>Total atualizado</th><th>Parcelas</th><th>Recebido</th><th>A receber</th><th>Pr&oacute;x. parcela</th><th>Atraso</th><th>Honor. O&amp;B</th><th>Respons&aacute;vel</th><th>Situa&ccedil;&atilde;o</th><th>A&ccedil;&otilde;es</th></tr></thead>
+          <thead><tr><th>Devedor</th><th>Valor original</th><th>Total atualizado</th><th>Parcelas</th><th>Recebido</th><th>A receber</th><th>Pr&oacute;x. parcela</th><th>Atraso</th><th>Honor. O&amp;B</th><th>Operador</th><th>Situa&ccedil;&atilde;o</th><th>A&ccedil;&otilde;es</th></tr></thead>
           <tbody id="tb-pp"></tbody>
         </table></div>
       </div>
@@ -160,7 +181,7 @@
       <div class="tbl-wrap">
         <div class="tbl-top"><div class="tbl-top-t">Registros</div><div class="tbl-filters"><input class="input-fi" id="f-cv-b" placeholder="Buscar..." oninput="renderTbl('clientes','vista')" style="width:180px"><span id="cnt-cv" style="font-size:11px;color:var(--tx3)"></span></div></div>
         <div style="overflow-x:auto"><table>
-          <thead><tr><th>Devedor</th><th>Cliente credor</th><th>Valor cobrado</th><th>Valor recebido</th><th>Atualiz. c/ juros</th><th>Data pagamento</th><th>Atraso</th><th>Hon. O&amp;B</th><th>% Honor.</th><th>Respons&aacute;vel</th><th>Situa&ccedil;&atilde;o</th><th>A&ccedil;&otilde;es</th></tr></thead>
+          <thead><tr><th>Devedor</th><th>Cliente credor</th><th>Valor cobrado</th><th>Valor recebido</th><th>Atualiz. c/ juros</th><th>Data pagamento</th><th>Atraso</th><th>Hon. O&amp;B</th><th>% Honor.</th><th>Operador</th><th>Situa&ccedil;&atilde;o</th><th>A&ccedil;&otilde;es</th></tr></thead>
           <tbody id="tb-cv"></tbody>
         </table></div>
       </div>
@@ -170,7 +191,7 @@
       <div class="tbl-wrap">
         <div class="tbl-top"><div class="tbl-top-t">Registros</div><div class="tbl-filters"><input class="input-fi" id="f-cp-b" placeholder="Buscar..." oninput="renderTbl('clientes','parcelado')" style="width:180px"><span id="cnt-cp" style="font-size:11px;color:var(--tx3)"></span></div></div>
         <div style="overflow-x:auto"><table>
-          <thead><tr><th>Devedor</th><th>Cliente credor</th><th>Valor original</th><th>Total atualizado</th><th>Parcelas</th><th>Recebido</th><th>A receber</th><th>Pr&oacute;x. parcela</th><th>Atraso</th><th>% Honor.</th><th>Honor. O&amp;B</th><th>Respons&aacute;vel</th><th>Situa&ccedil;&atilde;o</th><th>A&ccedil;&otilde;es</th></tr></thead>
+          <thead><tr><th>Devedor</th><th>Cliente credor</th><th>Valor original</th><th>Total atualizado</th><th>Parcelas</th><th>Recebido</th><th>A receber</th><th>Pr&oacute;x. parcela</th><th>Atraso</th><th>% Honor.</th><th>Honor. O&amp;B</th><th>Operador</th><th>Situa&ccedil;&atilde;o</th><th>A&ccedil;&otilde;es</th></tr></thead>
           <tbody id="tb-cp"></tbody>
         </table></div>
       </div>
@@ -179,6 +200,11 @@
 
   <!-- PAINEL DA OPERADORA -->
   <div class="page" id="pg-operadora">
+    <div class="sub-tabs" id="op-main-tabs">
+      <button class="stab active" onclick="setOpMainTab('carteiras',this)">Carteiras</button>
+      <button class="stab" onclick="setOpMainTab('acordos',this)">Acordos</button>
+    </div>
+    <div id="op-panel-carteiras">
     <div class="sub-tabs">
       <button class="stab active" onclick="setOpSub('propria',this)">Carteira Pr&oacute;pria</button>
       <button class="stab" onclick="setOpSub('clientes',this)">Clientes Externos</button>
@@ -195,12 +221,27 @@
       </select>
     </div>
     <div class="acordos-grid" id="op-grid"></div>
+    </div>
+    <div id="op-panel-acordos" style="display:none">
+      <div class="sub-tabs">
+        <button class="stab active" onclick="setOpAcordoSub('administrativos',this)">Administrativos</button>
+        <button class="stab" onclick="setOpAcordoSub('judiciais',this)">Judiciais</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+        <input class="input-fi" id="op-ac-search" placeholder="Buscar devedor, credor ou processo..." oninput="renderOperadoraAcordos()" style="flex:1;min-width:160px">
+        <select class="input-fi" id="op-ac-sit" onchange="renderOperadoraAcordos()">
+          <option value="">Todas as situa&ccedil;&otilde;es</option>
+          <option>Ativo</option><option>Em atraso</option><option>Cumprido</option><option>Inadimplente</option><option>Cancelado</option><option>Arquivado</option>
+        </select>
+      </div>
+      <div class="acordos-grid" id="op-ac-grid"></div>
+    </div>
   </div>
 
-  <!-- ACORDOS LOJAS -->
+  <!-- ACORDOS ADMINISTRATIVOS -->
   <div class="page" id="pg-acordos">
-    <div class="sh"><div class="sh-bar" style="background:var(--amber)"></div><div class="sh-title">Acordos de Lojas</div><div class="sh-line"></div><div class="sh-action"><button class="btn btn-teal btn-sm" onclick="openModal('acordos')">+ Lan&ccedil;ar</button></div></div>
-    <div class="kpi-grid" id="kpi-ac"></div>
+    <div class="sh"><div class="sh-bar" style="background:var(--amber)"></div><div class="sh-title">Acordos Administrativos</div><div class="sh-line"></div><div class="sh-action"><button class="btn btn-teal btn-sm" onclick="openModal('acordos')">+ Lan&ccedil;ar</button></div></div>
+    <div class="kpi-grid cols-5" id="kpi-ac"></div>
     <hr class="dv">
     <div class="chart-row-2">
       <div class="chart-card"><div class="cc-title">Acordos por m&ecirc;s</div><div class="cc-sub">Celebrados vs cumpridos</div><div class="cc-leg"><div class="cc-li"><div class="cc-sq" style="background:#f59e0b"></div>Celebrados</div><div class="cc-li"><div class="cc-sq" style="background:#3fb950"></div>Cumpridos</div></div><div class="cw"><canvas id="chartAc"></canvas></div></div>
@@ -208,19 +249,19 @@
     </div>
     <hr class="dv">
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <input class="input-fi" id="f-ac-b" placeholder="Buscar loja..." oninput="renderAcordos()" style="flex:1;min-width:140px">
-      <select class="input-fi" id="f-ac-s" onchange="renderAcordos()"><option value="">Todas as situa&ccedil;&otilde;es</option><option>Em dia</option><option>Em atraso</option><option>Renegociado</option><option>Cumprido</option><option>Quebrado</option></select>
+      <input class="input-fi" id="f-ac-b" placeholder="Buscar devedor ou credor..." oninput="renderAcordos()" style="flex:1;min-width:140px">
+      <select class="input-fi" id="f-ac-s" onchange="renderAcordos()"><option value="">Todas as situa&ccedil;&otilde;es</option><option>Ativo</option><option>Em atraso</option><option>Cumprido</option><option>Inadimplente</option><option>Cancelado</option></select>
     </div>
-    <div class="tbl-wrap"><div class="tbl-top"><div class="tbl-top-t">Renegocia&ccedil;&otilde;es de Lojas</div><span id="cnt-ac" style="font-size:11px;color:var(--tx3)"></span></div>
-      <div style="overflow-x:auto"><table><thead><tr><th>Loja</th><th>CNPJ/CPF</th><th>Valor orig.</th><th>Acordado</th><th>Tipo</th><th>Parcelas</th><th>Recebido</th><th>Pr&oacute;x. venc.</th><th>Atraso</th><th>Situa&ccedil;&atilde;o</th><th>Respons&aacute;vel</th><th>A&ccedil;&otilde;es</th></tr></thead>
+    <div class="tbl-wrap"><div class="tbl-top"><div class="tbl-top-t">Acordos administrativos</div><span id="cnt-ac" style="font-size:11px;color:var(--tx3)"></span></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>Devedor / Credor</th><th>Valor acordado</th><th>Recebido</th><th>Saldo</th><th>Parcelas</th><th>Pr&oacute;x. parcela</th><th>Tipo</th><th>Honor.</th><th>Situa&ccedil;&atilde;o</th><th>Operador</th><th>A&ccedil;&otilde;es</th></tr></thead>
       <tbody id="tb-ac"></tbody></table></div>
     </div>
   </div>
 
   <!-- JUDICIAL -->
   <div class="page" id="pg-judicial">
-    <div class="sh"><div class="sh-bar" style="background:var(--purple)"></div><div class="sh-title">T&iacute;tulos Judiciais</div><div class="sh-line"></div><div class="sh-action"><button class="btn btn-teal btn-sm" onclick="openModal('judicial')">+ Lan&ccedil;ar</button></div></div>
-    <div class="kpi-grid" id="kpi-j"></div>
+    <div class="sh"><div class="sh-bar" style="background:var(--purple)"></div><div class="sh-title">Acordos Judiciais</div><div class="sh-line"></div><div class="sh-action"><button class="btn btn-teal btn-sm" onclick="openModal('judicial')">+ Lan&ccedil;ar</button></div></div>
+    <div class="kpi-grid cols-5" id="kpi-j"></div>
     <hr class="dv">
     <div class="chart-row-2">
       <div class="chart-card"><div class="cc-title">Entradas mensais &mdash; Judicial</div><div class="cc-sub">Valores recebidos por m&ecirc;s</div><div class="cc-leg"><div class="cc-li"><div class="cc-sq" style="background:#bc8cff"></div>Recebido</div></div><div class="cw"><canvas id="chartJud"></canvas></div></div>
@@ -228,11 +269,11 @@
     </div>
     <hr class="dv">
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <input class="input-fi" id="f-jud-b" placeholder="Buscar..." oninput="renderJudicial()" style="flex:1;min-width:140px">
+      <input class="input-fi" id="f-jud-b" placeholder="Buscar devedor, credor ou processo..." oninput="renderJudicial()" style="flex:1;min-width:140px">
       <select class="input-fi" id="f-jud-f" onchange="renderJudicial()"><option value="">Todas as fases</option><option>Cita&ccedil;&atilde;o</option><option>Instru&ccedil;&atilde;o</option><option>Senten&ccedil;a</option><option>Recurso</option><option>Execu&ccedil;&atilde;o</option><option>Acordo</option><option>Arquivado</option></select>
     </div>
-    <div class="tbl-wrap"><div class="tbl-top"><div class="tbl-top-t">Processos Ativos</div><span id="cnt-j" style="font-size:11px;color:var(--tx3)"></span></div>
-      <div style="overflow-x:auto"><table><thead><tr><th>N&ordm; Processo</th><th>Devedor</th><th>Valor causa</th><th>Recebido</th><th>Fase</th><th>Pr&oacute;x. movim.</th><th>&Uacute;ltima entrada</th><th>Respons&aacute;vel</th><th>Situa&ccedil;&atilde;o</th><th>A&ccedil;&otilde;es</th></tr></thead>
+    <div class="tbl-wrap"><div class="tbl-top"><div class="tbl-top-t">Acordos judiciais</div><span id="cnt-j" style="font-size:11px;color:var(--tx3)"></span></div>
+      <div style="overflow-x:auto"><table><thead><tr><th>N&ordm; Processo</th><th>Devedor / Credor</th><th>Valor acordado</th><th>Recebido</th><th>Saldo</th><th>Parcelas</th><th>Pr&oacute;x. parcela</th><th>Tipo</th><th>Honor.</th><th>Fase</th><th>Situa&ccedil;&atilde;o</th><th>Operador</th><th>A&ccedil;&otilde;es</th></tr></thead>
       <tbody id="tb-j"></tbody></table></div>
     </div>
   </div>
@@ -245,9 +286,11 @@
       <div class="cfg-row"><div><div class="cfg-lbl">Honor&aacute;rios padr&atilde;o (%)</div><div class="cfg-sub">Aplicado sobre valores recebidos de devedores de clientes externos</div></div><div style="display:flex;gap:6px;align-items:center"><input id="cfg-hon" type="number" min="1" max="100" style="width:65px" class="ff input"><span style="color:var(--tx2)">%</span><button class="btn btn-ghost" onclick="saveCfg()">Salvar</button></div></div>
       <div class="cfg-row"><div><div class="cfg-lbl">Juros mensais padr&atilde;o (%)</div><div class="cfg-sub">Aplicado nas atualiza&ccedil;&otilde;es de cobran&ccedil;as em aberto</div></div><div style="display:flex;gap:6px;align-items:center"><input id="cfg-juros" type="number" min="0" max="100" step="0.1" style="width:65px" class="ff input"><span style="color:var(--tx2)">%/m&ecirc;s</span><button class="btn btn-ghost" onclick="saveCfg()">Salvar</button></div></div>
       <div class="cfg-row"><div><div class="cfg-lbl">Corre&ccedil;&atilde;o monet&aacute;ria anual (%)</div><div class="cfg-sub">IPCA/IGP-M estimado para c&aacute;lculo de atualiza&ccedil;&atilde;o</div></div><div style="display:flex;gap:6px;align-items:center"><input id="cfg-cm" type="number" min="0" max="100" step="0.1" style="width:65px" class="ff input"><span style="color:var(--tx2)">%/ano</span><button class="btn btn-ghost" onclick="saveCfg()">Salvar</button></div></div>
+      <div class="cfg-row"><div><div class="cfg-lbl">Juros de atraso &mdash; acordos (%)</div><div class="cfg-sub">Sugerido ao dar baixa em parcela vencida de acordo, por m&ecirc;s de atraso</div></div><div style="display:flex;gap:6px;align-items:center"><input id="cfg-juratr" type="number" min="0" max="100" step="0.1" style="width:65px" class="ff input"><span style="color:var(--tx2)">%/m&ecirc;s</span><button class="btn btn-ghost" onclick="saveCfg()">Salvar</button></div></div>
     </div>
     <div class="cfg-blk">
-      <div class="cfg-title">Advogados Respons&aacute;veis</div>
+      <div class="cfg-title">Operadores</div>
+      <div class="cfg-sub" style="margin-bottom:6px">Nomes dispon&iacute;veis no campo &ldquo;Operador&rdquo; dos lan&ccedil;amentos e acordos</div>
       <div id="adv-list"></div>
       <div style="display:flex;gap:6px;margin-top:10px"><input id="novo-adv" placeholder="Nome completo" style="flex:1" class="ff input"><button class="btn btn-teal" onclick="addAdv()">+ Adicionar</button></div>
     </div>
