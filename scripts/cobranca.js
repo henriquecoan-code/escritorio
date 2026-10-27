@@ -457,8 +457,8 @@ function renderDash(){
     '<div class="fat-card"><div class="fc-label">Receita — carteira própria</div><div class="fc-val">'+R(pRecTot)+'</div><div class="fc-sub">'+pPct+'% do faturamento</div><div class="fc-bar"><div class="fc-fill" style="width:'+pPct+'%;background:var(--teal)"></div></div></div>'+
     '<div class="fat-card"><div class="fc-label">Receita — honorários '+S.config.honorarios+'%</div><div class="fc-val">'+R(cHonTot)+'</div><div class="fc-sub">'+hPct+'% do faturamento</div><div class="fc-bar"><div class="fc-fill" style="width:'+hPct+'%;background:var(--rose)"></div></div></div>';
 
-  document.getElementById('kpi-adm').innerHTML=kpisAcordo('acordos');
-  document.getElementById('kpi-jd').innerHTML=kpisAcordo('judicial');
+  document.getElementById('kpi-adm').innerHTML=kpisAcordo('acordos',byPer(S.acordos));
+  document.getElementById('kpi-jd').innerHTML=kpisAcordo('judicial',byPer(S.judicial));
 
   renderChartDash();
 }
@@ -637,8 +637,8 @@ function gerarParcAcordo(n,vParc,honTotal,honPct,tipo,data1){
   return parcs;
 }
 
-function kpisAcordo(key){
-  var list=S[key]||[], isJud=key==='judicial';
+function kpisAcordo(key,records){
+  var list=records||S[key]||[], isJud=key==='judicial';
   var tot=list.reduce(function(a,r){return a+acValor(r);},0);
   var rec=list.reduce(function(a,r){return a+acRecebido(r);},0);
   var ati=list.filter(acAtivo).length;
