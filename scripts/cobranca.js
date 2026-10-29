@@ -235,7 +235,7 @@ function initFirebase(){
     fbAuth.onAuthStateChanged(function(user){
       currentUser=user||null;
       refreshAuthUI();
-      if(currentUser){firebaseReady=true;setAuth(false);startRealtime();}
+      if(currentUser){firebaseReady=true;setAuth(false);if(window.OBFirestoreCache)window.OBFirestoreCache.login(fbDb);startRealtime();}
       else{firebaseReady=false;Object.keys(unsub).forEach(function(k){if(unsub[k])unsub[k]();});unsub={};setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
       if(window.OBAuthHint)window.OBAuthHint.update(user);
       if(window.OBFirestoreCache)window.OBFirestoreCache.watch(fbDb,user);
@@ -682,22 +682,24 @@ function compensarProximas(parcs,i,diff){
     var q=parcs[k];
     if(parcFechada(q))continue;
     normalizarParcela(q);
-    var minimo=totalPagoParc(q), atual=Number(q.valor||0), novo=arred(atual-resto);
+    var minimo=Math.max(0,arred(totalPagoParc(q)-Number(q.juros_atraso||0))), atual=Number(q.valor||0), novo=arred(atual-resto);
     if(novo<minimo){resto=arred(resto-(atual-minimo));q.valor=minimo;}
     else{q.valor=novo;resto=0;}
     q.sit=statusParcela(q);
   }
   return resto;
 }
-// Honorários de cada parcela proporcionais ao valor dela; o centavo que sobra vai para a última.
+// Honorários de cada parcela proporcionais ao valor dela. Cada fatia é a diferença entre totais
+// acumulados arredondados, então nenhuma fica negativa e a soma fecha exatamente no total.
 function honProporcional(parcs,honTotal){
   var soma=parcs.reduce(function(a,p){return a+Number(p.valor||0);},0), n=parcs.length;
   if(!n)return [];
   if(soma<=0)return dividirCentavos(honTotal,n);
-  var out=[],acum=0;
+  var out=[],acum=0,anterior=0;
   for(var i=0;i<n;i++){
-    var h=i===n-1?arred(honTotal-acum):arred(honTotal*Number(parcs[i].valor||0)/soma);
-    out.push(h);acum=arred(acum+h);
+    acum+=Number(parcs[i].valor||0);
+    var atual=i===n-1?arred(honTotal):arred(honTotal*acum/soma);
+    out.push(arred(atual-anterior));anterior=atual;
   }
   return out;
 }
@@ -895,25 +897,47 @@ function listaPagtos(key,id,pi,p){
 }
 function temProximaAberta(parcs,pi){return parcs.slice(pi+1).some(function(q){return !parcFechada(q);});}
 function taxaJurosAtraso(){return Number(S.config.juros_atraso!==undefined?S.config.juros_atraso:2);}
-function jurosSugerido(p){
-  var dias=diasAtraso(p.venc,p.sit);
-  if(!dias)return 0;
-  return arred(Math.max(0,devidoParc(p)-totalPagoParc(p))*(taxaJurosAtraso()/100)*Math.ceil(dias/30));
+function diasEntre(ini,fim){
+  var a=new Date(String(ini).slice(0,10)+'T00:00:00'), b=new Date(String(fim).slice(0,10)+'T00:00:00');
+  return Math.floor((b-a)/864e5);
+}
+// Meses de atraso já cobrados na parcela. Pagamentos com juros anteriores a este controle
+// contam como cobrados até a data do último pagamento.
+function mesesJurosCobrados(p){
+  if(p.juros_meses!==undefined)return Number(p.juros_meses)||0;
+  if(Number(p.juros_atraso||0)>0&&p.data_pgto&&p.venc){var d=diasEntre(p.venc,p.data_pgto);return d>0?Math.ceil(d/30):0;}
+  return 0;
+}
+// Juros de atraso até a data do pagamento: só os meses (contados do vencimento) ainda não cobrados.
+function jurosAtraso(p,dataPgto){
+  var dias=p.venc&&p.sit!=='Pago'?diasEntre(p.venc,dataPgto||today()):0;
+  var meses=dias>0?Math.ceil(dias/30):0, novos=Math.max(0,meses-mesesJurosCobrados(p));
+  return {valor:arred(Math.max(0,devidoParc(p)-totalPagoParc(p))*(taxaJurosAtraso()/100)*novos),meses:meses};
 }
 function formPagamento(key,id,r,pi){
   var p=r.parcelas[pi];
   var restante=Math.max(0,arred(devidoParc(p)-totalPagoParc(p)));
-  var juros=jurosSugerido(p);
+  var juros=jurosAtraso(p,today()).valor;
   var args='\''+key+'\',\''+id+'\','+pi;
   var h='<tr class="pg-row"><td colspan="8"><div class="pg-form" data-restante="'+restante+'">';
   h+='<label>Valor recebido (R$)<input id="pg-valor" class="input-fi" type="number" min="0" step="0.01" value="'+arred(restante+juros).toFixed(2)+'" oninput="atualizarPgForm('+args+')"></label>';
-  h+='<label>Data<input id="pg-data" class="input-fi" type="date" value="'+today()+'"></label>';
-  if(juros>0) h+='<label class="pg-check"><input id="pg-juros" type="checkbox" checked data-juros="'+juros+'" onchange="trocarJurosPg('+args+')"> Juros de atraso ('+taxaJurosAtraso()+'%/mês): '+R(juros)+'</label>';
+  h+='<label>Data<input id="pg-data" class="input-fi" type="date" value="'+today()+'" onchange="atualizarJurosPg('+args+')"></label>';
+  h+='<label class="pg-check" id="pg-juros-wrap"'+(juros>0?'':' style="display:none"')+'><input id="pg-juros" type="checkbox" checked data-juros="'+juros+'" onchange="trocarJurosPg('+args+')"> <span id="pg-juros-txt">Juros de atraso ('+taxaJurosAtraso()+'%/mês): '+R(juros)+'</span></label>';
   h+='<div id="pg-aviso" class="pg-aviso"></div>';
   h+='<div class="pg-acoes"><button class="btn btn-ghost btn-sm" onclick="abrirDetalhe(\''+key+'\',\''+id+'\')">Cancelar</button><button class="btn btn-teal btn-sm" onclick="confirmarPagamento('+args+')">Confirmar pagamento</button></div>';
   h+='</div></td></tr>';
   setTimeout(function(){atualizarPgForm(key,id,pi);},0);
   return h;
+}
+// Data do pagamento mudou: recalcula os juros até essa data e o valor sugerido.
+function atualizarJurosPg(key,id,pi){
+  var r=S[key].find(function(x){return x.id===id;}), jEl=document.getElementById('pg-juros');
+  if(!r||!jEl)return;
+  var j=jurosAtraso(r.parcelas[pi],gv('pg-data')||today()).valor;
+  jEl.dataset.juros=j;
+  document.getElementById('pg-juros-wrap').style.display=j>0?'':'none';
+  document.getElementById('pg-juros-txt').textContent='Juros de atraso ('+taxaJurosAtraso()+'%/mês): '+R(j);
+  trocarJurosPg(key,id,pi);
 }
 function trocarJurosPg(key,id,pi){
   var jEl=document.getElementById('pg-juros'), form=jEl.closest('.pg-form');
@@ -926,7 +950,7 @@ function atualizarPgForm(key,id,pi){
   if(!r||!aviso)return;
   var p=r.parcelas[pi];
   var jEl=document.getElementById('pg-juros');
-  var devido=arred(devidoParc(p)+(jEl&&jEl.checked?Number(jEl.dataset.juros):0)-totalPagoParc(p));
+  var devido=arred(devidoParc(p)+(jEl&&jEl.checked?Number(jEl.dataset.juros)||0:0)-totalPagoParc(p));
   var v=arred(parseFloat(gv('pg-valor'))||0), dif=arred(v-devido);
   var temProx=temProximaAberta(r.parcelas,pi);
   if(dif<-0.005){
@@ -947,7 +971,8 @@ async function confirmarPagamento(key,id,pi){
   var data=gv('pg-data')||today();
   var jEl=document.getElementById('pg-juros');
   var opcResto=(document.querySelector('input[name="pg-resto"]:checked')||{}).value;
-  if(jEl&&jEl.checked) p.juros_atraso=arred(Number(p.juros_atraso||0)+Number(jEl.dataset.juros));
+  var jur=jurosAtraso(p,data);
+  if(jEl&&jEl.checked&&jur.valor>0){p.juros_atraso=arred(Number(p.juros_atraso||0)+jur.valor);p.juros_meses=jur.meses;}
   p.pagamentos=pagtosParcela(p).concat([{valor:v,data:data}]);
   p.pago=totalPagoParc(p);
   p.data_pgto=data;
@@ -1000,7 +1025,11 @@ async function editTipoParc(key,id,pi,tipo){
 
 // ── Formulário de acordo ──
 // Rascunho das parcelas aberto em "Editar parcelas"; só é gravado se o usuário mexeu nele.
-var parcRascunho=null, parcEditadas=false, parcEsperado=0;
+var parcRascunho=null, parcEditadas=false, parcEsperado=0, parcBasePagtos='';
+// Pagamentos de cada parcela, para detectar o que foi registrado (em outra aba ou por outra pessoa) durante a edição.
+function assinaturaPagtos(parcs){
+  return JSON.stringify((parcs||[]).map(function(p){return [pagtosParcela(p),Number(p.juros_atraso||0),Number(p.transferido||0),Number(p.excedente||0)];}));
+}
 function buildFormAcordo(key,r){
   r=r||{};
   var isJud=key==='judicial';
@@ -1031,7 +1060,7 @@ function buildFormAcordo(key,r){
   h+=inp('f-valor-acordado','Valor acordado (R$) *',r.valor_acordado||(isJud?'':r.valor)||'',num+' oninput="recalcAcordo(true)"');
   h+=inp('f-nparc','Nº de parcelas',nparc,'type="number" min="1" max="120" oninput="recalcAcordo(true)"');
   h+='<div class="ff parc-ed-btn"><label>&nbsp;</label><button type="button" class="btn btn-ghost" onclick="abrirEditorParcelas()">Editar parcelas (datas e valores)</button><span id="parc-resumo" class="acd-sub">'+(r.parcelas_editadas?'Parcelas editadas à mão':'')+'</span></div>';
-  h+=inp('f-vparc','Valor por parcela (R$)',acVparcManual(r)?r.vparc:'',num+' placeholder="Calculado automaticamente"');
+  h+=inp('f-vparc','Valor por parcela (R$)',acVparcManual(r)?r.vparc:'',num+' placeholder="Calculado automaticamente" oninput="descartarRascunho()"');
   h+=inp('f-honorarios','Honorários (%)',r.id?honDe(r):cfg.honorarios,'type="number" min="0" max="100" step="0.1" oninput="recalcAcordo()"');
   h+=inp('f-hon-calc','Honorários calculados (R$)',(r.hon_calc===undefined||r.hon_calc===null)?'':r.hon_calc,num);
   h+=inp('f-data1','1ª parcela em',r.data1||r.prox_venc||today(),'type="date" onchange="recalcAcordo(true)"');
@@ -1091,6 +1120,7 @@ function abrirEditorParcelas(){
   if(!parcRascunho&&!ehAcordo(gv('m-tipo'))){
     var exC=exEmEdicao();
     if(!(exC&&Array.isArray(exC.parcelas))&&!gf('f-valor')){toast('Informe o valor original antes de editar as parcelas.','err');return;}
+    parcBasePagtos=assinaturaPagtos(exC?exC.parcelas:[]);
     parcRascunho=JSON.parse(JSON.stringify(exC&&Array.isArray(exC.parcelas)?exC.parcelas:parcelasCarteiraDoForm())).map(normalizarParcela);
     parcEsperado=arred(parcRascunho.reduce(function(a,p){return a+Number(p.valor||0);},0));
   }
@@ -1098,6 +1128,7 @@ function abrirEditorParcelas(){
     var ex=exEmEdicao(), pc=paramsCronograma(ex), exParcs=ex?acParcs(ex):[];
     var temPago=exParcs.some(function(p){return totalPagoParc(p)>0;});
     var base=(exParcs.length&&(temPago||!cronogramaMudou(ex,pc)))?exParcs:gerarParcAcordo(pc.valores,pc.honCalc,pc.hon,pc.tipoParc,pc.data1);
+    parcBasePagtos=assinaturaPagtos(exParcs);
     parcRascunho=JSON.parse(JSON.stringify(base)).map(normalizarParcela);
   }
   document.getElementById('m-body').classList.add('editando-parcelas');
@@ -1176,7 +1207,6 @@ function cronogramaMudou(ex,pc){
   return !ex||!Array.isArray(ex.parcelas)
     ||String(ex.valor_acordado)!==String(pc.vAc)||String(ex.nparc)!==String(pc.n)
     ||String(ex.data1)!==String(pc.data1)||String(ex.tipo_parcela)!==String(pc.tipoParc)
-    ||arred(ex.hon_calc)!==pc.honCalc
     ||acVparcManual(ex)!==pc.vParcManual
     ||(pc.vParcManual&&arred(ex.vparc)!==pc.vParc);
 }
@@ -1199,7 +1229,8 @@ function lerFormAcordo(key,ex){
     rec.parcelas_editadas=true;
   } else {
     var manter=temPago||!cronogramaMudou(ex,pc);
-    rec.parcelas=manter?exParcs:gerarParcAcordo(valores,honCalc,hon,tipoParc,data1);
+    if(manter){rec.parcelas=JSON.parse(JSON.stringify(exParcs));aplicarHonorarios(rec.parcelas,honCalc,hon);}
+    else rec.parcelas=gerarParcAcordo(valores,honCalc,hon,tipoParc,data1);
     rec.parcelas_editadas=!!(manter&&ex&&ex.parcelas_editadas);
   }
   if(anterior>0) rec.recebido_anterior=anterior;
@@ -1297,7 +1328,7 @@ function verParcelas(key,id,pagIdx){
 // ══════════════════════════════════════════════════════════════
 // O modal de lançamento é substituído pelas telas de parcelas; resetModal restaura o formulário original.
 var MODAL_HTML=document.querySelector('.modal').innerHTML;
-function resetModal(){parcRascunho=null;parcEditadas=false;parcEsperado=0;var m=document.querySelector('.modal');m.classList.remove('modal-wide');if(!document.getElementById('m-body'))m.innerHTML=MODAL_HTML;document.getElementById('m-body').classList.remove('editando-parcelas');}
+function resetModal(){parcRascunho=null;parcEditadas=false;parcEsperado=0;parcBasePagtos='';var m=document.querySelector('.modal');m.classList.remove('modal-wide');if(!document.getElementById('m-body'))m.innerHTML=MODAL_HTML;document.getElementById('m-body').classList.remove('editando-parcelas');}
 function showModalHTML(html){var m=document.querySelector('.modal');m.innerHTML=html;m.classList.add('modal-wide');document.getElementById('mbg').classList.add('open');}
 
 // Mantém o operador já gravado no registro mesmo que ele tenha sido removido da lista
@@ -1529,11 +1560,25 @@ function closeModal(){
 function gv(id){var e=document.getElementById(id);return e?e.value:'';}
 function gf(id){var e=document.getElementById(id);return e?parseFloat(e.value)||0:0;}
 
-// Confirma quando as parcelas editadas não fecham com o valor a parcelar.
+// Confirma quando as parcelas editadas não fecham com o valor a parcelar e recusa salvar
+// se o lançamento recebeu pagamentos depois que o editor foi aberto (o rascunho os apagaria).
 function somaRascunhoOk(){
   if(!(parcRascunho&&parcEditadas))return true;
+  var exAtual=exEmEdicao();
+  if(exAtual&&assinaturaPagtos(exAtual.parcelas)!==parcBasePagtos){
+    parcRascunho=null;parcEditadas=false;
+    fecharEditorParcelas();
+    alert('Este lançamento recebeu pagamentos enquanto as parcelas eram editadas. As edições foram descartadas para não apagar esses pagamentos: abra "Editar parcelas" de novo e refaça os ajustes.');
+    return false;
+  }
   var somaP=arred(parcRascunho.reduce(function(a,p){return a+Number(p.valor||0);},0)), espP=esperadoRascunho();
   return Math.abs(somaP-espP)<=0.01||confirm('A soma das parcelas ('+R(somaP)+') é diferente do valor a parcelar ('+R(espP)+'). Salvar mesmo assim?');
+}
+// Todas as parcelas pagas: quitado. Parcela reaberta num registro quitado: volta a ativo/em aberto.
+function reconciliarSituacao(key,r){
+  var quitada=ehAcordo(key)?'Cumprido':'Recebido', todas=r.parcelas.length&&r.parcelas.every(function(p){return p.sit==='Pago';});
+  if(todas) r.situacao=quitada;
+  else if(r.situacao===quitada) r.situacao=ehAcordo(key)?'Ativo':'Em aberto';
 }
 async function salvar(){
   var tipo=gv('m-tipo'), id=gv('m-id');
@@ -1558,6 +1603,7 @@ async function salvar(){
     if(editadas){parcelas.forEach(function(p,i){p.num=i+1;p.sit=statusParcela(p);});nParc=parcelas.length;}
     rec={parcelas_editadas:editadas||!!(ex&&ex.parcelas_editadas),devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor:valor,parcelas:parcelas,_nparc:nParc,_data1:data1,juros_custom:j2,cm_custom:gf('f-cm'),honorarios:numCampo('f-honorarios',S.config.honorarios),responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex?ex.lancamento:today(),criado_em:ex?ex.criado_em:today()};
   }
+  if(rec.parcelas_editadas&&Array.isArray(rec.parcelas)) reconciliarSituacao(tipo,rec);
   rec.id=ex?ex.id:uid();
   if(ex){var i=list.findIndex(function(r){return r.id===rec.id;});list[i]=rec;} else list.push(rec);
   document.getElementById('m-body').classList.remove('editando-parcelas');

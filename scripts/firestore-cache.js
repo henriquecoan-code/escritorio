@@ -3,7 +3,7 @@
 (function(){
   var DIRTY_KEY='ob-cache-dirty';   // limpeza anterior não concluiu
   var HINT_KEY='ob-auth-hint';      // gravada por scripts/auth-hint.js enquanto há sessão
-  var hadUser=false, clearing=false;
+  var hadUser=false, clearing=false, enabled=false;
 
   function lsGet(key){try{return localStorage.getItem(key);}catch(e){return null;}}
   function lsSet(key,value){try{if(value===null)localStorage.removeItem(key);else localStorage.setItem(key,value);}catch(e){}}
@@ -20,11 +20,19 @@
       }
       // Deslogado: não abre o cache, para não travar a limpeza feita por outra aba.
       if(lsGet(HINT_KEY)!=='1')return;
+      this.ligar(db);
+    },
+    ligar:function(db){
+      if(enabled||clearing||lsGet(DIRTY_KEY))return;
+      enabled=true;
       db.enablePersistence({synchronizeTabs:true}).catch(function(error){
         // Sem IndexedDB ou aba antiga com outra versão: segue sem cache, como antes.
         console.warn('Cache local do Firestore indisponível:',error.code||error);
       });
     },
+    // Login feito nesta página (primeira visita ou depois de sair): liga o cache.
+    // Chamar no onAuthStateChanged antes de iniciar as leituras protegidas.
+    login:function(db){this.ligar(db);},
     // Chamar em onAuthStateChanged, depois de OBAuthHint.update: se a sessão desta aba acabou
     // (pelo botão Sair aqui ou em outra aba), fecha o Firestore e apaga o cache.
     watch:function(db,user){
