@@ -211,6 +211,27 @@ tr.row-atraso td{background:rgba(248,81,73,0.07)}
 tr.row-atraso td:first-child{box-shadow:inset 3px 0 0 var(--red)}
 .ac-card.ac-atraso{border-left:3px solid var(--red)}
 .modal.modal-wide{width:860px}
+/* Editor de parcelas: esconde o formulário enquanto o editor está aberto */
+#parc-editor{display:none}
+#m-body.editando-parcelas>:not(#parc-editor){display:none}
+#m-body.editando-parcelas>#parc-editor{display:block}
+.parc-ed-btn{justify-content:flex-end}
+.parc-ed-btn .btn{width:100%}
+.parc-ed input{width:140px;padding:4px 8px}
+.parc-ed-tot{display:flex;flex-wrap:wrap;gap:18px;margin-top:10px;font-size:11.5px;color:var(--tx2)}
+.parc-ed-dif{color:var(--red)}
+/* Pagamentos da parcela */
+.pg-item{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.pg-del{border:none;background:transparent;color:var(--tx3);cursor:pointer;font-size:13px;line-height:1;padding:0 2px}
+.pg-del:hover{color:var(--red)}
+tr.pg-row td{background:var(--ink3)}
+.pg-form{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;padding:6px 2px}
+.pg-form label{display:flex;flex-direction:column;gap:4px;font-size:10.5px;color:var(--tx3)}
+.pg-form .pg-check{flex-direction:row;align-items:center;gap:6px;color:var(--tx2)}
+.pg-aviso{flex-basis:100%;font-size:11.5px;color:var(--amber);display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.pg-aviso:empty{display:none}
+.pg-aviso label{flex-direction:row;align-items:center;gap:5px;font-size:11.5px;color:var(--tx2)}
+.pg-acoes{display:flex;gap:6px;margin-left:auto}
 .acd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
 .acd-box{background:var(--ink3);border:1px solid var(--rim);border-radius:var(--rs);padding:10px;font-size:11.5px;line-height:1.6}
 .acd-lbl{font-size:9px;color:var(--tx3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px}
