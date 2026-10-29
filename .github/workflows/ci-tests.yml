@@ -13,7 +13,8 @@ env:
 jobs:
   e2e-playwright:
     name: E2E Playwright
-    runs-on: ubuntu-latest
+    # ubuntu-latest migrou para a Ubuntu 26 (out/2026) e o "playwright install --with-deps" falha lá.
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout

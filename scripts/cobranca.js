@@ -202,10 +202,14 @@ function syncNow(){
   startRealtime();
 }
 
+// Cada chamada ganha um número; se outra começar durante o await, esta desiste (evita listeners duplicados).
+var realtimeGen=0;
 async function startRealtime(){
+  var gen=++realtimeGen;
   Object.keys(unsub).forEach(function(k){if(unsub[k])unsub[k]();});
   unsub={};
   try{await loadQueuedOperations();}catch(error){console.error(error);toast('Não foi possível preparar o armazenamento local','err');}
+  if(gen!==realtimeGen)return;
   setSync('loading','Conectando ao Firebase...');
   function handleRealtimeError(error){console.error(error);setSync('error','Sincronização indisponível',syncErrorDetail(error));toast(syncErrorDetail(error),'err');}
   DATA_KEYS.forEach(function(k){
@@ -234,6 +238,7 @@ function initFirebase(){
       if(currentUser){firebaseReady=true;setAuth(false);startRealtime();}
       else{firebaseReady=false;Object.keys(unsub).forEach(function(k){if(unsub[k])unsub[k]();});unsub={};setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
       if(window.OBAuthHint)window.OBAuthHint.update(user);
+      if(window.OBFirestoreCache)window.OBFirestoreCache.watch(fbDb,user);
     });
   }catch(e){console.error(e);setSync('error','Erro ao iniciar Firebase');setAuth(true,'Não foi possível iniciar o Firebase.');}
 }
@@ -249,6 +254,34 @@ function pct(v){return Number(v||0).toFixed(1)+'%';}
 function fD(s){if(!s)return '—';try{var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0];}catch(e){return s;}}
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function today(){return new Date().toISOString().split('T')[0];}
+function arred(v){return Math.round(Number(v||0)*100)/100;}
+// Divide um total em n parcelas em centavos; o centavo que sobra vai para as primeiras parcelas.
+function dividirCentavos(total,n){
+  var c=Math.round(Number(total||0)*100),b=Math.floor(c/n),resto=c-b*n,out=[];
+  for(var i=0;i<n;i++)out.push((b+(i<resto?1:0))/100);
+  return out;
+}
+// Vencimento da parcela i (0 = primeira): dias 28 a 31 viram dia 30; em fevereiro, dia 28.
+function vencParcela(data1,i){
+  var p=String(data1).slice(0,10).split('-').map(Number);
+  var m=p[1]-1+i, y=p[0]+Math.floor(m/12);
+  m=((m%12)+12)%12;
+  var d=p[2]>=28?(m===1?28:30):p[2];
+  return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+}
+// Honorários do registro; usa o padrão só quando o campo não existe (0% é um valor válido).
+function honDe(r){
+  var h=r?r.honorarios:undefined;
+  return (h===undefined||h===null||h===''||isNaN(Number(h)))?Number(S.config.honorarios):Number(h);
+}
+// Lê um campo numérico do formulário; vazio usa o padrão, mas "0" continua 0.
+function numCampo(id,padrao){var v=String(gv(id)).trim();if(v==='')return padrao;var n=parseFloat(v);return isNaN(n)?padrao:n;}
+// Aceita "1.234,56", "1234,56" e "1234.56".
+function lerValorBR(v){
+  var s=String(v||'').replace(/\s|R\$/g,'');
+  if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');
+  return s===''?NaN:Number(s);
+}
 
 // Calcula valor atualizado: juros compostos mensais + correção anual proporcional
 function calcAtual(valor, dataRef, jurosMes, correcaoAno){
@@ -268,12 +301,9 @@ function gerarParcelas(total, nParc, dataInicio, jurosMes){
   var parcelas=[];
   var j=Number(jurosMes||1)/100;
   var fator=nParc>1?(j*Math.pow(1+j,nParc))/(Math.pow(1+j,nParc)-1):1;
-  var valParc=total*(nParc>1?fator:1);
+  var valParc=arred(total*(nParc>1?fator:1));
   for(var i=0;i<nParc;i++){
-    var d=new Date(dataInicio+'T00:00:00');
-    d.setMonth(d.getMonth()+i);
-    var ds=d.toISOString().split('T')[0];
-    parcelas.push({num:i+1,venc:ds,valor:valParc,pago:0,sit:'Pendente'});
+    parcelas.push({num:i+1,venc:vencParcela(dataInicio,i),valor:valParc,pago:0,sit:'Pendente'});
   }
   return parcelas;
 }
@@ -299,7 +329,7 @@ function atrH(dias){
   return '<span class="atr-badge" style="background:rgba(248,81,73,0.25);color:#ff9090">'+dias+'d</span>';
 }
 function pillSit(s){
-  var m={Recebido:'green','Em aberto':'amber','Em dia':'green','Em atraso':'red',Renegociado:'amber',Cumprido:'green',Quebrado:'red',Inadimplente:'red',Judicial:'purple',Pendente:'amber',Pago:'green',Ativo:'blue',Suspenso:'amber',Arquivado:'dim'};
+  var m={Recebido:'green','Em aberto':'amber',Parcial:'amber','Em dia':'green','Em atraso':'red',Renegociado:'amber',Cumprido:'green',Quebrado:'red',Inadimplente:'red',Judicial:'purple',Pendente:'amber',Pago:'green',Ativo:'blue',Suspenso:'amber',Arquivado:'dim'};
   var c=m[s]||'amber';
   if(c==='dim') return '<span class="tag" style="background:var(--ink4);color:var(--tx3)">'+esc(s)+'</span>';
   return '<span class="tag tag-'+c+'">'+esc(s)+'</span>';
@@ -438,8 +468,8 @@ function renderDash(){
   var cpTotal=cp.reduce(function(a,r){return a+totalParc(r.parcelas);},0);
   var cpRec=cp.reduce(function(a,r){return a+totalPago(r.parcelas);},0);
   var cRecTot=cvRec+cpRec;
-  var honPct_cv=cv.reduce(function(a,r){return a+(Number(r.recebido||0)*(Number(r.honorarios||S.config.honorarios)/100));},0);
-  var honPct_cp=cp.reduce(function(a,r){return a+(totalPago(r.parcelas)*(Number(r.honorarios||S.config.honorarios)/100));},0);
+  var honPct_cv=cv.reduce(function(a,r){return a+(Number(r.recebido||0)*(honDe(r)/100));},0);
+  var honPct_cp=cp.reduce(function(a,r){return a+(totalPago(r.parcelas)*(honDe(r)/100));},0);
   var cHonTot=honPct_cv+honPct_cp;
   var cTot=cvCob+cpTotal, cTx=cTot>0?(cRecTot/cTot)*100:0;
 
@@ -457,8 +487,8 @@ function renderDash(){
     '<div class="fat-card"><div class="fc-label">Receita — carteira própria</div><div class="fc-val">'+R(pRecTot)+'</div><div class="fc-sub">'+pPct+'% do faturamento</div><div class="fc-bar"><div class="fc-fill" style="width:'+pPct+'%;background:var(--teal)"></div></div></div>'+
     '<div class="fat-card"><div class="fc-label">Receita — honorários '+S.config.honorarios+'%</div><div class="fc-val">'+R(cHonTot)+'</div><div class="fc-sub">'+hPct+'% do faturamento</div><div class="fc-bar"><div class="fc-fill" style="width:'+hPct+'%;background:var(--rose)"></div></div></div>';
 
-  document.getElementById('kpi-adm').innerHTML=kpisAcordo('acordos');
-  document.getElementById('kpi-jd').innerHTML=kpisAcordo('judicial');
+  document.getElementById('kpi-adm').innerHTML=kpisAcordo('acordos',byPer(S.acordos||[]));
+  document.getElementById('kpi-jd').innerHTML=kpisAcordo('judicial',byPer(S.judicial||[]));
 
   renderChartDash();
 }
@@ -484,8 +514,8 @@ function renderChartDash(){
     {label:'Parcelado pago',data:months.map(function(o){return S.propria_parc.filter(function(r){var lk=r.lancamento;if(!lk)return false;var d=new Date(lk);return d.getFullYear()===o.y&&d.getMonth()===o.m;}).reduce(function(a,r){return a+totalPago(r.parcelas);},0);}),backgroundColor:'rgba(88,166,255,0.7)',borderRadius:3}
   ]});
   var honMes=months.map(function(o){
-    var cv=S.clientes_vista.filter(function(r){var d=new Date(r.lancamento||r.data_pgto||'2000-01-01');return d.getFullYear()===o.y&&d.getMonth()===o.m;}).reduce(function(a,r){return a+Number(r.recebido||0)*(Number(r.honorarios||S.config.honorarios)/100);},0);
-    var cp=S.clientes_parc.filter(function(r){var d=new Date(r.lancamento||'2000-01-01');return d.getFullYear()===o.y&&d.getMonth()===o.m;}).reduce(function(a,r){return a+totalPago(r.parcelas)*(Number(r.honorarios||S.config.honorarios)/100);},0);
+    var cv=S.clientes_vista.filter(function(r){var d=new Date(r.lancamento||r.data_pgto||'2000-01-01');return d.getFullYear()===o.y&&d.getMonth()===o.m;}).reduce(function(a,r){return a+Number(r.recebido||0)*(honDe(r)/100);},0);
+    var cp=S.clientes_parc.filter(function(r){var d=new Date(r.lancamento||'2000-01-01');return d.getFullYear()===o.y&&d.getMonth()===o.m;}).reduce(function(a,r){return a+totalPago(r.parcelas)*(honDe(r)/100);},0);
     return cv+cp;
   });
   mkChart('chartDashH','bar',{labels:labels,datasets:[{label:'Honorários',data:honMes,backgroundColor:'rgba(251,113,133,0.7)',borderRadius:3}]});
@@ -514,8 +544,8 @@ function renderTbl(cart,tipo){
       var id=r.id;
       var atu=r.situacao!=='Recebido'?calcAtual(r.valor,r.lancamento,j,cm):Number(r.valor);
       var dias=diasAtraso(r.data_pgto,r.situacao);
-      var honVal=Number(r.recebido||0)*(Number(r.honorarios||S.config.honorarios)/100);
-      var honPct=Number(r.honorarios||S.config.honorarios);
+      var honVal=Number(r.recebido||0)*(honDe(r)/100);
+      var honPct=honDe(r);
       var base='<td><b>'+esc(r.devedor)+'</b></td>'+(isCliente?'<td class="dim">'+esc(r.credor||'—')+'</td>':'')+'<td>'+R(r.valor)+'</td><td class="pos">'+(Number(r.recebido||0)>0?R(r.recebido):'<span class="dim">—</span>')+'</td><td style="color:var(--amber)">'+R(atu)+'</td><td class="dim">'+fD(r.data_pgto)+'</td><td>'+atrH(dias)+'</td>'+(isCliente?'<td class="pos">'+R(honVal)+'</td><td class="dim">'+honPct+'%</td>':'<td style="display:none"></td>')+'<td class="dim">'+esc(r.responsavel||'—')+'</td><td>'+pillSit(r.situacao)+'</td>';
       if(!isCliente) base=base.replace('<td style="display:none"></td>','');
       return '<tr>'+base+'<td><button class="row-ab" onclick="editRec(\''+key+'\',\''+id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+id+'\')">Excluir</button></td></tr>';
@@ -527,15 +557,15 @@ function renderTbl(cart,tipo){
     tb.innerHTML=filtered.map(function(r){
       var id=r.id;
       var totP=totalParc(r.parcelas), totRec=totalPago(r.parcelas);
-      var aRec=totP-totRec;
+      var aRec=acSaldo(r);
       var prox=proxParc(r.parcelas);
       var proxVenc=prox?prox.venc:null;
       var dias=proxVenc&&r.situacao!=='Recebido'?diasAtraso(proxVenc,'Em aberto'):null;
-      var honPct=Number(r.honorarios||S.config.honorarios)/100;
+      var honPct=honDe(r)/100;
       var honVal=totRec*honPct;
       var npago=(r.parcelas||[]).filter(function(p){return p.sit==='Pago';}).length;
       var nTot=(r.parcelas||[]).length;
-      var base='<td><b>'+esc(r.devedor)+'</b></td>'+(isCliente?'<td class="dim">'+esc(r.credor||'—')+'</td>':'')+'<td>'+R(r.valor)+'</td><td style="color:var(--amber)">'+R(totP)+'</td><td class="dim">'+npago+'/'+nTot+'x</td><td class="pos">'+R(totRec)+'</td><td class="warn">'+R(aRec)+'</td><td class="dim">'+(proxVenc?fD(proxVenc):'—')+'</td><td>'+atrH(dias)+'</td>'+(isCliente?'<td class="dim">'+(Number(r.honorarios||S.config.honorarios))+'%</td><td class="pos">'+R(honVal)+'</td>':'')+'<td class="dim">'+esc(r.responsavel||'—')+'</td><td>'+pillSit(r.situacao)+'</td>';
+      var base='<td><b>'+esc(r.devedor)+'</b></td>'+(isCliente?'<td class="dim">'+esc(r.credor||'—')+'</td>':'')+'<td>'+R(r.valor)+'</td><td style="color:var(--amber)">'+R(totP)+'</td><td class="dim">'+npago+'/'+nTot+'x</td><td class="pos">'+R(totRec)+'</td><td class="warn">'+R(aRec)+'</td><td class="dim">'+(proxVenc?fD(proxVenc):'—')+'</td><td>'+atrH(dias)+'</td>'+(isCliente?'<td class="dim">'+(honDe(r))+'%</td><td class="pos">'+R(honVal)+'</td>':'')+'<td class="dim">'+esc(r.responsavel||'—')+'</td><td>'+pillSit(r.situacao)+'</td>';
       return '<tr>'+base+'<td><button class="row-ab" onclick="editRec(\''+key+'\',\''+id+'\')">Editar</button><button class="row-ab" onclick="verParcelas(\''+key+'\',\''+id+'\')">Parcelas</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+id+'\')">Excluir</button></td></tr>';
     }).join('');
   }
@@ -544,6 +574,21 @@ function renderTbl(cart,tipo){
 // ══════════════════════════════════════════════════════════════
 //  PAINEL DA OPERADORA
 // ══════════════════════════════════════════════════════════════
+// Ordem dos cards: Negociação primeiro, depois os demais em aberto e os Recebidos por último.
+// Dentro de cada grupo, maior atraso primeiro; nos Recebidos, o pagamento mais recente primeiro.
+function grupoOp(r){return r.situacao==='Negociação'?0:r.situacao==='Recebido'?2:1;}
+function atrasoOp(r){
+  if(r._tipo!=='parcelado') return diasAtraso(r.data_pgto,r.situacao)||0;
+  if(r.situacao==='Recebido') return 0;
+  var venc=(r.parcelas||[]).filter(function(p){return p.sit!=='Pago';}).map(function(p){return p.venc||'';}).filter(Boolean).sort()[0];
+  return venc?(diasAtraso(venc,'Em aberto')||0):0;
+}
+// Parcelas pagas antes do registro da data ficam sem data_pgto: usa a data de lançamento.
+function ultimoPgtoOp(r){
+  if(r._tipo!=='parcelado') return r.data_pgto||r.lancamento||'';
+  var ds=(r.parcelas||[]).map(function(p){return p.data_pgto||'';}).filter(Boolean).sort();
+  return ds.length?ds[ds.length-1]:(r.lancamento||'');
+}
 function renderOperadora(){
   var busca=(document.getElementById('op-search')||{}).value||'';
   var tipoF=(document.getElementById('op-tipo')||{}).value||'';
@@ -555,18 +600,23 @@ function renderOperadora(){
   if(busca) all=all.filter(function(r){return (r.devedor||'').toLowerCase().indexOf(busca.toLowerCase())>=0;});
   if(tipoF) all=all.filter(function(r){return r._tipo===tipoF;});
   if(sitF) all=all.filter(function(r){return (r.situacao||'').indexOf(sitF)>=0;});
+  all.sort(function(a,b){
+    var g=grupoOp(a)-grupoOp(b);
+    if(g) return g;
+    if(grupoOp(a)===2) return ultimoPgtoOp(b).localeCompare(ultimoPgtoOp(a));
+    return atrasoOp(b)-atrasoOp(a);
+  });
   var grid=document.getElementById('op-grid');
   if(!all.length){grid.innerHTML='<div style="grid-column:1/-1"><div class="empty"><div class="empty-ic">🔍</div><div class="empty-t">Nenhum acordo encontrado</div><div class="empty-s">Ajuste os filtros ou adicione lançamentos</div></div></div>';return;}
   grid.innerHTML=all.map(function(r){
-    var hon=Number(r.honorarios||S.config.honorarios)/100;
+    var hon=honDe(r)/100;
     var isParc=r._tipo==='parcelado';
     var totP=isParc?totalParc(r.parcelas):Number(r.valor||0);
     var totRec=isParc?totalPago(r.parcelas):Number(r.recebido||0);
-    var aRec=totP-totRec;
+    var aRec=isParc?acSaldo(r):totP-totRec;
     var atu=!isParc&&r.situacao!=='Recebido'?calcAtual(r.valor,r.lancamento,j,cm):totP;
     var honVal=totRec*hon;
-    var prox=isParc?proxParc(r.parcelas):null;
-    var dias=isParc?(prox?diasAtraso(prox.venc,'Em aberto'):null):diasAtraso(r.data_pgto,r.situacao);
+    var dias=atrasoOp(r)||null;
     var progPct=totP>0?(totRec/totP)*100:0;
     var nPago=isParc?(r.parcelas||[]).filter(function(p){return p.sit==='Pago';}).length:0;
     var nTot=isParc?(r.parcelas||[]).length:0;
@@ -605,13 +655,62 @@ var SIT_ACORDO={acordos:['Ativo','Cumprido','Inadimplente','Cancelado'],judicial
 
 function acParcs(r){return Array.isArray(r.parcelas)?r.parcelas:[];}
 function acValor(r){return Number(r.valor_acordado||r.valor||0);}
-function parcPago(p){return p.sit==='Pago'?Number(p.pago||p.valor||0):0;}
+// Pagamentos da parcela. Parcelas pagas antes do controle de pagamentos só têm "pago" e "data_pgto".
+function pagtosParcela(p){
+  if(Array.isArray(p.pagamentos)) return p.pagamentos;
+  return p.sit==='Pago'||Number(p.pago||0)>0?[{valor:Number(p.pago||p.valor||0),data:p.data_pgto||''}]:[];
+}
+function totalPagoParc(p){return arred(pagtosParcela(p).reduce(function(a,x){return a+Number(x.valor||0);},0));}
+function devidoParc(p){return arred(Number(p.valor||0)+Number(p.juros_atraso||0));}
+// Pago quando o recebido cobre o devido (parcela zerada também conta como quitada); Parcial quando cobre só uma parte.
+function statusParcela(p){
+  if(!Array.isArray(p.pagamentos)&&p.sit==='Pago') return 'Pago';
+  var pago=totalPagoParc(p);
+  if(pago>=devidoParc(p)-0.005) return 'Pago';
+  return pago>0?'Parcial':'Em aberto';
+}
+// Parcela fechada com dinheiro recebido: não absorve diferenças de outras parcelas.
+// Converte parcela antiga (só pago/data_pgto) para a lista de pagamentos.
+function normalizarParcela(p){if(!Array.isArray(p.pagamentos))p.pagamentos=pagtosParcela(p).slice();return p;}
+function parcFechada(p){return p.sit==='Pago'&&totalPagoParc(p)>0;}
+function parcPago(p){return totalPagoParc(p);}
+// Aplica -diff nas parcelas seguintes ainda abertas, em ordem: diff>0 abate, diff<0 acrescenta.
+// Nenhuma parcela fica abaixo do que já recebeu; o que não couber passa para a seguinte e o que sobrar é devolvido.
+function compensarProximas(parcs,i,diff){
+  var resto=arred(diff);
+  for(var k=i+1;k<parcs.length&&Math.abs(resto)>=0.005;k++){
+    var q=parcs[k];
+    if(parcFechada(q))continue;
+    normalizarParcela(q);
+    var minimo=totalPagoParc(q), atual=Number(q.valor||0), novo=arred(atual-resto);
+    if(novo<minimo){resto=arred(resto-(atual-minimo));q.valor=minimo;}
+    else{q.valor=novo;resto=0;}
+    q.sit=statusParcela(q);
+  }
+  return resto;
+}
+// Honorários de cada parcela proporcionais ao valor dela; o centavo que sobra vai para a última.
+function honProporcional(parcs,honTotal){
+  var soma=parcs.reduce(function(a,p){return a+Number(p.valor||0);},0), n=parcs.length;
+  if(!n)return [];
+  if(soma<=0)return dividirCentavos(honTotal,n);
+  var out=[],acum=0;
+  for(var i=0;i<n;i++){
+    var h=i===n-1?arred(honTotal-acum):arred(honTotal*Number(parcs[i].valor||0)/soma);
+    out.push(h);acum=arred(acum+h);
+  }
+  return out;
+}
+function aplicarHonorarios(parcs,honTotal,honPct){
+  var hons=honProporcional(parcs,honTotal);
+  parcs.forEach(function(p,i){p.num=i+1;p.hon_valor=hons[i];p.hon_pct=Number(honPct)||0;});
+}
 function acRecebido(r){return acParcs(r).reduce(function(a,p){return a+parcPago(p);},0)+acRecAnterior(r);}
 // Saldo = parcelas ainda em aberto (juros de atraso pagos não abatem as parcelas seguintes)
 function acRecAnterior(r){return Array.isArray(r.parcelas)?Number(r.recebido_anterior||0):Number(r.recebido||0);}
 function acSaldo(r){
   if(!Array.isArray(r.parcelas)) return Math.max(0,acValor(r)-acRecebido(r));
-  return r.parcelas.reduce(function(a,p){return a+(p.sit==='Pago'?0:Number(p.valor||0));},0);
+  return r.parcelas.reduce(function(a,p){return a+(p.sit==='Pago'?0:Math.max(0,devidoParc(p)-totalPagoParc(p)));},0);
 }
 function acProx(r){return acParcs(r).find(function(p){return p.sit!=='Pago';})||null;}
 function parcVencida(p){return !!(p&&p.sit!=='Pago'&&diasAtraso(p.venc,p.sit));}
@@ -627,18 +726,25 @@ function acBusca(r,busca){
   return [r.devedor,r.credor,r.numero,r.documento].some(function(v){return (v||'').toLowerCase().indexOf(b)>=0;});
 }
 
-function gerarParcAcordo(n,vParc,honTotal,honPct,tipo,data1){
-  var parcs=[];
+// valores: valor de cada parcela (já em centavos); honorários divididos em centavos do mesmo jeito.
+function gerarParcAcordo(valores,honTotal,honPct,tipo,data1){
+  var n=valores.length, hons=dividirCentavos(honTotal,n), parcs=[];
   for(var i=0;i<n;i++){
-    var d=new Date(data1+'T00:00:00');
-    d.setMonth(d.getMonth()+i);
-    parcs.push({num:i+1,venc:d.toISOString().slice(0,10),valor:Number(vParc)||0,hon_valor:(Number(honTotal)||0)/n,hon_pct:Number(honPct)||0,tipo:tipo||TIPOS_PARCELA[0],sit:'Em aberto',pago:0});
+    parcs.push({num:i+1,venc:vencParcela(data1,i),valor:valores[i],hon_valor:hons[i],hon_pct:Number(honPct)||0,tipo:tipo||TIPOS_PARCELA[0],sit:'Em aberto',pago:0,pagamentos:[]});
   }
   return parcs;
 }
+// Valor por parcela digitado à mão? Registros antigos não têm a marca: compara com a divisão automática.
+function acVparcManual(r){
+  if(typeof r.vparc_manual==='boolean') return r.vparc_manual;
+  var n=r.nparc||acParcs(r).length||1;
+  return !!Number(r.vparc)&&Math.abs(Number(r.vparc)*n-Math.max(0,acValor(r)-acRecAnterior(r)))>0.01*n;
+}
 
-function kpisAcordo(key){
-  var list=S[key]||[], isJud=key==='judicial';
+// list opcional: o painel geral passa só os acordos do período escolhido.
+function kpisAcordo(key,list){
+  list=list||S[key]||[];
+  var isJud=key==='judicial';
   var tot=list.reduce(function(a,r){return a+acValor(r);},0);
   var rec=list.reduce(function(a,r){return a+acRecebido(r);},0);
   var ati=list.filter(acAtivo).length;
@@ -664,7 +770,12 @@ function serieAcordo(list,months){
           if(Array.isArray(r.pagamentos)) return sum+r.pagamentos.filter(function(p){return noMes(p.data,o);}).reduce(function(a,p){return a+Number(p.valor||0);},0);
           return sum+(noMes(r.lancamento,o)?Number(r.recebido||0):0);
         }
-        return sum+r.parcelas.filter(function(p){return p.sit==='Pago'&&noMes(p.data_pgto,o);}).reduce(function(a,p){return a+parcPago(p);},0);
+        // Acordo antigo que ganhou parcelas: o que foi recebido antes entra uma vez só,
+        // pela lista de pagamentos datados ou, sem ela, pelo recebido anterior na data de lançamento.
+        var hist=0;
+        if(Array.isArray(r.pagamentos)&&r.pagamentos.length) hist=r.pagamentos.filter(function(p){return noMes(p.data,o);}).reduce(function(a,p){return a+Number(p.valor||0);},0);
+        else if(Number(r.recebido_anterior||0)>0&&noMes(r.lancamento,o)) hist=Number(r.recebido_anterior);
+        return sum+hist+r.parcelas.reduce(function(a,p){return a+pagtosParcela(p).filter(function(x){return noMes(x.data,o);}).reduce(function(b,x){return b+Number(x.valor||0);},0);},0);
       },0);
     })
   };
@@ -687,11 +798,11 @@ function linhaAcordo(key,r){
     '<td class="dim">'+(parcs.length?pagas+'/'+parcs.length+'x':esc(typeof r.parcelas==='string'&&r.parcelas?r.parcelas:'—'))+'</td>'+
     '<td>'+proxHtml+'</td>'+
     '<td><span class="tag tag-'+tipoCor+'" style="font-size:9px">'+esc(tipo)+'</span></td>'+
-    '<td class="dim">'+Number(r.honorarios||S.config.honorarios)+'%</td>'+
+    '<td class="dim">'+honDe(r)+'%</td>'+
     (isJud?'<td>'+pillSit(r.fase||'—')+'</td>':'')+
     '<td>'+pillSit(r.situacao||'Ativo')+'</td>'+
     '<td class="dim">'+esc(r.responsavel||'—')+'</td>'+
-    '<td onclick="event.stopPropagation()"><button class="row-ab" onclick="editRec(\''+key+'\',\''+r.id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+r.id+'\')">Excluir</button></td>'+
+    '<td onclick="event.stopPropagation()"><button class="row-ab" onclick="verAcordo(\''+key+'\',\''+r.id+'\')">Parcelas</button><button class="row-ab" onclick="editRec(\''+key+'\',\''+r.id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+r.id+'\')">Excluir</button></td>'+
     '</tr>';
 }
 
@@ -733,17 +844,20 @@ function renderChartJudicial(){
 }
 
 // ── Detalhe do acordo (modal com parcelas) ──
-function verAcordo(key,id){
+// pagIdx: parcela com o formulário de pagamento aberto
+function verAcordo(key,id,pagIdx){
   var r=S[key].find(function(x){return x.id===id;});
   if(!r)return;
   var isJud=key==='judicial';
-  var hon=Number(r.honorarios||S.config.honorarios);
-  var honCalc=r.hon_calc||acValor(r)*(hon/100);
+  var hon=honDe(r);
+  var honCalc=(r.hon_calc===undefined||r.hon_calc===null||r.hon_calc==='')?acValor(r)*(hon/100):Number(r.hon_calc);
   var box=function(t,c){return '<div class="acd-box"><div class="acd-lbl">'+t+'</div>'+c+'</div>';};
   var html='<div class="modal-title">'+(isJud?'Acordo Judicial — '+esc(r.numero||'s/n'):'Acordo Administrativo — '+esc(r.devedor||''))+'</div>';
   html+='<div class="acd-grid">';
   html+=box('Devedor','<div style="font-weight:600">'+esc(r.devedor||'—')+'</div>'+(r.credor?'<div class="acd-sub">Credor: '+esc(r.credor)+'</div>':'')+(r.documento?'<div class="acd-sub">CNPJ/CPF: '+esc(r.documento)+'</div>':''));
-  html+=box('Valores','<div>Acordado: <b style="color:var(--teal)">'+R(acValor(r))+'</b></div><div>Recebido: <b style="color:var(--green)">'+R(acRecebido(r))+'</b></div><div>Saldo: <b style="color:var(--amber)">'+R(acSaldo(r))+'</b></div>');
+  // Valor da cobrança: no judicial antigo vinha em "valor" (valor da causa); no administrativo é o valor original.
+  var vCob=Number(isJud?(r.valor_cobranca||(r.valor_acordado?0:r.valor)):r.valor_original)||0;
+  html+=box('Valores','<div>Valor da cobrança: <b>'+(vCob?R(vCob):'—')+'</b></div><div>Valor acordado: <b style="color:var(--teal)">'+R(acValor(r))+'</b></div><div>Recebido: <b style="color:var(--green)">'+R(acRecebido(r))+'</b></div><div>Saldo: <b style="color:var(--amber)">'+R(acSaldo(r))+'</b></div>');
   html+=box('Honorários','<div><b style="color:var(--purple)">'+hon+'%</b> = '+R(honCalc)+'</div><div class="acd-sub">'+esc(r.tipo_parcela||TIPOS_PARCELA[0])+'</div>');
   html+=box(isJud?'Fase / Situação':'Situação','<div>'+(isJud?pillSit(r.fase||'—')+' ':'')+pillSit(r.situacao||'Ativo')+'</div><div class="acd-sub" style="margin-top:4px">Operador: '+esc(r.responsavel||'—')+'</div>');
   html+='</div>';
@@ -758,8 +872,9 @@ function verAcordo(key,id){
       html+='<tr class="'+(atr?'row-atraso':'')+'"><td class="dim">'+p.num+'ª</td><td class="dim">'+fD(p.venc)+(atr?' '+atrH(diasAtraso(p.venc,p.sit)):'')+'</td><td>'+R(p.valor)+'</td><td style="color:var(--purple)">'+R(p.hon_valor||0)+'</td>'+
         '<td><select class="input-fi acd-sel" onchange="editTipoParc(\''+key+'\',\''+id+'\','+pi+',this.value)">'+opts+'</select></td>'+
         '<td>'+pillSit(p.sit||'Em aberto')+'</td>'+
-        '<td class="pos">'+(p.sit==='Pago'?R(p.pago||p.valor)+(p.data_pgto?'<div class="acd-sub">'+fD(p.data_pgto)+'</div>':''):'<span class="dim">—</span>')+'</td>'+
-        '<td>'+(p.sit==='Pago'?'':'<button class="row-ab" onclick="marcarPagoAcordo(\''+key+'\',\''+id+'\','+pi+')">Marcar pago</button>')+'</td></tr>';
+        '<td class="pos">'+listaPagtos(key,id,pi,p)+'</td>'+
+        '<td>'+(p.sit==='Pago'||pi===pagIdx?'':'<button class="row-ab" onclick="verAcordo(\''+key+'\',\''+id+'\','+pi+')">Registrar pagamento</button>')+'</td></tr>';
+      if(pi===pagIdx) html+=formPagamento(key,id,r,pi);
     });
     html+='</tbody></table></div>';
   } else {
@@ -768,30 +883,113 @@ function verAcordo(key,id){
   html+='<div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Fechar</button><button class="btn btn-teal" onclick="editRec(\''+key+'\',\''+id+'\')">Editar</button></div>';
   showModalHTML(html);
 }
-async function marcarPagoAcordo(key,id,pi){
+function ehAcordo(key){return key==='acordos'||key==='judicial';}
+// Detalhe com parcelas: acordos usam verAcordo, carteiras parceladas usam verParcelas.
+function abrirDetalhe(key,id,pagIdx){if(ehAcordo(key))verAcordo(key,id,pagIdx);else verParcelas(key,id,pagIdx);}
+function listaPagtos(key,id,pi,p){
+  var lst=pagtosParcela(p);
+  if(!lst.length) return '<span class="dim">—</span>';
+  return lst.map(function(x,j){return '<div class="pg-item">'+R(x.valor)+(x.data?' <span class="acd-sub">'+fD(x.data)+'</span>':'')+'<button class="pg-del" title="Excluir pagamento" onclick="removerPagamento(\''+key+'\',\''+id+'\','+pi+','+j+')">×</button></div>';}).join('')+
+    (p.transferido?'<div class="acd-sub">'+R(p.transferido)+' passou p/ a próxima</div>':'')+
+    (p.excedente?'<div class="acd-sub">'+R(p.excedente)+' abatido da(s) próxima(s)</div>':'');
+}
+function temProximaAberta(parcs,pi){return parcs.slice(pi+1).some(function(q){return !parcFechada(q);});}
+function taxaJurosAtraso(){return Number(S.config.juros_atraso!==undefined?S.config.juros_atraso:2);}
+function jurosSugerido(p){
+  var dias=diasAtraso(p.venc,p.sit);
+  if(!dias)return 0;
+  return arred(Math.max(0,devidoParc(p)-totalPagoParc(p))*(taxaJurosAtraso()/100)*Math.ceil(dias/30));
+}
+function formPagamento(key,id,r,pi){
+  var p=r.parcelas[pi];
+  var restante=Math.max(0,arred(devidoParc(p)-totalPagoParc(p)));
+  var juros=jurosSugerido(p);
+  var args='\''+key+'\',\''+id+'\','+pi;
+  var h='<tr class="pg-row"><td colspan="8"><div class="pg-form" data-restante="'+restante+'">';
+  h+='<label>Valor recebido (R$)<input id="pg-valor" class="input-fi" type="number" min="0" step="0.01" value="'+arred(restante+juros).toFixed(2)+'" oninput="atualizarPgForm('+args+')"></label>';
+  h+='<label>Data<input id="pg-data" class="input-fi" type="date" value="'+today()+'"></label>';
+  if(juros>0) h+='<label class="pg-check"><input id="pg-juros" type="checkbox" checked data-juros="'+juros+'" onchange="trocarJurosPg('+args+')"> Juros de atraso ('+taxaJurosAtraso()+'%/mês): '+R(juros)+'</label>';
+  h+='<div id="pg-aviso" class="pg-aviso"></div>';
+  h+='<div class="pg-acoes"><button class="btn btn-ghost btn-sm" onclick="abrirDetalhe(\''+key+'\',\''+id+'\')">Cancelar</button><button class="btn btn-teal btn-sm" onclick="confirmarPagamento('+args+')">Confirmar pagamento</button></div>';
+  h+='</div></td></tr>';
+  setTimeout(function(){atualizarPgForm(key,id,pi);},0);
+  return h;
+}
+function trocarJurosPg(key,id,pi){
+  var jEl=document.getElementById('pg-juros'), form=jEl.closest('.pg-form');
+  document.getElementById('pg-valor').value=(Number(form.dataset.restante)+(jEl.checked?Number(jEl.dataset.juros):0)).toFixed(2);
+  atualizarPgForm(key,id,pi);
+}
+// Mostra o que acontece com a diferença entre o valor digitado e o devido.
+function atualizarPgForm(key,id,pi){
+  var r=S[key].find(function(x){return x.id===id;}), aviso=document.getElementById('pg-aviso');
+  if(!r||!aviso)return;
+  var p=r.parcelas[pi];
+  var jEl=document.getElementById('pg-juros');
+  var devido=arred(devidoParc(p)+(jEl&&jEl.checked?Number(jEl.dataset.juros):0)-totalPagoParc(p));
+  var v=arred(parseFloat(gv('pg-valor'))||0), dif=arred(v-devido);
+  var temProx=temProximaAberta(r.parcelas,pi);
+  if(dif<-0.005){
+    aviso.innerHTML='Faltam <b>'+R(-dif)+'</b> nesta parcela. O restante:'+
+      '<label><input type="radio" name="pg-resto" value="aberto" checked> fica em aberto nesta parcela</label>'+
+      '<label'+(temProx?'':' class="dim"')+'><input type="radio" name="pg-resto" value="proxima"'+(temProx?'':' disabled')+'> passa para a próxima parcela'+(temProx?'':' (não há próxima em aberto)')+'</label>';
+  } else if(dif>0.005){
+    aviso.innerHTML=temProx?'<b>'+R(dif)+'</b> a mais serão abatidos da próxima parcela.':'<b>'+R(dif)+'</b> a mais — não há próxima parcela em aberto para abater.';
+  } else aviso.innerHTML='';
+}
+async function confirmarPagamento(key,id,pi){
   var r=S[key].find(function(x){return x.id===id;});
   if(!r||!acParcs(r)[pi])return;
+  r.parcelas.forEach(normalizarParcela);
   var p=r.parcelas[pi];
-  var base=Number(p.valor||0), sugerido=base, juros=0;
-  var dias=diasAtraso(p.venc,p.sit);
-  if(dias){
-    var taxa=Number(S.config.juros_atraso!==undefined?S.config.juros_atraso:2);
-    juros=base*(taxa/100)*Math.ceil(dias/30);
-    if(juros>0&&confirm('Parcela em atraso há '+dias+' dia(s). Aplicar juros de '+taxa+'%/mês?\nJuros: '+R(juros)+' — Total: '+R(base+juros))) sugerido=base+juros;
-    else juros=0;
+  var v=arred(parseFloat(gv('pg-valor')));
+  if(!(v>0)){toast('Informe um valor recebido maior que zero.','err');return;}
+  var data=gv('pg-data')||today();
+  var jEl=document.getElementById('pg-juros');
+  var opcResto=(document.querySelector('input[name="pg-resto"]:checked')||{}).value;
+  if(jEl&&jEl.checked) p.juros_atraso=arred(Number(p.juros_atraso||0)+Number(jEl.dataset.juros));
+  p.pagamentos=pagtosParcela(p).concat([{valor:v,data:data}]);
+  p.pago=totalPagoParc(p);
+  p.data_pgto=data;
+  var dif=arred(p.pago-devidoParc(p));
+  if(dif>0.005){
+    // Pagou a mais: o excedente abate as próximas e esta parcela passa a valer o que cobriu.
+    var sobra=compensarProximas(r.parcelas,pi,dif), usado=arred(dif-sobra);
+    if(usado>0){p.valor=arred(Number(p.valor||0)+usado);p.excedente=arred(Number(p.excedente||0)+usado);}
+  } else if(dif<-0.005&&opcResto==='proxima'){
+    // Pagou menos e o restante vai para a próxima: esta parcela fecha no valor recebido.
+    var falta=-dif;
+    compensarProximas(r.parcelas,pi,-falta);
+    p.valor=arred(Number(p.valor||0)-falta);
+    p.transferido=arred(Number(p.transferido||0)+falta);
   }
-  var v=prompt('Valor recebido (R$):',sugerido.toFixed(2));
-  if(v===null)return;
-  var pago=parseFloat(String(v).replace(',','.'));
-  p.pago=isNaN(pago)?sugerido:pago;
-  p.sit='Pago';
-  p.data_pgto=today();
-  if(juros>0)p.juros_atraso=juros;else delete p.juros_atraso;
-  if(r.parcelas.every(function(x){return x.sit==='Pago';})) r.situacao='Cumprido';
+  p.sit=statusParcela(p);
+  if(ehAcordo(key)) aplicarHonorarios(r.parcelas,acHonTotal(r),honDe(r));
+  if(r.parcelas.every(function(x){return x.sit==='Pago';})) r.situacao=ehAcordo(key)?'Cumprido':'Recebido';
   renderCurrentPage();
   toast('Pagamento registrado!','ok');
-  verAcordo(key,id);
+  abrirDetalhe(key,id);
   await persistDocuments(key,[r]);
+}
+async function removerPagamento(key,id,pi,j){
+  var r=S[key].find(function(x){return x.id===id;});
+  if(!r||!acParcs(r)[pi])return;
+  if(!confirm('Excluir este pagamento?\nTransferências ou abatimentos já feitos nas outras parcelas não são desfeitos. Se precisar, ajuste em Editar → Editar parcelas.'))return;
+  var p=r.parcelas[pi];
+  var lst=pagtosParcela(p).slice();
+  lst.splice(j,1);
+  p.pagamentos=lst;
+  p.pago=totalPagoParc(p);
+  p.data_pgto=lst.length?lst[lst.length-1].data:'';
+  p.sit=statusParcela(p);
+  var quitada=ehAcordo(key)?'Cumprido':'Recebido';
+  if(r.situacao===quitada&&!r.parcelas.every(function(x){return x.sit==='Pago';})) r.situacao=ehAcordo(key)?'Ativo':'Em aberto';
+  renderCurrentPage();
+  abrirDetalhe(key,id);
+  await persistDocuments(key,[r]);
+}
+function acHonTotal(r){
+  return (r.hon_calc===undefined||r.hon_calc===null||r.hon_calc==='')?arred(acValor(r)*honDe(r)/100):Number(r.hon_calc);
 }
 async function editTipoParc(key,id,pi,tipo){
   var r=S[key].find(function(x){return x.id===id;});
@@ -801,13 +999,15 @@ async function editTipoParc(key,id,pi,tipo){
 }
 
 // ── Formulário de acordo ──
+// Rascunho das parcelas aberto em "Editar parcelas"; só é gravado se o usuário mexeu nele.
+var parcRascunho=null, parcEditadas=false, parcEsperado=0;
 function buildFormAcordo(key,r){
   r=r||{};
   var isJud=key==='judicial';
   var cfg=S.config||DEF.config;
   var parcs=acParcs(r);
   var nparc=r.nparc||parcs.length||parseInt(r.parcelas)||1;
-  var temPago=parcs.some(function(p){return p.sit==='Pago';});
+  var temPago=parcs.some(function(p){return totalPagoParc(p)>0;});
   var anterior=acRecAnterior(r);
   var sits=SIT_ACORDO[key].slice();
   if(r.situacao&&sits.indexOf(r.situacao)<0) sits.unshift(r.situacao);
@@ -827,49 +1027,181 @@ function buildFormAcordo(key,r){
   }
   h+='<div class="modal-sec">Valores do acordo</div>';
   h+=isJud?inp('f-valor-cob','Valor da cobrança (R$)',r.valor_cobranca||(r.valor_acordado?'':r.valor)||'',num):inp('f-valor-orig','Valor original (R$)',r.valor_original||'',num);
-  h+=inp('f-valor-acordado','Valor acordado (R$) *',r.valor_acordado||(isJud?'':r.valor)||'',num+' oninput="recalcAcordo()"');
-  h+=inp('f-nparc','Nº de parcelas',nparc,'type="number" min="1" max="120" oninput="recalcAcordo()"');
-  h+=inp('f-vparc','Valor por parcela (R$)',r.vparc||'',num+' placeholder="Calculado automaticamente"');
-  h+=inp('f-honorarios','Honorários (%)',r.honorarios||cfg.honorarios,'type="number" min="0" max="100" step="0.1" oninput="recalcAcordo()"');
-  h+=inp('f-hon-calc','Honorários calculados (R$)',r.hon_calc||'',num);
-  h+=inp('f-data1','1ª parcela em',r.data1||r.prox_venc||today(),'type="date"');
+  // Mudar valor ou nº de parcelas limpa o valor por parcela, que volta a ser calculado.
+  h+=inp('f-valor-acordado','Valor acordado (R$) *',r.valor_acordado||(isJud?'':r.valor)||'',num+' oninput="recalcAcordo(true)"');
+  h+=inp('f-nparc','Nº de parcelas',nparc,'type="number" min="1" max="120" oninput="recalcAcordo(true)"');
+  h+='<div class="ff parc-ed-btn"><label>&nbsp;</label><button type="button" class="btn btn-ghost" onclick="abrirEditorParcelas()">Editar parcelas (datas e valores)</button><span id="parc-resumo" class="acd-sub">'+(r.parcelas_editadas?'Parcelas editadas à mão':'')+'</span></div>';
+  h+=inp('f-vparc','Valor por parcela (R$)',acVparcManual(r)?r.vparc:'',num+' placeholder="Calculado automaticamente"');
+  h+=inp('f-honorarios','Honorários (%)',r.id?honDe(r):cfg.honorarios,'type="number" min="0" max="100" step="0.1" oninput="recalcAcordo()"');
+  h+=inp('f-hon-calc','Honorários calculados (R$)',(r.hon_calc===undefined||r.hon_calc===null)?'':r.hon_calc,num);
+  h+=inp('f-data1','1ª parcela em',r.data1||r.prox_venc||today(),'type="date" onchange="recalcAcordo(true)"');
   h+='<div class="ff"><label>Tipo de parcela</label><select id="f-tipo-parcela">'+SEL(TIPOS_PARCELA,r.tipo_parcela||TIPOS_PARCELA[0])+'</select></div>';
   h+='<input type="hidden" id="f-rec-ant" value="'+anterior+'">';
   if(anterior>0&&!temPago) h+='<div class="ff full acd-sub" style="color:var(--amber)">'+R(anterior)+' já recebido antes do controle por parcelas: as parcelas são geradas sobre o saldo restante.</div>';
-  if(temPago) h+='<div class="ff full acd-sub" style="color:var(--amber)">Este acordo já tem parcelas pagas: alterar valor, nº de parcelas ou datas não refaz o cronograma.</div>';
+  if(temPago) h+='<div class="ff full acd-sub" style="color:var(--amber)">Este acordo já tem parcelas pagas: alterar valor, nº de parcelas ou datas aqui não refaz o cronograma. Use “Editar parcelas” para ajustar.</div>';
   h+='<div class="modal-sec">Controle</div>';
   if(isJud) h+='<div class="ff"><label>Fase processual</label><select id="f-fase">'+SEL(FASES_JUD,r.fase||'Execução')+'</select></div>';
   h+='<div class="ff"><label>Operador</label><select id="f-responsavel">'+ADV(r.responsavel)+'</select></div>';
   h+='<div class="ff"><label>Situação</label><select id="f-situacao">'+SEL(sits,r.situacao||'Ativo')+'</select></div>';
   h+='<div class="ff full"><label>Observações</label><textarea id="f-obs">'+esc(r.obs||'')+'</textarea></div>';
+  h+='<div id="parc-editor" class="ff full"></div>';
   return h;
 }
-function recalcAcordo(){
-  var v=gf('f-valor-acordado'), n=parseInt(gv('f-nparc'))||1;
-  var hon=parseFloat(gv('f-honorarios'));if(isNaN(hon))hon=S.config.honorarios;
+function recalcAcordo(limparParcela){
+  if(limparParcela) descartarRascunho();
+  var v=gf('f-valor-acordado'), n=Math.max(1,parseInt(gv('f-nparc'))||1);
+  var hon=numCampo('f-honorarios',S.config.honorarios);
   var hc=document.getElementById('f-hon-calc');
   if(hc&&hc!==document.activeElement) hc.value=v?(v*hon/100).toFixed(2):'';
   var vp=document.getElementById('f-vparc');
-  if(vp) vp.placeholder=v?(Math.max(0,v-gf('f-rec-ant'))/n).toFixed(2):'Calculado automaticamente';
+  if(!vp)return;
+  if(limparParcela) vp.value='';
+  vp.placeholder=v?dividirCentavos(Math.max(0,v-gf('f-rec-ant')),n)[0].toFixed(2):'Calculado automaticamente';
 }
-function lerFormAcordo(key,ex){
-  var isJud=key==='judicial';
+function exEmEdicao(){
+  var key=gv('m-tipo'), id=gv('m-id');
+  return id&&S[key]?S[key].find(function(x){return x.id===id;})||null:null;
+}
+function rascunhoTemPago(){return !!parcRascunho&&parcRascunho.some(function(p){return totalPagoParc(p)>0;});}
+// Mudar valor, nº de parcelas ou 1ª data refaz o rascunho (se ainda não houver parcela paga).
+function descartarRascunho(){
+  if(!parcRascunho||rascunhoTemPago())return;
+  // Carteira já salva mantém as parcelas gravadas; o formulário não refaz o cronograma.
+  if(!ehAcordo(gv('m-tipo'))&&exEmEdicao())return;
+  var avisar=parcEditadas;
+  parcRascunho=null;parcEditadas=false;
+  var res=document.getElementById('parc-resumo');
+  if(res) res.innerHTML=avisar?'<span style="color:var(--amber)">Parcelas recalculadas: as edições anteriores foram descartadas.</span>':'';
+}
+// Parcelas de um lançamento novo de carteira, calculadas como no salvar (juros do parcelamento).
+function parcelasCarteiraDoForm(){
+  var nParc=parseInt(gv('f-nparc'))||3, vParc=gf('f-vparc'), data1=gv('f-data1')||today();
+  var j2=gf('f-juros')||S.config.juros, valor=gf('f-valor'), jm=j2/100;
+  var fator=nParc>1?(jm*Math.pow(1+jm,nParc))/(Math.pow(1+jm,nParc)-1):1;
+  var valCalc=vParc>0?vParc:(valor*(nParc>1?fator:1));
+  var parcelas=gerarParcelas(valor,nParc,data1,j2);
+  parcelas.forEach(function(p){p.valor=arred(valCalc);});
+  return parcelas;
+}
+// Acordo: o valor a parcelar vem do formulário. Carteira: é o total das parcelas quando o editor foi aberto.
+function esperadoRascunho(){
+  return ehAcordo(gv('m-tipo'))?arred(Math.max(0,gf('f-valor-acordado')-gf('f-rec-ant'))):parcEsperado;
+}
+function abrirEditorParcelas(){
+  if(!parcRascunho&&!ehAcordo(gv('m-tipo'))){
+    var exC=exEmEdicao();
+    if(!(exC&&Array.isArray(exC.parcelas))&&!gf('f-valor')){toast('Informe o valor original antes de editar as parcelas.','err');return;}
+    parcRascunho=JSON.parse(JSON.stringify(exC&&Array.isArray(exC.parcelas)?exC.parcelas:parcelasCarteiraDoForm())).map(normalizarParcela);
+    parcEsperado=arred(parcRascunho.reduce(function(a,p){return a+Number(p.valor||0);},0));
+  }
+  if(!parcRascunho){
+    var ex=exEmEdicao(), pc=paramsCronograma(ex), exParcs=ex?acParcs(ex):[];
+    var temPago=exParcs.some(function(p){return totalPagoParc(p)>0;});
+    var base=(exParcs.length&&(temPago||!cronogramaMudou(ex,pc)))?exParcs:gerarParcAcordo(pc.valores,pc.honCalc,pc.hon,pc.tipoParc,pc.data1);
+    parcRascunho=JSON.parse(JSON.stringify(base)).map(normalizarParcela);
+  }
+  document.getElementById('m-body').classList.add('editando-parcelas');
+  document.querySelector('.modal').classList.add('modal-wide');
+  renderEditorParcelas();
+}
+function fecharEditorParcelas(){
+  document.getElementById('m-body').classList.remove('editando-parcelas');
+  document.querySelector('.modal').classList.remove('modal-wide');
+  var res=document.getElementById('parc-resumo');
+  if(res&&parcEditadas){
+    var soma=parcRascunho.reduce(function(a,p){return a+Number(p.valor||0);},0);
+    res.innerHTML='Parcelas editadas: '+parcRascunho.length+'x, total '+R(soma);
+  }
+  recalcModal();
+}
+function renderEditorParcelas(){
+  var box=document.getElementById('parc-editor');
+  if(!box||!parcRascunho)return;
+  var acordo=ehAcordo(gv('m-tipo'));
+  var hon=numCampo('f-honorarios',S.config.honorarios);
+  var vAc=gf('f-valor-acordado');
+  var hons=acordo?honProporcional(parcRascunho,arred(numCampo('f-hon-calc',vAc*hon/100))):[];
+  var esperado=esperadoRascunho();
+  var soma=arred(parcRascunho.reduce(function(a,p){return a+Number(p.valor||0);},0));
+  var dif=arred(soma-esperado);
+  var h='<div class="modal-sec">'+(acordo?'Parcelas do acordo':'Parcelas')+'</div>';
+  h+='<div class="acd-sub" style="margin:6px 0 8px">Ao alterar o valor de uma parcela, a diferença é compensada na próxima parcela em aberto.</div>';
+  h+='<div style="overflow:auto;max-height:340px"><table class="parc-ed"><thead><tr><th>Nº</th><th>Vencimento</th><th>Valor</th><th>Recebido</th>'+(acordo?'<th>Honorários</th>':'')+'<th>Situação</th></tr></thead><tbody>';
+  parcRascunho.forEach(function(p,i){
+    h+='<tr><td class="dim">'+(i+1)+'ª</td>'+
+      '<td><input class="input-fi" type="date" value="'+esc(p.venc||'')+'" onchange="editarDataParcela('+i+',this.value)"></td>'+
+      '<td><input class="input-fi" type="number" min="0" step="0.01" value="'+Number(p.valor||0).toFixed(2)+'" onchange="editarValorParcela('+i+',this.value)"></td>'+
+      '<td class="pos">'+(totalPagoParc(p)>0?R(totalPagoParc(p)):'<span class="dim">—</span>')+'</td>'+
+      (acordo?'<td style="color:var(--purple)">'+R(hons[i])+'</td>':'')+
+      '<td>'+pillSit(statusParcela(p))+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div class="parc-ed-tot"><span>Soma das parcelas: <b>'+R(soma)+'</b></span><span>Valor a parcelar: <b>'+R(esperado)+'</b></span>'+
+    '<span class="'+(Math.abs(dif)>0.005?'parc-ed-dif':'dim')+'">Diferença: <b>'+R(dif)+'</b></span></div>';
+  h+='<div style="text-align:right;margin-top:10px"><button type="button" class="btn btn-ghost btn-sm" onclick="fecharEditorParcelas()">'+(acordo?'Voltar ao acordo':'Voltar ao lançamento')+'</button></div>';
+  box.innerHTML=h;
+}
+function editarValorParcela(i,valor){
+  var p=parcRascunho&&parcRascunho[i];
+  if(!p)return;
+  var v=arred(parseFloat(valor));
+  if(isNaN(v)||v<0){toast('Informe um valor válido.','err');renderEditorParcelas();return;}
+  var diff=arred(v-Number(p.valor||0));
+  p.valor=v;
+  var sobra=compensarProximas(parcRascunho,i,diff);
+  parcRascunho.forEach(function(q){q.sit=statusParcela(q);});
+  parcEditadas=true;
+  renderEditorParcelas();
+  if(Math.abs(sobra)>=0.005) toast('Não há parcela seguinte em aberto para compensar '+R(Math.abs(sobra))+'. Confira a soma.','err');
+}
+function editarDataParcela(i,data){
+  if(!parcRascunho||!parcRascunho[i]||!data)return;
+  parcRascunho[i].venc=data;
+  parcEditadas=true;
+}
+
+// Parâmetros do cronograma lidos do formulário (usados ao salvar e ao abrir o editor de parcelas).
+function paramsCronograma(ex){
   var vAc=gf('f-valor-acordado');
   var n=Math.max(1,Math.min(120,parseInt(gv('f-nparc'))||1));
   var anterior=ex?acRecAnterior(ex):0;
-  var vParc=gf('f-vparc')||(Math.max(0,vAc-anterior)/n);
-  var hon=parseFloat(gv('f-honorarios'));if(isNaN(hon))hon=S.config.honorarios;
-  var honCalc=gf('f-hon-calc')||(vAc*hon/100);
-  var data1=gv('f-data1')||today();
-  var tipoParc=gv('f-tipo-parcela')||TIPOS_PARCELA[0];
-  var rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor_acordado:vAc,nparc:n,vparc:vParc,honorarios:hon,hon_calc:honCalc,data1:data1,tipo_parcela:tipoParc,responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex&&ex.lancamento?ex.lancamento:today(),criado_em:ex&&ex.criado_em?ex.criado_em:today()};
+  // Parcela digitada à mão vale para todas; senão o saldo é dividido em centavos (a soma fecha exata).
+  var vParcManual=String(gv('f-vparc')).trim()!=='';
+  var valores=vParcManual?Array(n).fill(arred(gf('f-vparc'))):dividirCentavos(Math.max(0,vAc-anterior),n);
+  var hon=numCampo('f-honorarios',S.config.honorarios);
+  return {vAc:vAc,n:n,anterior:anterior,vParcManual:vParcManual,valores:valores,vParc:valores[0],hon:hon,
+    honCalc:arred(numCampo('f-hon-calc',vAc*hon/100)),data1:gv('f-data1')||today(),tipoParc:gv('f-tipo-parcela')||TIPOS_PARCELA[0]};
+}
+function cronogramaMudou(ex,pc){
+  return !ex||!Array.isArray(ex.parcelas)
+    ||String(ex.valor_acordado)!==String(pc.vAc)||String(ex.nparc)!==String(pc.n)
+    ||String(ex.data1)!==String(pc.data1)||String(ex.tipo_parcela)!==String(pc.tipoParc)
+    ||arred(ex.hon_calc)!==pc.honCalc
+    ||acVparcManual(ex)!==pc.vParcManual
+    ||(pc.vParcManual&&arred(ex.vparc)!==pc.vParc);
+}
+function lerFormAcordo(key,ex){
+  var isJud=key==='judicial';
+  var pc=paramsCronograma(ex);
+  var vAc=pc.vAc, n=pc.n, anterior=pc.anterior, vParcManual=pc.vParcManual, valores=pc.valores, vParc=pc.vParc;
+  var hon=pc.hon, honCalc=pc.honCalc, data1=pc.data1, tipoParc=pc.tipoParc;
+  var rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor_acordado:vAc,nparc:n,vparc:vParc,vparc_manual:vParcManual,honorarios:hon,hon_calc:honCalc,data1:data1,tipo_parcela:tipoParc,responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex&&ex.lancamento?ex.lancamento:today(),criado_em:ex&&ex.criado_em?ex.criado_em:today()};
   if(isJud){rec.numero=gv('f-numero').trim();rec.valor_cobranca=gf('f-valor-cob');rec.fase=gv('f-fase');}
   else{rec.documento=gv('f-documento').trim();rec.valor_original=gf('f-valor-orig');}
   // Cronograma: gerado no cadastro e refeito na edição só enquanto nenhuma parcela foi paga
   var exParcs=ex?acParcs(ex):[];
-  var temPago=exParcs.some(function(p){return p.sit==='Pago';});
-  var mudou=!ex||!Array.isArray(ex.parcelas)||['valor_acordado','nparc','vparc','hon_calc','data1','tipo_parcela'].some(function(k){return String(ex[k])!==String(rec[k]);});
-  rec.parcelas=(temPago||!mudou)?exParcs:gerarParcAcordo(n,vParc,honCalc,hon,tipoParc,data1);
+  var temPago=exParcs.some(function(p){return totalPagoParc(p)>0;});
+  if(parcRascunho&&parcEditadas){
+    rec.parcelas=JSON.parse(JSON.stringify(parcRascunho));
+    rec.parcelas.forEach(function(p){p.sit=statusParcela(p);});
+    aplicarHonorarios(rec.parcelas,honCalc,hon);
+    rec.nparc=rec.parcelas.length;
+    rec.parcelas_editadas=true;
+  } else {
+    var manter=temPago||!cronogramaMudou(ex,pc);
+    rec.parcelas=manter?exParcs:gerarParcAcordo(valores,honCalc,hon,tipoParc,data1);
+    rec.parcelas_editadas=!!(manter&&ex&&ex.parcelas_editadas);
+  }
   if(anterior>0) rec.recebido_anterior=anterior;
   if(ex&&Array.isArray(ex.pagamentos)&&ex.pagamentos.length) rec.pagamentos=ex.pagamentos;
   return rec;
@@ -878,6 +1210,21 @@ function lerFormAcordo(key,ex){
 // ══════════════════════════════════════════════════════════════
 //  PAINEL DA OPERADORA — ACORDOS
 // ══════════════════════════════════════════════════════════════
+// Ordem dos cards de acordo: em andamento primeiro (maior atraso primeiro), depois Cumpridos
+// e por fim Cancelados/Arquivados, esses dois pelo pagamento mais recente.
+function grupoAcOp(r){return r.situacao==='Cumprido'?1:(r.situacao==='Cancelado'||r.situacao==='Arquivado')?2:0;}
+function atrasoAcOp(r){
+  if(!Array.isArray(r.parcelas)) return acParcAtraso(r)?1:0;
+  var venc=r.parcelas.filter(function(p){return p.sit!=='Pago';}).map(function(p){return p.venc||'';}).filter(Boolean).sort()[0];
+  return venc?(diasAtraso(venc,'Em aberto')||0):0;
+}
+function ultimoPgtoAcOp(r){
+  var ds=[];
+  acParcs(r).forEach(function(p){pagtosParcela(p).forEach(function(x){if(x.data)ds.push(String(x.data).slice(0,10));});});
+  (Array.isArray(r.pagamentos)?r.pagamentos:[]).forEach(function(x){if(x.data)ds.push(String(x.data).slice(0,10));});
+  ds.sort();
+  return ds.length?ds[ds.length-1]:(r.lancamento||'');
+}
 function renderOperadoraAcordos(){
   var grid=document.getElementById('op-ac-grid');
   if(!grid)return;
@@ -885,6 +1232,12 @@ function renderOperadoraAcordos(){
   var sitF=(document.getElementById('op-ac-sit')||{}).value||'';
   var key=opAcordoSub==='judiciais'?'judicial':'acordos', isJud=key==='judicial';
   var list=(S[key]||[]).filter(function(r){return acBusca(r,busca)&&acFiltroSit(r,sitF);});
+  list.sort(function(a,b){
+    var g=grupoAcOp(a)-grupoAcOp(b);
+    if(g) return g;
+    if(grupoAcOp(a)>0) return ultimoPgtoAcOp(b).localeCompare(ultimoPgtoAcOp(a));
+    return atrasoAcOp(b)-atrasoAcOp(a);
+  });
   if(!list.length){grid.innerHTML='<div style="grid-column:1/-1"><div class="empty"><div class="empty-ic">🤝</div><div class="empty-t">Nenhum acordo encontrado</div><div class="empty-s">Ajuste os filtros ou lance acordos</div></div></div>';return;}
   var cor=isJud?'var(--purple)':'var(--amber)';
   grid.innerHTML=list.map(function(r){
@@ -910,31 +1263,33 @@ function renderOperadoraAcordos(){
 // ══════════════════════════════════════════════════════════════
 //  VER PARCELAS (modal extra)
 // ══════════════════════════════════════════════════════════════
-function verParcelas(key,id){
+// pagIdx: parcela com o formulário de pagamento aberto
+function verParcelas(key,id,pagIdx){
   var r=S[key].find(function(x){return x.id===id;});
   if(!r)return;
-  var html='<div class="modal-title">Parcelas — '+esc(r.devedor)+'</div><div style="overflow-y:auto;max-height:400px"><table><thead><tr><th>Parcela</th><th>Vencimento</th><th>Valor</th><th>Pago</th><th>Situação</th><th>Ações</th></tr></thead><tbody>';
-  (r.parcelas||[]).forEach(function(p,pi){
-    html+='<tr><td class="dim">'+p.num+'ª</td><td class="dim">'+fD(p.venc)+'</td><td>'+R(p.valor)+'</td><td class="pos">'+(p.pago>0?R(p.pago):'<span class="dim">—</span>')+'</td><td>'+pillSit(p.sit)+'</td><td><button class="row-ab" onclick="marcarPago(\''+key+'\',\''+id+'\','+pi+')">Marcar pago</button></td></tr>';
+  var parcs=r.parcelas||[], isCli=key.indexOf('clientes')===0;
+  var box=function(t,c){return '<div class="acd-box"><div class="acd-lbl">'+t+'</div>'+c+'</div>';};
+  var html='<div class="modal-title">Parcelas — '+esc(r.devedor||'')+'</div>';
+  html+='<div class="acd-grid">';
+  html+=box('Devedor','<div style="font-weight:600">'+esc(r.devedor||'—')+'</div>'+(r.credor?'<div class="acd-sub">Credor: '+esc(r.credor)+'</div>':''));
+  html+=box('Valores','<div>Valor original: <b>'+R(r.valor)+'</b></div><div>Total parcelado: <b style="color:var(--teal)">'+R(totalParc(parcs))+'</b></div><div>Recebido: <b style="color:var(--green)">'+R(acRecebido(r))+'</b></div><div>A receber: <b style="color:var(--amber)">'+R(acSaldo(r))+'</b></div>');
+  if(isCli) html+=box('Honorários','<div><b style="color:var(--purple)">'+honDe(r)+'%</b> sobre o recebido = '+R(acRecebido(r)*honDe(r)/100)+'</div>');
+  html+=box('Situação','<div>'+pillSit(r.situacao||'Em aberto')+'</div><div class="acd-sub" style="margin-top:4px">Operador: '+esc(r.responsavel||'—')+'</div>');
+  html+='</div>';
+  if(r.obs) html+='<div class="acd-obs">'+esc(r.obs)+'</div>';
+  html+='<div class="modal-sec">Parcelas</div>';
+  html+='<div style="overflow:auto;max-height:280px"><table><thead><tr><th>Nº</th><th>Vencimento</th><th>Valor</th><th>Situação</th><th>Recebido</th><th></th></tr></thead><tbody>';
+  parcs.forEach(function(p,pi){
+    var atr=parcVencida(p);
+    html+='<tr class="'+(atr?'row-atraso':'')+'"><td class="dim">'+p.num+'ª</td><td class="dim">'+fD(p.venc)+(atr?' '+atrH(diasAtraso(p.venc,p.sit)):'')+'</td><td>'+R(p.valor)+'</td>'+
+      '<td>'+pillSit(p.sit||'Em aberto')+'</td>'+
+      '<td class="pos">'+listaPagtos(key,id,pi,p)+'</td>'+
+      '<td>'+(p.sit==='Pago'||pi===pagIdx?'':'<button class="row-ab" onclick="verParcelas(\''+key+'\',\''+id+'\','+pi+')">Registrar pagamento</button>')+'</td></tr>';
+    if(pi===pagIdx) html+=formPagamento(key,id,r,pi);
   });
-  html+='</tbody></table></div><div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Fechar</button></div>';
+  html+='</tbody></table></div>';
+  html+='<div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Fechar</button><button class="btn btn-teal" onclick="editRec(\''+key+'\',\''+id+'\')">Editar</button></div>';
   showModalHTML(html);
-}
-async function marcarPago(key,id,pi){
-  var r=S[key].find(function(x){return x.id===id;});
-  if(!r)return;
-  var p=r.parcelas[pi];
-  var val=prompt('Valor pago (R$):',p.valor.toFixed(2));
-  if(!val) return;
-  p.pago=parseFloat(val)||p.valor;
-  p.sit='Pago';
-  var todoPago=r.parcelas.every(function(x){return x.sit==='Pago';});
-  if(todoPago) r.situacao='Recebido';
-  closeModal();
-  renderTbl(key.split('_')[0],key.split('_')[1]);
-  renderOperadora();
-  toast('Parcela marcada como paga!','ok');
-  await persistDocuments(key,[r]);
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -942,7 +1297,7 @@ async function marcarPago(key,id,pi){
 // ══════════════════════════════════════════════════════════════
 // O modal de lançamento é substituído pelas telas de parcelas; resetModal restaura o formulário original.
 var MODAL_HTML=document.querySelector('.modal').innerHTML;
-function resetModal(){var m=document.querySelector('.modal');m.classList.remove('modal-wide');if(!document.getElementById('m-body'))m.innerHTML=MODAL_HTML;}
+function resetModal(){parcRascunho=null;parcEditadas=false;parcEsperado=0;var m=document.querySelector('.modal');m.classList.remove('modal-wide');if(!document.getElementById('m-body'))m.innerHTML=MODAL_HTML;document.getElementById('m-body').classList.remove('editando-parcelas');}
 function showModalHTML(html){var m=document.querySelector('.modal');m.innerHTML=html;m.classList.add('modal-wide');document.getElementById('mbg').classList.add('open');}
 
 // Mantém o operador já gravado no registro mesmo que ele tenha sido removido da lista
@@ -987,13 +1342,14 @@ function buildForm(tipo,r){
   } else {
     html+='<div class="ff"><label>Nº de parcelas</label><input id="f-nparc" type="number" value="'+(r._nparc||3)+'" min="1" max="120" oninput="syncParcelamento(\'nparc\')"></div>';
     html+='<div class="ff"><label>Ou: valor de cada parcela (R$)</label><input id="f-vparc" type="number" value="'+vParcVal+'" min="0" step="0.01" placeholder="Deixe em branco para calcular" oninput="syncParcelamento(\'vparc\')"></div>';
-    html+='<div class="ff"><label>1ª parcela em</label><input id="f-data1" type="date" value="'+(r._data1||today())+'" oninput="recalcModal()"></div>';
+    html+='<div class="ff"><label>1ª parcela em</label><input id="f-data1" type="date" value="'+(r._data1||today())+'" oninput="descartarRascunho();recalcModal()"></div>';
     html+='<div class="ff"><label>Juros mensais (%)</label><input id="f-juros" type="number" value="'+(r.juros_custom||j)+'" min="0" step="0.1" oninput="syncParcelamento(\'juros\')"></div>';
     html+='<div class="ff"><label>Correção monetária anual (%)</label><input id="f-cm" type="number" value="'+(r.cm_custom||cm)+'" min="0" step="0.1" oninput="syncParcelamento(\'cm\')"></div>';
+    html+='<div class="ff parc-ed-btn"><label>&nbsp;</label><button type="button" class="btn btn-ghost" onclick="abrirEditorParcelas()">Editar parcelas (datas e valores)</button><span id="parc-resumo" class="acd-sub">'+(r.parcelas_editadas?'Parcelas editadas à mão':'')+'</span></div>';
   }
 
   if(isCliente){
-    html+='<div class="ff"><label>Honorários (%)</label><input id="f-honorarios" type="number" value="'+(r.honorarios||hon)+'" min="0" max="100" step="0.1" oninput="recalcModal()"></div>';
+    html+='<div class="ff"><label>Honorários (%)</label><input id="f-honorarios" type="number" value="'+(r.id?honDe(r):hon)+'" min="0" max="100" step="0.1" oninput="recalcModal()"></div>';
   }
 
   html+='<div class="calc-box" id="calc-preview"><div class="calc-box-title">Prévia do cálculo</div><div id="calc-rows"><div style="font-size:11px;color:var(--tx3)">Preencha os valores acima para ver a prévia</div></div></div>';
@@ -1002,6 +1358,7 @@ function buildForm(tipo,r){
   html+='<div class="ff"><label>Operador</label><select id="f-responsavel">'+ADV(r.responsavel)+'</select></div>';
   html+='<div class="ff"><label>Situação</label><select id="f-situacao">'+SEL(['Em aberto','Em dia','Em atraso','Negociação','Recebido','Inadimplente','Judicial'],r.situacao||'Em aberto')+'</select></div>';
   html+='<div class="ff full"><label>Observações</label><textarea id="f-obs">'+esc(r.obs||'')+'</textarea></div>';
+  if(isParc) html+='<div id="parc-editor" class="ff full"></div>';
   return html;
 }
 
@@ -1040,6 +1397,7 @@ function switchTipoModal(isParc,tipoBase){
     var mTitle=document.getElementById('m-title'); if(mTitle) mTitle.textContent='Novo Lançamento — '+(lbls[novoTipo]||'');
     var dv=document.getElementById('f-devedor')&&document.getElementById('f-devedor').value||'';
     var cr=document.getElementById('f-credor')&&document.getElementById('f-credor').value||'';
+    parcRascunho=null;parcEditadas=false;parcEsperado=0;
     var mBody=document.getElementById('m-body'); if(mBody) mBody.innerHTML=buildForm(novoTipo,{devedor:dv,credor:cr});
     if(dv&&document.getElementById('f-devedor')) document.getElementById('f-devedor').value=dv;
     if(cr&&document.getElementById('f-credor')) document.getElementById('f-credor').value=cr;
@@ -1050,6 +1408,7 @@ function switchTipoModal(isParc,tipoBase){
 }
 
 function syncParcelamento(src){
+  if(src!=='init') descartarRascunho();
   var elValor = document.getElementById('f-valor');
   var elNparc = document.getElementById('f-nparc');
   var elVparc = document.getElementById('f-vparc');
@@ -1127,9 +1486,16 @@ function recalcModal(){
     var jm=j/100;
     var fator=nParc>1?(jm*Math.pow(1+jm,nParc))/(Math.pow(1+jm,nParc)-1):1;
     var valCalc=vParc>0?vParc:(valor*(nParc>1?fator:1));
-    var total=valCalc*nParc;
+    var total=valCalc*nParc, descParc=nParc+'x de '+R(valCalc);
+    // Parcelas já gravadas (edição) ou editadas à mão: a prévia mostra as parcelas reais.
+    var exP=exEmEdicao(), reais=parcRascunho||(exP&&Array.isArray(exP.parcelas)?exP.parcelas:null);
+    if(reais&&reais.length){
+      total=arred(reais.reduce(function(a,p){return a+Number(p.valor||0);},0));
+      var iguais=reais.every(function(p){return Math.abs(Number(p.valor||0)-Number(reais[0].valor||0))<0.005;});
+      descParc=iguais?reais.length+'x de '+R(reais[0].valor):reais.length+' parcelas (valores editados)';
+    }
     rows+='<div class="calc-row"><span class="calc-key">Valor original</span><span class="calc-val">'+R(valor)+'</span></div>';
-    rows+='<div class="calc-row"><span class="calc-key">Parcelas</span><span class="calc-val">'+nParc+'x de '+R(valCalc)+'</span></div>';
+    rows+='<div class="calc-row"><span class="calc-key">Parcelas</span><span class="calc-val">'+descParc+'</span></div>';
     rows+='<div class="calc-row"><span class="calc-key">Total parcelado</span><span class="calc-val" style="color:var(--amber)">'+R(total)+'</span></div>';
     if(isCliente) rows+='<div class="calc-row"><span class="calc-key">Honorários sobre total ('+Math.round(hon*100)+'%)</span><span class="calc-val" style="color:var(--purple)">'+R(total*hon)+'</span></div>';
     rows+='<div class="calc-row"><span class="calc-key">Acréscimo de juros</span><span class="calc-val" style="color:var(--amber)">+'+R(total-valor)+'</span></div>';
@@ -1153,37 +1519,48 @@ function editRec(key,id){
   document.getElementById('mbg').classList.add('open');
 }
 
-function closeModal(){document.getElementById('mbg').classList.remove('open');}
+// Com o editor de parcelas aberto, Cancelar (ou clicar fora) volta ao formulário do acordo em vez de fechar o lançamento.
+function closeModal(){
+  var body=document.getElementById('m-body');
+  if(body&&body.classList.contains('editando-parcelas')){fecharEditorParcelas();return;}
+  document.getElementById('mbg').classList.remove('open');
+}
 
 function gv(id){var e=document.getElementById(id);return e?e.value:'';}
 function gf(id){var e=document.getElementById(id);return e?parseFloat(e.value)||0:0;}
 
+// Confirma quando as parcelas editadas não fecham com o valor a parcelar.
+function somaRascunhoOk(){
+  if(!(parcRascunho&&parcEditadas))return true;
+  var somaP=arred(parcRascunho.reduce(function(a,p){return a+Number(p.valor||0);},0)), espP=esperadoRascunho();
+  return Math.abs(somaP-espP)<=0.01||confirm('A soma das parcelas ('+R(somaP)+') é diferente do valor a parcelar ('+R(espP)+'). Salvar mesmo assim?');
+}
 async function salvar(){
   var tipo=gv('m-tipo'), id=gv('m-id');
   var list=S[tipo], ex=id?list.find(function(r){return r.id===id;}):null;
   var rec={};
   if(tipo==='acordos'||tipo==='judicial'){
     if(!gv('f-devedor').trim()||!gf('f-valor-acordado')){toast('Informe devedor e valor acordado.','err');return;}
+    if(!somaRascunhoOk())return;
     rec=lerFormAcordo(tipo,ex);
   } else if(tipo.slice(-5)==='vista'){
     if(!gv('f-devedor').trim()||!gf('f-valor')){toast('Informe devedor e valor.','err');return;}
-    rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor:gf('f-valor'),recebido:gf('f-recebido'),data_pgto:gv('f-data-pgto'),lancamento:gv('f-lanc')||today(),criado_em:ex?ex.criado_em:today(),juros_custom:gf('f-juros'),cm_custom:gf('f-cm'),honorarios:gf('f-honorarios')||S.config.honorarios,responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim()};
+    rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor:gf('f-valor'),recebido:gf('f-recebido'),data_pgto:gv('f-data-pgto'),lancamento:gv('f-lanc')||today(),criado_em:ex?ex.criado_em:today(),juros_custom:gf('f-juros'),cm_custom:gf('f-cm'),honorarios:numCampo('f-honorarios',S.config.honorarios),responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim()};
   } else {
     if(!gv('f-devedor').trim()||!gf('f-valor')){toast('Informe devedor e valor.','err');return;}
+    if(!somaRascunhoOk())return;
     var nParc=parseInt(gv('f-nparc'))||3;
-    var vParc=gf('f-vparc');
     var data1=gv('f-data1')||today();
     var j2=gf('f-juros')||S.config.juros;
     var valor=gf('f-valor');
-    var jm=j2/100;
-    var fator=nParc>1?(jm*Math.pow(1+jm,nParc))/(Math.pow(1+jm,nParc)-1):1;
-    var valCalc=vParc>0?vParc:(valor*(nParc>1?fator:1));
-    var parcelas=ex?ex.parcelas:gerarParcelas(valor,nParc,data1,j2);
-    if(!ex) parcelas.forEach(function(p){p.valor=valCalc;});
-    rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor:valor,parcelas:parcelas,_nparc:nParc,_data1:data1,juros_custom:j2,cm_custom:gf('f-cm'),honorarios:gf('f-honorarios')||S.config.honorarios,responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex?ex.lancamento:today(),criado_em:ex?ex.criado_em:today()};
+    var editadas=!!(parcRascunho&&parcEditadas);
+    var parcelas=editadas?JSON.parse(JSON.stringify(parcRascunho)):(ex?ex.parcelas:parcelasCarteiraDoForm());
+    if(editadas){parcelas.forEach(function(p,i){p.num=i+1;p.sit=statusParcela(p);});nParc=parcelas.length;}
+    rec={parcelas_editadas:editadas||!!(ex&&ex.parcelas_editadas),devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor:valor,parcelas:parcelas,_nparc:nParc,_data1:data1,juros_custom:j2,cm_custom:gf('f-cm'),honorarios:numCampo('f-honorarios',S.config.honorarios),responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex?ex.lancamento:today(),criado_em:ex?ex.criado_em:today()};
   }
   rec.id=ex?ex.id:uid();
   if(ex){var i=list.findIndex(function(r){return r.id===rec.id;});list[i]=rec;} else list.push(rec);
+  document.getElementById('m-body').classList.remove('editando-parcelas');
   closeModal();
   toast('Lançamento salvo!','ok');
   if(tipo.indexOf('propria')===0||tipo.indexOf('clientes')===0){renderTbl(tipo.split('_')[0],tipo.split('_')[1]);renderDash();}

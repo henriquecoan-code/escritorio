@@ -244,9 +244,14 @@ function syncNow(){
   startRealtime();
 }
 
+// Cada chamada ganha um número; se outra começar durante o await, esta desiste (evita listeners duplicados).
+let realtimeGen=0;
 async function startRealtime(){
+  const gen=++realtimeGen;
   [unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());
+  unsubClientes=unsubInteracoes=unsubConfig=null;
   try{await loadQueuedOperations();}catch(error){console.error(error);toast('Não foi possível preparar o armazenamento local');}
+  if(gen!==realtimeGen)return;
   setSync('loading','Conectando ao Firebase...');
   const handleRealtimeError=error=>{
     console.error(error);
@@ -271,6 +276,7 @@ function initFirebase(){
       if(currentUser){firebaseReady=true;setAuth(false);startRealtime();}
       else{firebaseReady=false;[unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
       window.OBAuthHint?.update(user);
+      window.OBFirestoreCache?.watch(fbDb,user);
     });
   }catch(e){console.error(e);setSync('error','Erro ao iniciar Firebase');setAuth(true,'Não foi possível iniciar o Firebase.');}
 }
