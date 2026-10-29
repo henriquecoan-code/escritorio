@@ -202,10 +202,14 @@ function syncNow(){
   startRealtime();
 }
 
+// Cada chamada ganha um número; se outra começar durante o await, esta desiste (evita listeners duplicados).
+var realtimeGen=0;
 async function startRealtime(){
+  var gen=++realtimeGen;
   Object.keys(unsub).forEach(function(k){if(unsub[k])unsub[k]();});
   unsub={};
   try{await loadQueuedOperations();}catch(error){console.error(error);toast('Não foi possível preparar o armazenamento local','err');}
+  if(gen!==realtimeGen)return;
   setSync('loading','Conectando ao Firebase...');
   function handleRealtimeError(error){console.error(error);setSync('error','Sincronização indisponível',syncErrorDetail(error));toast(syncErrorDetail(error),'err');}
   DATA_KEYS.forEach(function(k){
@@ -234,6 +238,7 @@ function initFirebase(){
       if(currentUser){firebaseReady=true;setAuth(false);startRealtime();}
       else{firebaseReady=false;Object.keys(unsub).forEach(function(k){if(unsub[k])unsub[k]();});unsub={};setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
       if(window.OBAuthHint)window.OBAuthHint.update(user);
+      if(window.OBFirestoreCache)window.OBFirestoreCache.watch(fbDb,user);
     });
   }catch(e){console.error(e);setSync('error','Erro ao iniciar Firebase');setAuth(true,'Não foi possível iniciar o Firebase.');}
 }
@@ -249,6 +254,34 @@ function pct(v){return Number(v||0).toFixed(1)+'%';}
 function fD(s){if(!s)return '—';try{var p=s.split('-');return p[2]+'/'+p[1]+'/'+p[0];}catch(e){return s;}}
 function esc(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function today(){return new Date().toISOString().split('T')[0];}
+function arred(v){return Math.round(Number(v||0)*100)/100;}
+// Divide um total em n parcelas em centavos; o centavo que sobra vai para as primeiras parcelas.
+function dividirCentavos(total,n){
+  var c=Math.round(Number(total||0)*100),b=Math.floor(c/n),resto=c-b*n,out=[];
+  for(var i=0;i<n;i++)out.push((b+(i<resto?1:0))/100);
+  return out;
+}
+// Vencimento da parcela i (0 = primeira): dias 28 a 31 viram dia 30; em fevereiro, dia 28.
+function vencParcela(data1,i){
+  var p=String(data1).slice(0,10).split('-').map(Number);
+  var m=p[1]-1+i, y=p[0]+Math.floor(m/12);
+  m=((m%12)+12)%12;
+  var d=p[2]>=28?(m===1?28:30):p[2];
+  return y+'-'+String(m+1).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+}
+// Honorários do registro; usa o padrão só quando o campo não existe (0% é um valor válido).
+function honDe(r){
+  var h=r?r.honorarios:undefined;
+  return (h===undefined||h===null||h===''||isNaN(Number(h)))?Number(S.config.honorarios):Number(h);
+}
+// Lê um campo numérico do formulário; vazio usa o padrão, mas "0" continua 0.
+function numCampo(id,padrao){var v=String(gv(id)).trim();if(v==='')return padrao;var n=parseFloat(v);return isNaN(n)?padrao:n;}
+// Aceita "1.234,56", "1234,56" e "1234.56".
+function lerValorBR(v){
+  var s=String(v||'').replace(/\s|R\$/g,'');
+  if(s.indexOf(',')>=0)s=s.replace(/\./g,'').replace(',','.');
+  return s===''?NaN:Number(s);
+}
 
 // Calcula valor atualizado: juros compostos mensais + correção anual proporcional
 function calcAtual(valor, dataRef, jurosMes, correcaoAno){
@@ -268,12 +301,9 @@ function gerarParcelas(total, nParc, dataInicio, jurosMes){
   var parcelas=[];
   var j=Number(jurosMes||1)/100;
   var fator=nParc>1?(j*Math.pow(1+j,nParc))/(Math.pow(1+j,nParc)-1):1;
-  var valParc=total*(nParc>1?fator:1);
+  var valParc=arred(total*(nParc>1?fator:1));
   for(var i=0;i<nParc;i++){
-    var d=new Date(dataInicio+'T00:00:00');
-    d.setMonth(d.getMonth()+i);
-    var ds=d.toISOString().split('T')[0];
-    parcelas.push({num:i+1,venc:ds,valor:valParc,pago:0,sit:'Pendente'});
+    parcelas.push({num:i+1,venc:vencParcela(dataInicio,i),valor:valParc,pago:0,sit:'Pendente'});
   }
   return parcelas;
 }
@@ -438,8 +468,8 @@ function renderDash(){
   var cpTotal=cp.reduce(function(a,r){return a+totalParc(r.parcelas);},0);
   var cpRec=cp.reduce(function(a,r){return a+totalPago(r.parcelas);},0);
   var cRecTot=cvRec+cpRec;
-  var honPct_cv=cv.reduce(function(a,r){return a+(Number(r.recebido||0)*(Number(r.honorarios||S.config.honorarios)/100));},0);
-  var honPct_cp=cp.reduce(function(a,r){return a+(totalPago(r.parcelas)*(Number(r.honorarios||S.config.honorarios)/100));},0);
+  var honPct_cv=cv.reduce(function(a,r){return a+(Number(r.recebido||0)*(honDe(r)/100));},0);
+  var honPct_cp=cp.reduce(function(a,r){return a+(totalPago(r.parcelas)*(honDe(r)/100));},0);
   var cHonTot=honPct_cv+honPct_cp;
   var cTot=cvCob+cpTotal, cTx=cTot>0?(cRecTot/cTot)*100:0;
 
@@ -457,8 +487,8 @@ function renderDash(){
     '<div class="fat-card"><div class="fc-label">Receita — carteira própria</div><div class="fc-val">'+R(pRecTot)+'</div><div class="fc-sub">'+pPct+'% do faturamento</div><div class="fc-bar"><div class="fc-fill" style="width:'+pPct+'%;background:var(--teal)"></div></div></div>'+
     '<div class="fat-card"><div class="fc-label">Receita — honorários '+S.config.honorarios+'%</div><div class="fc-val">'+R(cHonTot)+'</div><div class="fc-sub">'+hPct+'% do faturamento</div><div class="fc-bar"><div class="fc-fill" style="width:'+hPct+'%;background:var(--rose)"></div></div></div>';
 
-  document.getElementById('kpi-adm').innerHTML=kpisAcordo('acordos');
-  document.getElementById('kpi-jd').innerHTML=kpisAcordo('judicial');
+  document.getElementById('kpi-adm').innerHTML=kpisAcordo('acordos',byPer(S.acordos||[]));
+  document.getElementById('kpi-jd').innerHTML=kpisAcordo('judicial',byPer(S.judicial||[]));
 
   renderChartDash();
 }
@@ -484,8 +514,8 @@ function renderChartDash(){
     {label:'Parcelado pago',data:months.map(function(o){return S.propria_parc.filter(function(r){var lk=r.lancamento;if(!lk)return false;var d=new Date(lk);return d.getFullYear()===o.y&&d.getMonth()===o.m;}).reduce(function(a,r){return a+totalPago(r.parcelas);},0);}),backgroundColor:'rgba(88,166,255,0.7)',borderRadius:3}
   ]});
   var honMes=months.map(function(o){
-    var cv=S.clientes_vista.filter(function(r){var d=new Date(r.lancamento||r.data_pgto||'2000-01-01');return d.getFullYear()===o.y&&d.getMonth()===o.m;}).reduce(function(a,r){return a+Number(r.recebido||0)*(Number(r.honorarios||S.config.honorarios)/100);},0);
-    var cp=S.clientes_parc.filter(function(r){var d=new Date(r.lancamento||'2000-01-01');return d.getFullYear()===o.y&&d.getMonth()===o.m;}).reduce(function(a,r){return a+totalPago(r.parcelas)*(Number(r.honorarios||S.config.honorarios)/100);},0);
+    var cv=S.clientes_vista.filter(function(r){var d=new Date(r.lancamento||r.data_pgto||'2000-01-01');return d.getFullYear()===o.y&&d.getMonth()===o.m;}).reduce(function(a,r){return a+Number(r.recebido||0)*(honDe(r)/100);},0);
+    var cp=S.clientes_parc.filter(function(r){var d=new Date(r.lancamento||'2000-01-01');return d.getFullYear()===o.y&&d.getMonth()===o.m;}).reduce(function(a,r){return a+totalPago(r.parcelas)*(honDe(r)/100);},0);
     return cv+cp;
   });
   mkChart('chartDashH','bar',{labels:labels,datasets:[{label:'Honorários',data:honMes,backgroundColor:'rgba(251,113,133,0.7)',borderRadius:3}]});
@@ -514,8 +544,8 @@ function renderTbl(cart,tipo){
       var id=r.id;
       var atu=r.situacao!=='Recebido'?calcAtual(r.valor,r.lancamento,j,cm):Number(r.valor);
       var dias=diasAtraso(r.data_pgto,r.situacao);
-      var honVal=Number(r.recebido||0)*(Number(r.honorarios||S.config.honorarios)/100);
-      var honPct=Number(r.honorarios||S.config.honorarios);
+      var honVal=Number(r.recebido||0)*(honDe(r)/100);
+      var honPct=honDe(r);
       var base='<td><b>'+esc(r.devedor)+'</b></td>'+(isCliente?'<td class="dim">'+esc(r.credor||'—')+'</td>':'')+'<td>'+R(r.valor)+'</td><td class="pos">'+(Number(r.recebido||0)>0?R(r.recebido):'<span class="dim">—</span>')+'</td><td style="color:var(--amber)">'+R(atu)+'</td><td class="dim">'+fD(r.data_pgto)+'</td><td>'+atrH(dias)+'</td>'+(isCliente?'<td class="pos">'+R(honVal)+'</td><td class="dim">'+honPct+'%</td>':'<td style="display:none"></td>')+'<td class="dim">'+esc(r.responsavel||'—')+'</td><td>'+pillSit(r.situacao)+'</td>';
       if(!isCliente) base=base.replace('<td style="display:none"></td>','');
       return '<tr>'+base+'<td><button class="row-ab" onclick="editRec(\''+key+'\',\''+id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+id+'\')">Excluir</button></td></tr>';
@@ -531,11 +561,11 @@ function renderTbl(cart,tipo){
       var prox=proxParc(r.parcelas);
       var proxVenc=prox?prox.venc:null;
       var dias=proxVenc&&r.situacao!=='Recebido'?diasAtraso(proxVenc,'Em aberto'):null;
-      var honPct=Number(r.honorarios||S.config.honorarios)/100;
+      var honPct=honDe(r)/100;
       var honVal=totRec*honPct;
       var npago=(r.parcelas||[]).filter(function(p){return p.sit==='Pago';}).length;
       var nTot=(r.parcelas||[]).length;
-      var base='<td><b>'+esc(r.devedor)+'</b></td>'+(isCliente?'<td class="dim">'+esc(r.credor||'—')+'</td>':'')+'<td>'+R(r.valor)+'</td><td style="color:var(--amber)">'+R(totP)+'</td><td class="dim">'+npago+'/'+nTot+'x</td><td class="pos">'+R(totRec)+'</td><td class="warn">'+R(aRec)+'</td><td class="dim">'+(proxVenc?fD(proxVenc):'—')+'</td><td>'+atrH(dias)+'</td>'+(isCliente?'<td class="dim">'+(Number(r.honorarios||S.config.honorarios))+'%</td><td class="pos">'+R(honVal)+'</td>':'')+'<td class="dim">'+esc(r.responsavel||'—')+'</td><td>'+pillSit(r.situacao)+'</td>';
+      var base='<td><b>'+esc(r.devedor)+'</b></td>'+(isCliente?'<td class="dim">'+esc(r.credor||'—')+'</td>':'')+'<td>'+R(r.valor)+'</td><td style="color:var(--amber)">'+R(totP)+'</td><td class="dim">'+npago+'/'+nTot+'x</td><td class="pos">'+R(totRec)+'</td><td class="warn">'+R(aRec)+'</td><td class="dim">'+(proxVenc?fD(proxVenc):'—')+'</td><td>'+atrH(dias)+'</td>'+(isCliente?'<td class="dim">'+(honDe(r))+'%</td><td class="pos">'+R(honVal)+'</td>':'')+'<td class="dim">'+esc(r.responsavel||'—')+'</td><td>'+pillSit(r.situacao)+'</td>';
       return '<tr>'+base+'<td><button class="row-ab" onclick="editRec(\''+key+'\',\''+id+'\')">Editar</button><button class="row-ab" onclick="verParcelas(\''+key+'\',\''+id+'\')">Parcelas</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+id+'\')">Excluir</button></td></tr>';
     }).join('');
   }
@@ -558,7 +588,7 @@ function renderOperadora(){
   var grid=document.getElementById('op-grid');
   if(!all.length){grid.innerHTML='<div style="grid-column:1/-1"><div class="empty"><div class="empty-ic">🔍</div><div class="empty-t">Nenhum acordo encontrado</div><div class="empty-s">Ajuste os filtros ou adicione lançamentos</div></div></div>';return;}
   grid.innerHTML=all.map(function(r){
-    var hon=Number(r.honorarios||S.config.honorarios)/100;
+    var hon=honDe(r)/100;
     var isParc=r._tipo==='parcelado';
     var totP=isParc?totalParc(r.parcelas):Number(r.valor||0);
     var totRec=isParc?totalPago(r.parcelas):Number(r.recebido||0);
@@ -627,18 +657,25 @@ function acBusca(r,busca){
   return [r.devedor,r.credor,r.numero,r.documento].some(function(v){return (v||'').toLowerCase().indexOf(b)>=0;});
 }
 
-function gerarParcAcordo(n,vParc,honTotal,honPct,tipo,data1){
-  var parcs=[];
+// valores: valor de cada parcela (já em centavos); honorários divididos em centavos do mesmo jeito.
+function gerarParcAcordo(valores,honTotal,honPct,tipo,data1){
+  var n=valores.length, hons=dividirCentavos(honTotal,n), parcs=[];
   for(var i=0;i<n;i++){
-    var d=new Date(data1+'T00:00:00');
-    d.setMonth(d.getMonth()+i);
-    parcs.push({num:i+1,venc:d.toISOString().slice(0,10),valor:Number(vParc)||0,hon_valor:(Number(honTotal)||0)/n,hon_pct:Number(honPct)||0,tipo:tipo||TIPOS_PARCELA[0],sit:'Em aberto',pago:0});
+    parcs.push({num:i+1,venc:vencParcela(data1,i),valor:valores[i],hon_valor:hons[i],hon_pct:Number(honPct)||0,tipo:tipo||TIPOS_PARCELA[0],sit:'Em aberto',pago:0});
   }
   return parcs;
 }
+// Valor por parcela digitado à mão? Registros antigos não têm a marca: compara com a divisão automática.
+function acVparcManual(r){
+  if(typeof r.vparc_manual==='boolean') return r.vparc_manual;
+  var n=r.nparc||acParcs(r).length||1;
+  return !!Number(r.vparc)&&Math.abs(Number(r.vparc)*n-Math.max(0,acValor(r)-acRecAnterior(r)))>0.01*n;
+}
 
-function kpisAcordo(key){
-  var list=S[key]||[], isJud=key==='judicial';
+// list opcional: o painel geral passa só os acordos do período escolhido.
+function kpisAcordo(key,list){
+  list=list||S[key]||[];
+  var isJud=key==='judicial';
   var tot=list.reduce(function(a,r){return a+acValor(r);},0);
   var rec=list.reduce(function(a,r){return a+acRecebido(r);},0);
   var ati=list.filter(acAtivo).length;
@@ -664,7 +701,12 @@ function serieAcordo(list,months){
           if(Array.isArray(r.pagamentos)) return sum+r.pagamentos.filter(function(p){return noMes(p.data,o);}).reduce(function(a,p){return a+Number(p.valor||0);},0);
           return sum+(noMes(r.lancamento,o)?Number(r.recebido||0):0);
         }
-        return sum+r.parcelas.filter(function(p){return p.sit==='Pago'&&noMes(p.data_pgto,o);}).reduce(function(a,p){return a+parcPago(p);},0);
+        // Acordo antigo que ganhou parcelas: o que foi recebido antes entra uma vez só,
+        // pela lista de pagamentos datados ou, sem ela, pelo recebido anterior na data de lançamento.
+        var hist=0;
+        if(Array.isArray(r.pagamentos)&&r.pagamentos.length) hist=r.pagamentos.filter(function(p){return noMes(p.data,o);}).reduce(function(a,p){return a+Number(p.valor||0);},0);
+        else if(Number(r.recebido_anterior||0)>0&&noMes(r.lancamento,o)) hist=Number(r.recebido_anterior);
+        return sum+hist+r.parcelas.filter(function(p){return p.sit==='Pago'&&noMes(p.data_pgto,o);}).reduce(function(a,p){return a+parcPago(p);},0);
       },0);
     })
   };
@@ -687,11 +729,11 @@ function linhaAcordo(key,r){
     '<td class="dim">'+(parcs.length?pagas+'/'+parcs.length+'x':esc(typeof r.parcelas==='string'&&r.parcelas?r.parcelas:'—'))+'</td>'+
     '<td>'+proxHtml+'</td>'+
     '<td><span class="tag tag-'+tipoCor+'" style="font-size:9px">'+esc(tipo)+'</span></td>'+
-    '<td class="dim">'+Number(r.honorarios||S.config.honorarios)+'%</td>'+
+    '<td class="dim">'+honDe(r)+'%</td>'+
     (isJud?'<td>'+pillSit(r.fase||'—')+'</td>':'')+
     '<td>'+pillSit(r.situacao||'Ativo')+'</td>'+
     '<td class="dim">'+esc(r.responsavel||'—')+'</td>'+
-    '<td onclick="event.stopPropagation()"><button class="row-ab" onclick="editRec(\''+key+'\',\''+r.id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+r.id+'\')">Excluir</button></td>'+
+    '<td onclick="event.stopPropagation()"><button class="row-ab" onclick="verAcordo(\''+key+'\',\''+r.id+'\')">Parcelas</button><button class="row-ab" onclick="editRec(\''+key+'\',\''+r.id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+r.id+'\')">Excluir</button></td>'+
     '</tr>';
 }
 
@@ -737,8 +779,8 @@ function verAcordo(key,id){
   var r=S[key].find(function(x){return x.id===id;});
   if(!r)return;
   var isJud=key==='judicial';
-  var hon=Number(r.honorarios||S.config.honorarios);
-  var honCalc=r.hon_calc||acValor(r)*(hon/100);
+  var hon=honDe(r);
+  var honCalc=(r.hon_calc===undefined||r.hon_calc===null||r.hon_calc==='')?acValor(r)*(hon/100):Number(r.hon_calc);
   var box=function(t,c){return '<div class="acd-box"><div class="acd-lbl">'+t+'</div>'+c+'</div>';};
   var html='<div class="modal-title">'+(isJud?'Acordo Judicial — '+esc(r.numero||'s/n'):'Acordo Administrativo — '+esc(r.devedor||''))+'</div>';
   html+='<div class="acd-grid">';
@@ -776,14 +818,15 @@ async function marcarPagoAcordo(key,id,pi){
   var dias=diasAtraso(p.venc,p.sit);
   if(dias){
     var taxa=Number(S.config.juros_atraso!==undefined?S.config.juros_atraso:2);
-    juros=base*(taxa/100)*Math.ceil(dias/30);
+    juros=arred(base*(taxa/100)*Math.ceil(dias/30));
     if(juros>0&&confirm('Parcela em atraso há '+dias+' dia(s). Aplicar juros de '+taxa+'%/mês?\nJuros: '+R(juros)+' — Total: '+R(base+juros))) sugerido=base+juros;
     else juros=0;
   }
   var v=prompt('Valor recebido (R$):',sugerido.toFixed(2));
   if(v===null)return;
-  var pago=parseFloat(String(v).replace(',','.'));
-  p.pago=isNaN(pago)?sugerido:pago;
+  var pago=lerValorBR(v);
+  if(!isFinite(pago)||pago<=0){toast('Informe um valor recebido maior que zero.','err');return;}
+  p.pago=arred(pago);
   p.sit='Pago';
   p.data_pgto=today();
   if(juros>0)p.juros_atraso=juros;else delete p.juros_atraso;
@@ -827,11 +870,12 @@ function buildFormAcordo(key,r){
   }
   h+='<div class="modal-sec">Valores do acordo</div>';
   h+=isJud?inp('f-valor-cob','Valor da cobrança (R$)',r.valor_cobranca||(r.valor_acordado?'':r.valor)||'',num):inp('f-valor-orig','Valor original (R$)',r.valor_original||'',num);
-  h+=inp('f-valor-acordado','Valor acordado (R$) *',r.valor_acordado||(isJud?'':r.valor)||'',num+' oninput="recalcAcordo()"');
-  h+=inp('f-nparc','Nº de parcelas',nparc,'type="number" min="1" max="120" oninput="recalcAcordo()"');
-  h+=inp('f-vparc','Valor por parcela (R$)',r.vparc||'',num+' placeholder="Calculado automaticamente"');
-  h+=inp('f-honorarios','Honorários (%)',r.honorarios||cfg.honorarios,'type="number" min="0" max="100" step="0.1" oninput="recalcAcordo()"');
-  h+=inp('f-hon-calc','Honorários calculados (R$)',r.hon_calc||'',num);
+  // Mudar valor ou nº de parcelas limpa o valor por parcela, que volta a ser calculado.
+  h+=inp('f-valor-acordado','Valor acordado (R$) *',r.valor_acordado||(isJud?'':r.valor)||'',num+' oninput="recalcAcordo(true)"');
+  h+=inp('f-nparc','Nº de parcelas',nparc,'type="number" min="1" max="120" oninput="recalcAcordo(true)"');
+  h+=inp('f-vparc','Valor por parcela (R$)',acVparcManual(r)?r.vparc:'',num+' placeholder="Calculado automaticamente"');
+  h+=inp('f-honorarios','Honorários (%)',r.id?honDe(r):cfg.honorarios,'type="number" min="0" max="100" step="0.1" oninput="recalcAcordo()"');
+  h+=inp('f-hon-calc','Honorários calculados (R$)',(r.hon_calc===undefined||r.hon_calc===null)?'':r.hon_calc,num);
   h+=inp('f-data1','1ª parcela em',r.data1||r.prox_venc||today(),'type="date"');
   h+='<div class="ff"><label>Tipo de parcela</label><select id="f-tipo-parcela">'+SEL(TIPOS_PARCELA,r.tipo_parcela||TIPOS_PARCELA[0])+'</select></div>';
   h+='<input type="hidden" id="f-rec-ant" value="'+anterior+'">';
@@ -844,32 +888,41 @@ function buildFormAcordo(key,r){
   h+='<div class="ff full"><label>Observações</label><textarea id="f-obs">'+esc(r.obs||'')+'</textarea></div>';
   return h;
 }
-function recalcAcordo(){
-  var v=gf('f-valor-acordado'), n=parseInt(gv('f-nparc'))||1;
-  var hon=parseFloat(gv('f-honorarios'));if(isNaN(hon))hon=S.config.honorarios;
+function recalcAcordo(limparParcela){
+  var v=gf('f-valor-acordado'), n=Math.max(1,parseInt(gv('f-nparc'))||1);
+  var hon=numCampo('f-honorarios',S.config.honorarios);
   var hc=document.getElementById('f-hon-calc');
   if(hc&&hc!==document.activeElement) hc.value=v?(v*hon/100).toFixed(2):'';
   var vp=document.getElementById('f-vparc');
-  if(vp) vp.placeholder=v?(Math.max(0,v-gf('f-rec-ant'))/n).toFixed(2):'Calculado automaticamente';
+  if(!vp)return;
+  if(limparParcela) vp.value='';
+  vp.placeholder=v?dividirCentavos(Math.max(0,v-gf('f-rec-ant')),n)[0].toFixed(2):'Calculado automaticamente';
 }
 function lerFormAcordo(key,ex){
   var isJud=key==='judicial';
   var vAc=gf('f-valor-acordado');
   var n=Math.max(1,Math.min(120,parseInt(gv('f-nparc'))||1));
   var anterior=ex?acRecAnterior(ex):0;
-  var vParc=gf('f-vparc')||(Math.max(0,vAc-anterior)/n);
-  var hon=parseFloat(gv('f-honorarios'));if(isNaN(hon))hon=S.config.honorarios;
-  var honCalc=gf('f-hon-calc')||(vAc*hon/100);
+  // Parcela digitada à mão vale para todas; senão o saldo é dividido em centavos (a soma fecha exata).
+  var vParcManual=String(gv('f-vparc')).trim()!=='';
+  var valores=vParcManual?Array(n).fill(arred(gf('f-vparc'))):dividirCentavos(Math.max(0,vAc-anterior),n);
+  var vParc=valores[0];
+  var hon=numCampo('f-honorarios',S.config.honorarios);
+  var honCalc=arred(numCampo('f-hon-calc',vAc*hon/100));
   var data1=gv('f-data1')||today();
   var tipoParc=gv('f-tipo-parcela')||TIPOS_PARCELA[0];
-  var rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor_acordado:vAc,nparc:n,vparc:vParc,honorarios:hon,hon_calc:honCalc,data1:data1,tipo_parcela:tipoParc,responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex&&ex.lancamento?ex.lancamento:today(),criado_em:ex&&ex.criado_em?ex.criado_em:today()};
+  var rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor_acordado:vAc,nparc:n,vparc:vParc,vparc_manual:vParcManual,honorarios:hon,hon_calc:honCalc,data1:data1,tipo_parcela:tipoParc,responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex&&ex.lancamento?ex.lancamento:today(),criado_em:ex&&ex.criado_em?ex.criado_em:today()};
   if(isJud){rec.numero=gv('f-numero').trim();rec.valor_cobranca=gf('f-valor-cob');rec.fase=gv('f-fase');}
   else{rec.documento=gv('f-documento').trim();rec.valor_original=gf('f-valor-orig');}
   // Cronograma: gerado no cadastro e refeito na edição só enquanto nenhuma parcela foi paga
   var exParcs=ex?acParcs(ex):[];
   var temPago=exParcs.some(function(p){return p.sit==='Pago';});
-  var mudou=!ex||!Array.isArray(ex.parcelas)||['valor_acordado','nparc','vparc','hon_calc','data1','tipo_parcela'].some(function(k){return String(ex[k])!==String(rec[k]);});
-  rec.parcelas=(temPago||!mudou)?exParcs:gerarParcAcordo(n,vParc,honCalc,hon,tipoParc,data1);
+  var mudou=!ex||!Array.isArray(ex.parcelas)
+    ||['valor_acordado','nparc','data1','tipo_parcela'].some(function(k){return String(ex[k])!==String(rec[k]);})
+    ||arred(ex.hon_calc)!==honCalc
+    ||acVparcManual(ex)!==vParcManual
+    ||(vParcManual&&arred(ex.vparc)!==vParc);
+  rec.parcelas=(temPago||!mudou)?exParcs:gerarParcAcordo(valores,honCalc,hon,tipoParc,data1);
   if(anterior>0) rec.recebido_anterior=anterior;
   if(ex&&Array.isArray(ex.pagamentos)&&ex.pagamentos.length) rec.pagamentos=ex.pagamentos;
   return rec;
@@ -924,9 +977,11 @@ async function marcarPago(key,id,pi){
   var r=S[key].find(function(x){return x.id===id;});
   if(!r)return;
   var p=r.parcelas[pi];
-  var val=prompt('Valor pago (R$):',p.valor.toFixed(2));
-  if(!val) return;
-  p.pago=parseFloat(val)||p.valor;
+  var val=prompt('Valor pago (R$):',Number(p.valor||0).toFixed(2));
+  if(val===null) return;
+  var pago=lerValorBR(val);
+  if(!isFinite(pago)||pago<=0){toast('Informe um valor pago maior que zero.','err');return;}
+  p.pago=arred(pago);
   p.sit='Pago';
   var todoPago=r.parcelas.every(function(x){return x.sit==='Pago';});
   if(todoPago) r.situacao='Recebido';
@@ -993,7 +1048,7 @@ function buildForm(tipo,r){
   }
 
   if(isCliente){
-    html+='<div class="ff"><label>Honorários (%)</label><input id="f-honorarios" type="number" value="'+(r.honorarios||hon)+'" min="0" max="100" step="0.1" oninput="recalcModal()"></div>';
+    html+='<div class="ff"><label>Honorários (%)</label><input id="f-honorarios" type="number" value="'+(r.id?honDe(r):hon)+'" min="0" max="100" step="0.1" oninput="recalcModal()"></div>';
   }
 
   html+='<div class="calc-box" id="calc-preview"><div class="calc-box-title">Prévia do cálculo</div><div id="calc-rows"><div style="font-size:11px;color:var(--tx3)">Preencha os valores acima para ver a prévia</div></div></div>';
@@ -1167,7 +1222,7 @@ async function salvar(){
     rec=lerFormAcordo(tipo,ex);
   } else if(tipo.slice(-5)==='vista'){
     if(!gv('f-devedor').trim()||!gf('f-valor')){toast('Informe devedor e valor.','err');return;}
-    rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor:gf('f-valor'),recebido:gf('f-recebido'),data_pgto:gv('f-data-pgto'),lancamento:gv('f-lanc')||today(),criado_em:ex?ex.criado_em:today(),juros_custom:gf('f-juros'),cm_custom:gf('f-cm'),honorarios:gf('f-honorarios')||S.config.honorarios,responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim()};
+    rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor:gf('f-valor'),recebido:gf('f-recebido'),data_pgto:gv('f-data-pgto'),lancamento:gv('f-lanc')||today(),criado_em:ex?ex.criado_em:today(),juros_custom:gf('f-juros'),cm_custom:gf('f-cm'),honorarios:numCampo('f-honorarios',S.config.honorarios),responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim()};
   } else {
     if(!gv('f-devedor').trim()||!gf('f-valor')){toast('Informe devedor e valor.','err');return;}
     var nParc=parseInt(gv('f-nparc'))||3;
@@ -1179,8 +1234,8 @@ async function salvar(){
     var fator=nParc>1?(jm*Math.pow(1+jm,nParc))/(Math.pow(1+jm,nParc)-1):1;
     var valCalc=vParc>0?vParc:(valor*(nParc>1?fator:1));
     var parcelas=ex?ex.parcelas:gerarParcelas(valor,nParc,data1,j2);
-    if(!ex) parcelas.forEach(function(p){p.valor=valCalc;});
-    rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor:valor,parcelas:parcelas,_nparc:nParc,_data1:data1,juros_custom:j2,cm_custom:gf('f-cm'),honorarios:gf('f-honorarios')||S.config.honorarios,responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex?ex.lancamento:today(),criado_em:ex?ex.criado_em:today()};
+    if(!ex) parcelas.forEach(function(p){p.valor=arred(valCalc);});
+    rec={devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor:valor,parcelas:parcelas,_nparc:nParc,_data1:data1,juros_custom:j2,cm_custom:gf('f-cm'),honorarios:numCampo('f-honorarios',S.config.honorarios),responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex?ex.lancamento:today(),criado_em:ex?ex.criado_em:today()};
   }
   rec.id=ex?ex.id:uid();
   if(ex){var i=list.findIndex(function(r){return r.id===rec.id;});list[i]=rec;} else list.push(rec);

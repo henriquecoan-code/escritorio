@@ -264,47 +264,67 @@ async function syncNow(){
   startRealtimeSync();
 }
 
+let contratosLoaded=false;         // primeiro snapshot de contratos ja aplicado
+let contratosPendingSnap=null;     // snapshot que chegou com edicao aberta (aplicado ao fechar)
+let contratosBackfillChecked=false;
+
+function applyContratosSnapshot(snap){
+  contratosLoaded=true;
+  // Item 5 - mescla inteligente usando updatedAt
+  const remoteUids = new Set();
+  snap.docs.forEach((doc)=>{
+    const remote = doc.data();
+    if(remote.createdAt && !remote.updatedAt) remote.updatedAt=remote.createdAt;
+    remoteUids.add(remote.uid);
+    const localIdx = DB.findIndex(r=>r.uid===remote.uid);
+    if(localIdx===-1){
+      DB.push(remote);
+    } else {
+      const localTs  = DB[localIdx].updatedAt || 0;
+      const remoteTs = remote.updatedAt || 0;
+      // so sobrescreve se a versao remota for mais recente
+      if(remoteTs >= localTs) DB[localIdx] = remote;
+    }
+  });
+  // remove registros excluidos remotamente
+  DB = DB.filter(r=>remoteUids.has(r.uid));
+
+  const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  setSyncStatus('ok','Tempo real',`${DB.length} registros · ${now}`);
+  firebasePermissionWarned=false;
+  fillSelects();renderDash();fillRegFilters();renderReg();
+}
+
+// Fecha modal/painel de edicao e aplica o snapshot que chegou enquanto estava aberto.
+function finishEditing(){
+  isEditing=false;
+  if(contratosPendingSnap){
+    const snap=contratosPendingSnap;
+    contratosPendingSnap=null;
+    applyContratosSnapshot(snap);
+  }
+}
+
 /* Item 4 - listener em tempo real para contratos (substitui polling) */
 function startRealtimeSync(){
   if(unsubContratos){ unsubContratos(); unsubContratos=null; }
+  contratosPendingSnap=null;
+  contratosBackfillChecked=false;
 
-  let backfillChecked=false;
-  unsubContratos = fbDb.collection('contratos').onSnapshot((snap)=>{
-    // nao sobrescreve durante edicao
-    if(isEditing) return;
-
-    // Item 5 - mescla inteligente usando updatedAt
-    const remoteUids = new Set();
-    const missingCreatedAt = [];
-    snap.docs.forEach((doc)=>{
-      const remote = doc.data();
-      if(!remote.createdAt) missingCreatedAt.push(remote);
-      else if(!remote.updatedAt) remote.updatedAt=remote.createdAt;
-      remoteUids.add(remote.uid);
-      const localIdx = DB.findIndex(r=>r.uid===remote.uid);
-      if(localIdx===-1){
-        DB.push(remote);
-      } else {
-        const localTs  = DB[localIdx].updatedAt || 0;
-        const remoteTs = remote.updatedAt || 0;
-        // so sobrescreve se a versao remota for mais recente
-        if(remoteTs >= localTs) DB[localIdx] = remote;
-      }
-    });
-    // remove registros excluidos remotamente
-    DB = DB.filter(r=>remoteUids.has(r.uid));
-
-    if(!backfillChecked && !snap.metadata.fromCache){
-      backfillChecked=true;
-      if(missingCreatedAt.length){
-        backfillCreatedAtInFirebase(missingCreatedAt).catch((err)=>console.warn('Backfill createdAt falhou:', err));
+  // includeMetadataChanges: a confirmacao do servidor (fromCache -> false) tambem chega aqui, para o backfill.
+  unsubContratos = fbDb.collection('contratos').onSnapshot({includeMetadataChanges:true},(snap)=>{
+    if(!contratosBackfillChecked && !snap.metadata.fromCache){
+      contratosBackfillChecked=true;
+      const missing=snap.docs.map(d=>d.data()).filter(r=>!r.createdAt);
+      if(missing.length){
+        backfillCreatedAtInFirebase(missing).catch((err)=>console.warn('Backfill createdAt falhou:', err));
       }
     }
-
-    const now=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-    setSyncStatus('ok','Tempo real',`${DB.length} registros · ${now}`);
-    firebasePermissionWarned=false;
-    fillSelects();renderDash();fillRegFilters();renderReg();
+    // so metadados mudaram (ex.: cache confirmado pelo servidor): nada a redesenhar
+    if(contratosLoaded && !snap.docChanges().length) return;
+    // nao sobrescreve durante edicao; guarda para aplicar ao fechar
+    if(isEditing){ contratosPendingSnap=snap; return; }
+    applyContratosSnapshot(snap);
   },
   (err)=>{
     console.error('onSnapshot erro:', err);
@@ -902,6 +922,7 @@ function init(){
         setAuthOverlay(true);
       }
       window.OBAuthHint?.update(user);
+      window.OBFirestoreCache?.watch(fbDb,user);
     });
     return;
   }
@@ -1449,7 +1470,7 @@ function openM(editUid){
     const overlay = document.getElementById('overlay'); if(overlay) overlay.classList.add('open');
   }
 }
-function closeM(){isEditing=false;document.getElementById('overlay').classList.remove('open');}
+function closeM(){finishEditing();document.getElementById('overlay').classList.remove('open');}
 function overlayBg(e){if(e.target===e.currentTarget)closeM();}
 async function saveC(){
   const cli=document.getElementById('m-cli').value.trim();
@@ -1939,7 +1960,7 @@ function toggleRegCard(uid){
   btn.textContent=isOpen?'\u25bc Editar':'\u25b2 Fechar';
   card.classList.toggle('expanded',!isOpen);
   // pausa autosync quando painel esta aberto
-  isEditing = !isOpen;
+  if(isOpen) finishEditing(); else isEditing=true;
 }
 
 function setRegEtapa(uid,etapa){
@@ -2058,7 +2079,7 @@ async function saveReg(uid){
   if(!ok) return; // Item 6 - nao fecha painel nem atualiza UI se falhou
 
   DB[idx]=updated;
-  isEditing=false; // libera autosync apos salvar confirmado
+  finishEditing(); // libera autosync apos salvar confirmado
   renderDash();renderReg();
 
   // Atualiza duração na tela
