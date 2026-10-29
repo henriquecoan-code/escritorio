@@ -310,6 +310,8 @@ function startRealtimeSync(){
   if(unsubContratos){ unsubContratos(); unsubContratos=null; }
   contratosPendingSnap=null;
   contratosBackfillChecked=false;
+  // O primeiro snapshot de cada listener vale sempre, mesmo vazio (ex.: o último contrato foi excluído).
+  let primeiroSnapshot=true;
 
   // includeMetadataChanges: a confirmacao do servidor (fromCache -> false) tambem chega aqui, para o backfill.
   unsubContratos = fbDb.collection('contratos').onSnapshot({includeMetadataChanges:true},(snap)=>{
@@ -321,7 +323,8 @@ function startRealtimeSync(){
       }
     }
     // so metadados mudaram (ex.: cache confirmado pelo servidor): nada a redesenhar
-    if(contratosLoaded && !snap.docChanges().length) return;
+    if(contratosLoaded && !primeiroSnapshot && !snap.docChanges().length) return;
+    primeiroSnapshot=false;
     // nao sobrescreve durante edicao; guarda para aplicar ao fechar
     if(isEditing){ contratosPendingSnap=snap; return; }
     applyContratosSnapshot(snap);
@@ -2082,11 +2085,12 @@ async function saveReg(uid){
   finishEditing(); // libera autosync apos salvar confirmado
   renderDash();renderReg();
 
-  // Atualiza duração na tela
-  const durItems=getRegDurItems(DB[idx]);
+  // finishEditing pode aplicar um snapshot que remove registros e muda os índices: busca pelo uid.
+  const saved=DB.find(r=>r.uid===uid)||updated;
+  const durItems=getRegDurItems(saved);
   const durEl=document.getElementById(`dur-${uid}`);
   if(durEl) durEl.innerHTML=regDurGridHTML(durItems);
-  toast(`"${escHtml(DB[idx].cliente||uid)}" salvo!`);
+  toast(`"${escHtml(saved.cliente||uid)}" salvo!`);
 }
 
 function exportRegHTML(){
