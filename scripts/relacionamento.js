@@ -273,7 +273,7 @@ function initFirebase(){
     fbAuth.onAuthStateChanged(user=>{
       currentUser=user||null;
       refreshAuthUI();
-      if(currentUser){firebaseReady=true;setAuth(false);startRealtime();}
+      if(currentUser){firebaseReady=true;setAuth(false);window.OBFirestoreCache?.login(fbDb);startRealtime();}
       else{firebaseReady=false;[unsubClientes,unsubInteracoes,unsubConfig].forEach(unsub=>unsub?.());setAuth(true);setSync('error','Login necessário','Entre para carregar os dados');}
       window.OBAuthHint?.update(user);
       window.OBFirestoreCache?.watch(fbDb,user);

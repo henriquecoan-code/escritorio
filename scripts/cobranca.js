@@ -971,6 +971,8 @@ async function confirmarPagamento(key,id,pi){
   var data=gv('pg-data')||today();
   var jEl=document.getElementById('pg-juros');
   var opcResto=(document.querySelector('input[name="pg-resto"]:checked')||{}).value;
+  // Parcela antiga sem contador: fixa os meses já cobrados antes que data_pgto mude.
+  if(p.juros_meses===undefined) p.juros_meses=mesesJurosCobrados(p);
   var jur=jurosAtraso(p,data);
   if(jEl&&jEl.checked&&jur.valor>0){p.juros_atraso=arred(Number(p.juros_atraso||0)+jur.valor);p.juros_meses=jur.meses;}
   p.pagamentos=pagtosParcela(p).concat([{valor:v,data:data}]);
@@ -1028,7 +1030,8 @@ async function editTipoParc(key,id,pi,tipo){
 var parcRascunho=null, parcEditadas=false, parcEsperado=0, parcBasePagtos='';
 // Pagamentos de cada parcela, para detectar o que foi registrado (em outra aba ou por outra pessoa) durante a edição.
 function assinaturaPagtos(parcs){
-  return JSON.stringify((parcs||[]).map(function(p){return [pagtosParcela(p),Number(p.juros_atraso||0),Number(p.transferido||0),Number(p.excedente||0)];}));
+  // Acordos antigos podem ter "parcelas" como texto: contam como sem parcelas.
+  return JSON.stringify((Array.isArray(parcs)?parcs:[]).map(function(p){return [pagtosParcela(p),Number(p.juros_atraso||0),Number(p.transferido||0),Number(p.excedente||0)];}));
 }
 function buildFormAcordo(key,r){
   r=r||{};
@@ -1576,6 +1579,7 @@ function somaRascunhoOk(){
 }
 // Todas as parcelas pagas: quitado. Parcela reaberta num registro quitado: volta a ativo/em aberto.
 function reconciliarSituacao(key,r){
+  if(r.situacao==='Arquivado'||r.situacao==='Cancelado')return;
   var quitada=ehAcordo(key)?'Cumprido':'Recebido', todas=r.parcelas.length&&r.parcelas.every(function(p){return p.sit==='Pago';});
   if(todas) r.situacao=quitada;
   else if(r.situacao===quitada) r.situacao=ehAcordo(key)?'Ativo':'Em aberto';
@@ -1583,7 +1587,7 @@ function reconciliarSituacao(key,r){
 async function salvar(){
   var tipo=gv('m-tipo'), id=gv('m-id');
   var list=S[tipo], ex=id?list.find(function(r){return r.id===id;}):null;
-  var rec={};
+  var rec={}, editouParcelas=!!(parcRascunho&&parcEditadas);
   if(tipo==='acordos'||tipo==='judicial'){
     if(!gv('f-devedor').trim()||!gf('f-valor-acordado')){toast('Informe devedor e valor acordado.','err');return;}
     if(!somaRascunhoOk())return;
@@ -1603,7 +1607,8 @@ async function salvar(){
     if(editadas){parcelas.forEach(function(p,i){p.num=i+1;p.sit=statusParcela(p);});nParc=parcelas.length;}
     rec={parcelas_editadas:editadas||!!(ex&&ex.parcelas_editadas),devedor:gv('f-devedor').trim(),credor:gv('f-credor').trim(),valor:valor,parcelas:parcelas,_nparc:nParc,_data1:data1,juros_custom:j2,cm_custom:gf('f-cm'),honorarios:numCampo('f-honorarios',S.config.honorarios),responsavel:gv('f-responsavel'),situacao:gv('f-situacao'),obs:gv('f-obs').trim(),lancamento:ex?ex.lancamento:today(),criado_em:ex?ex.criado_em:today()};
   }
-  if(rec.parcelas_editadas&&Array.isArray(rec.parcelas)) reconciliarSituacao(tipo,rec);
+  // Só quando as parcelas foram editadas neste salvamento (parcelas_editadas é uma marca permanente).
+  if(editouParcelas&&Array.isArray(rec.parcelas)) reconciliarSituacao(tipo,rec);
   rec.id=ex?ex.id:uid();
   if(ex){var i=list.findIndex(function(r){return r.id===rec.id;});list[i]=rec;} else list.push(rec);
   document.getElementById('m-body').classList.remove('editando-parcelas');
