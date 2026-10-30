@@ -31,6 +31,9 @@ var unsub={};
 const OUTBOX_DB='ob-cobranca-outbox';
 const OUTBOX_STORE='operacoes';
 var pendingOperations=new Map();
+// Revisões gravadas por esta aba: uma gravação mais nova nossa que já chegou ao servidor não é conflito.
+var revsProprias=new Set();
+var retentando=false;
 
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 
@@ -108,12 +111,23 @@ async function queueOperations(operations){
   var database=await openOutbox();
   await new Promise(function(resolve,reject){
     var transaction=database.transaction(OUTBOX_STORE,'readwrite');
-    operations.forEach(function(operation){pendingOperations.set(operation.id,operation);transaction.objectStore(OUTBOX_STORE).put(operation);});
+    operations.forEach(function(operation){
+      // Edição nova de um registro que ainda tem gravação pendente: continua aceitando a revisão
+      // de origem da pendente (e a própria pendente), já que ela será substituída por esta.
+      var anterior=pendingOperations.get(operation.id);
+      if(anterior&&anterior.revsAceitas&&operation.revsAceitas){
+        operation.revsAceitas=anterior.revsAceitas.concat([anterior.data.rev],operation.revsAceitas).filter(function(v,i,a){return a.indexOf(v)===i;});
+      }
+      if(operation.revsAceitas&&operation.data&&operation.data.rev)revsProprias.add(operation.data.rev);
+      pendingOperations.set(operation.id,operation);transaction.objectStore(OUTBOX_STORE).put(operation);
+    });
     transaction.oncomplete=resolve;transaction.onerror=function(){reject(transaction.error);};transaction.onabort=function(){reject(transaction.error);};
   });
   database.close();
 }
 async function removeQueuedOperations(operations){
+  // Só remove o que ainda está na fila: uma edição mais nova do mesmo registro pode ter tomado o lugar.
+  operations=operations.filter(function(operation){return pendingOperations.get(operation.id)===operation;});
   if(!operations.length)return;
   var database=await openOutbox();
   await new Promise(function(resolve,reject){
@@ -132,6 +146,7 @@ async function loadQueuedOperations(){
   });
   database.close();
   pendingOperations=new Map(operations.filter(function(o){return o.userId===currentUser.uid;}).map(function(o){return [o.id,o];}));
+  pendingOperations.forEach(function(o){if(o.revsAceitas&&o.data&&o.data.rev)revsProprias.add(o.data.rev);});
 }
 function applyQueuedOperations(){
   pendingOperations.forEach(function(operation){
@@ -149,8 +164,20 @@ function applyQueuedOperations(){
   });
 }
 function updatePendingSync(){if(pendingOperations.size)setSync('pending','Alterações pendentes',pendingOperations.size+' alteração(ões) aguardando o Firebase');}
+// Envia as operações e devolve as que entraram em conflito (não gravadas).
+// Registros do financeiro são gravados em transação: só grava se a revisão no servidor for a
+// revisão em que a edição se baseou (ou uma gravação mais nova desta aba, que já a substituiu).
+// Transação não fica na fila do SDK quando offline: falha e a operação continua na nossa fila.
 async function sendOperations(operations){
   if(!firebaseReady||!currentUser)throw new Error('Firebase indisponível');
+  var conflitos=[];
+  var versionadas=operations.filter(function(o){return !!o.revsAceitas;});
+  for(var v=0;v<versionadas.length;v++){
+    var op=versionadas[v];
+    var resultado=await gravarVersionada(op);
+    if(resultado==='conflito')conflitos.push(op);
+  }
+  operations=operations.filter(function(o){return !o.revsAceitas;});
   for(var start=0;start<operations.length;start+=450){
     var batch=fbDb.batch();
     operations.slice(start,start+450).forEach(function(operation){
@@ -159,24 +186,84 @@ async function sendOperations(operations){
     });
     await batch.commit();
   }
+  return conflitos;
+}
+function gravarVersionada(op){
+  var reference=fbDb.collection(op.collection).doc(op.documentId);
+  return fbDb.runTransaction(function(tx){
+    return tx.get(reference).then(function(snap){
+      var revServidor=snap.exists?(snap.data().rev||''):null;
+      // null: o registro não existe mais no servidor (novo, ou excluído por outra pessoa)
+      var aceita=revServidor===null?op.revsAceitas.indexOf('')>=0:op.revsAceitas.indexOf(revServidor)>=0;
+      if(!aceita) return revServidor&&revsProprias.has(revServidor)?'superada':'conflito';
+      tx.set(reference,op.data);
+      return 'gravada';
+    });
+  });
+}
+// Conflito: a alteração local é descartada e o registro volta a ficar como está no servidor.
+async function tratarConflitos(conflitos){
+  if(!conflitos.length)return;
+  var nomes=[];
+  for(var i=0;i<conflitos.length;i++){
+    var op=conflitos[i], key=null;
+    for(var k in COLLECTIONS){if(COLLECTIONS[k]===op.collection){key=k;break;}}
+    nomes.push((op.data&&(op.data.devedor||op.data.numero))||op.documentId);
+    if(!key)continue;
+    try{
+      var snap=await fbDb.collection(op.collection).doc(op.documentId).get();
+      var idx=S[key].findIndex(function(r){return r.id===op.documentId;});
+      if(snap.exists){if(idx>=0)S[key][idx]=snap.data();else S[key].push(snap.data());}
+      else if(idx>=0)S[key].splice(idx,1);
+    }catch(e){console.error(e);}
+  }
+  renderAll();
+  alert('Alteração não gravada em: '+nomes.join(', ')+'.\n\nO registro foi alterado por outra pessoa antes desta alteração chegar ao servidor (por exemplo, enquanto este computador estava sem conexão). Os dados atuais foram recarregados: confira e refaça a alteração se ainda for necessária.');
 }
 async function persistOperations(operations){
   await queueOperations(operations);
-  try{await sendOperations(operations);await removeQueuedOperations(operations);return true;}
+  try{
+    var conflitos=await sendOperations(operations);
+    await removeQueuedOperations(operations);
+    await tratarConflitos(conflitos);
+    return !conflitos.length;
+  }
   catch(error){console.error(error);updatePendingSync();toast('Alteração salva neste dispositivo e pendente de sincronização');return false;}
 }
 async function retryQueuedOperations(){
   var operations=Array.from(pendingOperations.values());
-  if(!operations.length)return true;
-  try{await sendOperations(operations);await removeQueuedOperations(operations);setSync('ok','Tempo real',syncSummary());toast('Alterações pendentes sincronizadas','ok');return true;}
+  if(!operations.length||retentando)return true;
+  retentando=true;
+  try{
+    var conflitos=await sendOperations(operations);
+    await removeQueuedOperations(operations);
+    setSync('ok','Tempo real',syncSummary());
+    if(operations.length>conflitos.length)toast('Alterações pendentes sincronizadas','ok');
+    await tratarConflitos(conflitos);
+    return !conflitos.length;
+  }
   catch(error){console.error(error);setSync('error','Sincronização pendente',syncErrorDetail(error));return false;}
+  finally{retentando=false;}
 }
+// Sem a fila do SDK, quem reenvia o que ficou pendente é a nossa fila: ao voltar a conexão e a cada minuto.
+window.addEventListener('online',function(){if(firebaseReady&&currentUser)retryQueuedOperations();});
+setInterval(function(){if(firebaseReady&&currentUser&&pendingOperations.size)retryQueuedOperations();},60000);
 function setOperations(collection,documents){return documents.map(function(d){return {id:operationId(collection,d.id),userId:currentUser.uid,collection:collection,documentId:d.id,type:'set',data:d};});}
 function deleteOperations(collection,ids){return ids.map(function(id){return {id:operationId(collection,id),userId:currentUser.uid,collection:collection,documentId:id,type:'delete'};});}
 
+// Cada gravação gera uma revisão nova; a operação leva a revisão em que a edição se baseou.
+function setOperationsVersionadas(collection,documents){
+  return documents.map(function(d){
+    var base=d.rev||'';
+    d.rev=uid();
+    var op=setOperations(collection,[JSON.parse(JSON.stringify(d))])[0];
+    op.revsAceitas=[base];
+    return op;
+  });
+}
 function persistDocuments(key,documents){
   if(!currentUser||!documents.length)return Promise.resolve(false);
-  return persistOperations(setOperations(COLLECTIONS[key],documents));
+  return persistOperations(setOperationsVersionadas(COLLECTIONS[key],documents));
 }
 function deleteDocuments(key,ids){
   if(!currentUser||!ids.length)return Promise.resolve(false);
@@ -1610,6 +1697,7 @@ async function salvar(){
   // Só quando as parcelas foram editadas neste salvamento (parcelas_editadas é uma marca permanente).
   if(editouParcelas&&Array.isArray(rec.parcelas)) reconciliarSituacao(tipo,rec);
   rec.id=ex?ex.id:uid();
+  if(ex&&ex.rev) rec.rev=ex.rev;
   if(ex){var i=list.findIndex(function(r){return r.id===rec.id;});list[i]=rec;} else list.push(rec);
   document.getElementById('m-body').classList.remove('editando-parcelas');
   closeModal();
