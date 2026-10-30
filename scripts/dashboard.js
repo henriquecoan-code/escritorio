@@ -913,6 +913,8 @@ function init(){
       clearInterval(syncTimer);
       if(currentUser){
         setAuthOverlay(false);
+        // login feito nesta página: liga o cache local antes das primeiras leituras
+        window.OBFirestoreCache?.login(fbDb);
         // carrega meta/fotos e dados iniciais, depois ativa listener tempo real
         loadFromFirebase().then(()=>{
           setSyncStatus('loading','Carregando contratos...','');
