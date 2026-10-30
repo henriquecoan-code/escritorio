@@ -397,11 +397,6 @@ function gerarParcelas(total, nParc, dataInicio, jurosMes){
 
 function totalPago(parcelas){return (parcelas||[]).reduce(function(a,p){return a+Number(p.pago||0);},0);}
 function totalParc(parcelas){return (parcelas||[]).reduce(function(a,p){return a+Number(p.valor||0);},0);}
-function proxParc(parcelas){
-  var hoje=today();
-  var pend=(parcelas||[]).filter(function(p){return p.sit!=='Pago'&&p.venc>=hoje;});
-  return pend.length?pend[0]:null;
-}
 function diasAtraso(dataRef,sit){
   if(!dataRef||sit==='Recebido'||sit==='Cumprido'||sit==='Pago') return null;
   var d=new Date(dataRef+'T00:00:00'),h=new Date();h.setHours(0,0,0,0);
@@ -635,7 +630,7 @@ function renderTbl(cart,tipo){
       var honPct=honDe(r);
       var base='<td><b>'+esc(r.devedor)+'</b></td>'+(isCliente?'<td class="dim">'+esc(r.credor||'—')+'</td>':'')+'<td>'+R(r.valor)+'</td><td class="pos">'+(Number(r.recebido||0)>0?R(r.recebido):'<span class="dim">—</span>')+'</td><td style="color:var(--amber)">'+R(atu)+'</td><td class="dim">'+fD(r.data_pgto)+'</td><td>'+atrH(dias)+'</td>'+(isCliente?'<td class="pos">'+R(honVal)+'</td><td class="dim">'+honPct+'%</td>':'<td style="display:none"></td>')+'<td class="dim">'+esc(r.responsavel||'—')+'</td><td>'+pillSit(r.situacao)+'</td>';
       if(!isCliente) base=base.replace('<td style="display:none"></td>','');
-      return '<tr>'+base+'<td><button class="row-ab" onclick="editRec(\''+key+'\',\''+id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+id+'\')">Excluir</button></td></tr>';
+      return '<tr class="'+(dias>0?'row-atraso':'')+'" style="cursor:pointer" onclick="editRec(\''+key+'\',\''+id+'\')" title="Clique para abrir o registro">'+base+'<td onclick="event.stopPropagation()"><button class="row-ab" onclick="editRec(\''+key+'\',\''+id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+id+'\')">Excluir</button></td></tr>';
     }).join('');
   } else {
     var cols=isCliente?14:12;
@@ -645,15 +640,17 @@ function renderTbl(cart,tipo){
       var id=r.id;
       var totP=totalParc(r.parcelas), totRec=totalPago(r.parcelas);
       var aRec=acSaldo(r);
-      var prox=proxParc(r.parcelas);
+      // Próxima parcela não quitada, inclusive vencida (igual aos acordos)
+      var prox=acProx(r);
       var proxVenc=prox?prox.venc:null;
-      var dias=proxVenc&&r.situacao!=='Recebido'?diasAtraso(proxVenc,'Em aberto'):null;
+      var dias=proxVenc&&r.situacao!=='Recebido'?diasAtraso(proxVenc,prox.sit):null;
+      var atraso=r.situacao!=='Recebido'&&parcVencida(prox);
       var honPct=honDe(r)/100;
       var honVal=totRec*honPct;
       var npago=(r.parcelas||[]).filter(function(p){return p.sit==='Pago';}).length;
       var nTot=(r.parcelas||[]).length;
-      var base='<td><b>'+esc(r.devedor)+'</b></td>'+(isCliente?'<td class="dim">'+esc(r.credor||'—')+'</td>':'')+'<td>'+R(r.valor)+'</td><td style="color:var(--amber)">'+R(totP)+'</td><td class="dim">'+npago+'/'+nTot+'x</td><td class="pos">'+R(totRec)+'</td><td class="warn">'+R(aRec)+'</td><td class="dim">'+(proxVenc?fD(proxVenc):'—')+'</td><td>'+atrH(dias)+'</td>'+(isCliente?'<td class="dim">'+(honDe(r))+'%</td><td class="pos">'+R(honVal)+'</td>':'')+'<td class="dim">'+esc(r.responsavel||'—')+'</td><td>'+pillSit(r.situacao)+'</td>';
-      return '<tr>'+base+'<td><button class="row-ab" onclick="editRec(\''+key+'\',\''+id+'\')">Editar</button><button class="row-ab" onclick="verParcelas(\''+key+'\',\''+id+'\')">Parcelas</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+id+'\')">Excluir</button></td></tr>';
+      var base='<td><b>'+esc(r.devedor)+'</b></td>'+(isCliente?'<td class="dim">'+esc(r.credor||'—')+'</td>':'')+'<td>'+R(r.valor)+'</td><td style="color:var(--amber)">'+R(totP)+'</td><td class="dim">'+npago+'/'+nTot+'x</td><td class="pos">'+R(totRec)+'</td><td class="warn">'+R(aRec)+'</td><td class="dim">'+(proxVenc?fD(proxVenc):(nTot?'<span style="color:var(--green)">Quitado</span>':'—'))+'</td><td>'+atrH(dias)+'</td>'+(isCliente?'<td class="dim">'+(honDe(r))+'%</td><td class="pos">'+R(honVal)+'</td>':'')+'<td class="dim">'+esc(r.responsavel||'—')+'</td><td>'+pillSit(r.situacao)+'</td>';
+      return '<tr class="'+(atraso?'row-atraso':'')+'" style="cursor:pointer" onclick="verParcelas(\''+key+'\',\''+id+'\')" title="Clique para ver as parcelas">'+base+'<td onclick="event.stopPropagation()"><button class="row-ab" onclick="verParcelas(\''+key+'\',\''+id+'\')">Parcelas</button><button class="row-ab" onclick="editRec(\''+key+'\',\''+id+'\')">Editar</button><button class="row-ab del" onclick="delRec(\''+key+'\',\''+id+'\')">Excluir</button></td></tr>';
     }).join('');
   }
 }
