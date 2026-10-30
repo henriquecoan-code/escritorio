@@ -127,12 +127,13 @@ async function queueOperations(operations){
 }
 async function removeQueuedOperations(operations){
   // Só remove o que ainda está na fila: uma edição mais nova do mesmo registro pode ter tomado o lugar.
-  operations=operations.filter(function(operation){return pendingOperations.get(operation.id)===operation;});
-  if(!operations.length)return;
+  // A conferência é feita depois de abrir a fila, porque uma edição nova pode entrar durante a espera.
+  if(!operations.some(function(operation){return pendingOperations.get(operation.id)===operation;}))return;
   var database=await openOutbox();
   await new Promise(function(resolve,reject){
     var transaction=database.transaction(OUTBOX_STORE,'readwrite');
-    operations.forEach(function(operation){pendingOperations.delete(operation.id);transaction.objectStore(OUTBOX_STORE).delete(operation.id);});
+    operations.filter(function(operation){return pendingOperations.get(operation.id)===operation;})
+      .forEach(function(operation){pendingOperations.delete(operation.id);transaction.objectStore(OUTBOX_STORE).delete(operation.id);});
     transaction.oncomplete=resolve;transaction.onerror=function(){reject(transaction.error);};transaction.onabort=function(){reject(transaction.error);};
   });
   database.close();
@@ -216,6 +217,11 @@ async function tratarConflitos(conflitos){
       if(snap.exists){if(idx>=0)S[key][idx]=snap.data();else S[key].push(snap.data());}
       else if(idx>=0)S[key].splice(idx,1);
     }catch(e){console.error(e);}
+    // Tela de parcelas aberta neste registro: mostra os dados do servidor (os índices dos pagamentos podem ter mudado).
+    if(detalheAberto&&detalheAberto.key===key&&detalheAberto.id===op.documentId&&!document.getElementById('m-body')&&document.getElementById('mbg').classList.contains('open')){
+      if(S[key].some(function(r){return r.id===op.documentId;})) abrirDetalhe(key,op.documentId);
+      else{detalheAberto=null;closeModal();}
+    }
   }
   renderAll();
   alert('Alteração não gravada em: '+nomes.join(', ')+'.\n\nO registro foi alterado por outra pessoa antes desta alteração chegar ao servidor (por exemplo, enquanto este computador estava sem conexão). Os dados atuais foram recarregados: confira e refaça a alteração se ainda for necessária.');
@@ -302,7 +308,7 @@ async function startRealtime(){
   DATA_KEYS.forEach(function(k){
     unsub[k]=fbDb.collection(COLLECTIONS[k]).onSnapshot(function(snap){
       S[k]=snap.docs.map(function(d){return d.data();});
-      applyQueuedOperations();renderAll();updatePendingSync();
+      applyQueuedOperations();renderAll();updatePendingSync();atualizarDetalhe(k);
       if(!pendingOperations.size)setSync('ok','Tempo real',syncSummary());
     },handleRealtimeError);
   });
@@ -798,7 +804,8 @@ function acSaldo(r){
   if(!Array.isArray(r.parcelas)) return Math.max(0,acValor(r)-acRecebido(r));
   return r.parcelas.reduce(function(a,p){return a+(p.sit==='Pago'?0:Math.max(0,devidoParc(p)-totalPagoParc(p)));},0);
 }
-function acProx(r){return acParcs(r).find(function(p){return p.sit!=='Pago';})||null;}
+// Parcela não quitada com o menor vencimento (o editor permite datas fora da ordem das parcelas).
+function acProx(r){return acParcs(r).reduce(function(m,p){return p.sit!=='Pago'&&(!m||(p.venc||'9999')<(m.venc||'9999'))?p:m;},null);}
 function parcVencida(p){return !!(p&&p.sit!=='Pago'&&diasAtraso(p.venc,p.sit));}
 function acParcAtraso(r){
   if(!Array.isArray(r.parcelas)) return (r.situacao==='Em atraso'||r.situacao==='Quebrado')?1:0;
@@ -934,6 +941,7 @@ function renderChartJudicial(){
 function verAcordo(key,id,pagIdx){
   var r=S[key].find(function(x){return x.id===id;});
   if(!r)return;
+  detalheAberto={key:key,id:id,rev:r.rev||'',pag:pagIdx!==undefined&&pagIdx!==null};
   var isJud=key==='judicial';
   var hon=honDe(r);
   var honCalc=(r.hon_calc===undefined||r.hon_calc===null||r.hon_calc==='')?acValor(r)*(hon/100):Number(r.hon_calc);
@@ -972,6 +980,24 @@ function verAcordo(key,id,pagIdx){
 function ehAcordo(key){return key==='acordos'||key==='judicial';}
 // Detalhe com parcelas: acordos usam verAcordo, carteiras parceladas usam verParcelas.
 function abrirDetalhe(key,id,pagIdx){if(ehAcordo(key))verAcordo(key,id,pagIdx);else verParcelas(key,id,pagIdx);}
+function detalheVisivel(key,id){
+  return !!(detalheAberto&&detalheAberto.key===key&&(!id||detalheAberto.id===id)&&!document.getElementById('m-body')&&document.getElementById('mbg').classList.contains('open'));
+}
+// Registro da tela de parcelas alterado por outra pessoa: redesenha a tela, a menos que haja
+// um pagamento sendo digitado (nesse caso, confirmar ou excluir recusa e redesenha).
+function atualizarDetalhe(key){
+  if(!detalheVisivel(key))return;
+  var r=S[key].find(function(x){return x.id===detalheAberto.id;});
+  if(!r){detalheAberto=null;closeModal();return;}
+  if((r.rev||'')!==detalheAberto.rev&&!detalheAberto.pag) abrirDetalhe(key,r.id);
+}
+// Ações da tela de parcelas usam índices: só valem se o registro ainda é o que está na tela.
+function detalheDesatualizado(key,id,r){
+  if(!detalheVisivel(key,id)||(r.rev||'')===detalheAberto.rev)return false;
+  abrirDetalhe(key,id);
+  alert('Este registro foi alterado por outra pessoa enquanto a tela estava aberta. Os dados foram atualizados: confira e repita a operação, se ainda for necessária.');
+  return true;
+}
 function listaPagtos(key,id,pi,p){
   var lst=pagtosParcela(p);
   if(!lst.length) return '<span class="dim">—</span>';
@@ -1047,7 +1073,7 @@ function atualizarPgForm(key,id,pi){
 }
 async function confirmarPagamento(key,id,pi){
   var r=S[key].find(function(x){return x.id===id;});
-  if(!r||!acParcs(r)[pi])return;
+  if(!r||!acParcs(r)[pi]||detalheDesatualizado(key,id,r))return;
   r.parcelas.forEach(normalizarParcela);
   var p=r.parcelas[pi];
   var v=arred(parseFloat(gv('pg-valor')));
@@ -1084,7 +1110,7 @@ async function confirmarPagamento(key,id,pi){
 }
 async function removerPagamento(key,id,pi,j){
   var r=S[key].find(function(x){return x.id===id;});
-  if(!r||!acParcs(r)[pi])return;
+  if(!r||!acParcs(r)[pi]||detalheDesatualizado(key,id,r))return;
   if(!confirm('Excluir este pagamento?\nTransferências ou abatimentos já feitos nas outras parcelas não são desfeitos. Se precisar, ajuste em Editar → Editar parcelas.'))return;
   var p=r.parcelas[pi];
   var lst=pagtosParcela(p).slice();
@@ -1112,6 +1138,11 @@ async function editTipoParc(key,id,pi,tipo){
 // ── Formulário de acordo ──
 // Rascunho das parcelas aberto em "Editar parcelas"; só é gravado se o usuário mexeu nele.
 var parcRascunho=null, parcEditadas=false, parcEsperado=0, parcBasePagtos='';
+// Revisão do registro quando o formulário de edição foi aberto: os campos do formulário refletem
+// essa revisão, mesmo que o tempo real atualize o registro enquanto ele está aberto.
+var revEdicao=null;
+// Registro exibido na tela de parcelas (verAcordo/verParcelas).
+var detalheAberto=null;
 // Pagamentos de cada parcela, para detectar o que foi registrado (em outra aba ou por outra pessoa) durante a edição.
 function assinaturaPagtos(parcs){
   // Acordos antigos podem ter "parcelas" como texto: contam como sem parcelas.
@@ -1385,6 +1416,7 @@ function renderOperadoraAcordos(){
 function verParcelas(key,id,pagIdx){
   var r=S[key].find(function(x){return x.id===id;});
   if(!r)return;
+  detalheAberto={key:key,id:id,rev:r.rev||'',pag:pagIdx!==undefined&&pagIdx!==null};
   var parcs=r.parcelas||[], isCli=key.indexOf('clientes')===0;
   var box=function(t,c){return '<div class="acd-box"><div class="acd-lbl">'+t+'</div>'+c+'</div>';};
   var html='<div class="modal-title">Parcelas — '+esc(r.devedor||'')+'</div>';
@@ -1415,7 +1447,7 @@ function verParcelas(key,id,pagIdx){
 // ══════════════════════════════════════════════════════════════
 // O modal de lançamento é substituído pelas telas de parcelas; resetModal restaura o formulário original.
 var MODAL_HTML=document.querySelector('.modal').innerHTML;
-function resetModal(){parcRascunho=null;parcEditadas=false;parcEsperado=0;parcBasePagtos='';var m=document.querySelector('.modal');m.classList.remove('modal-wide');if(!document.getElementById('m-body'))m.innerHTML=MODAL_HTML;document.getElementById('m-body').classList.remove('editando-parcelas');}
+function resetModal(){parcRascunho=null;parcEditadas=false;parcEsperado=0;parcBasePagtos='';revEdicao=null;detalheAberto=null;var m=document.querySelector('.modal');m.classList.remove('modal-wide');if(!document.getElementById('m-body'))m.innerHTML=MODAL_HTML;document.getElementById('m-body').classList.remove('editando-parcelas');}
 function showModalHTML(html){var m=document.querySelector('.modal');m.innerHTML=html;m.classList.add('modal-wide');document.getElementById('mbg').classList.add('open');}
 
 // Mantém o operador já gravado no registro mesmo que ele tenha sido removido da lista
@@ -1625,6 +1657,7 @@ function editRec(key,id){
   var found=S[key].find(function(x){return x.id===id;});
   if(!found)return;
   resetModal();
+  revEdicao=found.rev||'';
   var r=Object.assign({},found,{_editing:true});
   document.getElementById('m-tipo').value=key;
   document.getElementById('m-id').value=id;
@@ -1694,7 +1727,8 @@ async function salvar(){
   // Só quando as parcelas foram editadas neste salvamento (parcelas_editadas é uma marca permanente).
   if(editouParcelas&&Array.isArray(rec.parcelas)) reconciliarSituacao(tipo,rec);
   rec.id=ex?ex.id:uid();
-  if(ex&&ex.rev) rec.rev=ex.rev;
+  // Base da conferência no servidor: a revisão de quando o formulário foi aberto, não a atual de S.
+  if(ex){var revBase=revEdicao!==null?revEdicao:(ex.rev||'');if(revBase) rec.rev=revBase;}
   if(ex){var i=list.findIndex(function(r){return r.id===rec.id;});list[i]=rec;} else list.push(rec);
   document.getElementById('m-body').classList.remove('editando-parcelas');
   closeModal();
